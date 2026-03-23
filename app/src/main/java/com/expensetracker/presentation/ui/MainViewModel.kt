@@ -39,6 +39,12 @@ class MainViewModel @Inject constructor(
     val numberFormat: StateFlow<String> = userPreferencesRepository.numberFormat
         .stateIn(viewModelScope, SharingStarted.Eagerly, "millions")
 
+    val isBackupEnabled: StateFlow<Boolean> = userPreferencesRepository.isBackupEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val isHapticsEnabled: StateFlow<Boolean> = userPreferencesRepository.isHapticsEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     init {
         viewModelScope.launch {
             val userId = authManager.userId

@@ -26,7 +26,8 @@ class UserPreferencesRepository @Inject constructor(
         val THEME_MODE = stringPreferencesKey("theme_mode")   // "light" | "dark" | "system"
         val LAST_BACKUP_TIMESTAMP = longPreferencesKey("last_backup_timestamp")
         val DEFAULT_ACCOUNT_ID = longPreferencesKey("default_account_id")
-        val BACKUP_ENABLED = booleanPreferencesKey("backup_enabled")
+        val IS_BACKUP_ENABLED = booleanPreferencesKey("is_backup_enabled")
+        val IS_HAPTICS_ENABLED = booleanPreferencesKey("is_haptics_enabled")
     }
 
     val currencySymbol: Flow<String> = context.dataStore.data
@@ -53,9 +54,13 @@ class UserPreferencesRepository @Inject constructor(
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { it[Keys.LAST_BACKUP_TIMESTAMP] ?: 0L }
 
-    val backupEnabled: Flow<Boolean> = context.dataStore.data
+    val isBackupEnabled: Flow<Boolean> = context.dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { it[Keys.BACKUP_ENABLED] ?: true }
+        .map { it[Keys.IS_BACKUP_ENABLED] ?: true }
+
+    val isHapticsEnabled: Flow<Boolean> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.IS_HAPTICS_ENABLED] ?: true }
 
     suspend fun setCurrencySymbol(symbol: String) {
         context.dataStore.edit { it[Keys.CURRENCY_SYMBOL] = symbol }
@@ -81,7 +86,11 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { it[Keys.LAST_BACKUP_TIMESTAMP] = ts }
     }
 
-    suspend fun setBackupEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BACKUP_ENABLED] = enabled }
+    suspend fun setIsBackupEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.IS_BACKUP_ENABLED] = enabled }
+    }
+
+    suspend fun setIsHapticsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.IS_HAPTICS_ENABLED] = enabled }
     }
 }

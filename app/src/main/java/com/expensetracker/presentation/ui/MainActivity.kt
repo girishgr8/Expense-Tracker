@@ -8,6 +8,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -16,6 +17,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.expensetracker.presentation.navigation.AppNavGraph
 import com.expensetracker.presentation.theme.ExpenseTrackerTheme
+import com.expensetracker.util.LocalHapticManager
+import com.expensetracker.util.rememberHapticManager
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -40,7 +43,10 @@ fun AppRoot() {
 
     val themeMode by mainViewModel.themeMode.collectAsState()
     val useDynamicColor by mainViewModel.useDynamicColor.collectAsState()
+    val isHapticsEnabled by mainViewModel.isHapticsEnabled.collectAsState()
     val systemDark = isSystemInDarkTheme()
+
+    val hapticManager = rememberHapticManager(isHapticsEnabled)
 
     // Resolve whether dark mode should be active
     val isDark = when (themeMode) {
@@ -49,11 +55,15 @@ fun AppRoot() {
         else -> systemDark   // "system" follows device setting
     }
 
-    ExpenseTrackerTheme(
-        darkTheme = isDark, dynamicColor = useDynamicColor
+    CompositionLocalProvider(
+        LocalHapticManager provides hapticManager
     ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            AppNavGraph(navController = navController, mainViewModel = mainViewModel)
+        ExpenseTrackerTheme(
+            darkTheme = isDark, dynamicColor = useDynamicColor
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                AppNavGraph(navController = navController, mainViewModel = mainViewModel)
+            }
         }
     }
 }

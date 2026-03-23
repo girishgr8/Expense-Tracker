@@ -80,6 +80,7 @@ import com.expensetracker.presentation.theme.CardGradientStart
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
+import com.expensetracker.util.LocalHapticManager
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,12 +107,16 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
+    val haptic = LocalHapticManager.current
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = onNavigateToAddTransaction,
+                onClick = {
+                    haptic.perform()
+                    onNavigateToAddTransaction()
+                },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White,
                 shape = CircleShape,

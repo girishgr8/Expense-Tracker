@@ -1,12 +1,17 @@
 package com.expensetracker.presentation.ui.settings
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
 import com.expensetracker.data.repository.UserPreferencesRepository
 import com.expensetracker.util.DriveBackupScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
@@ -20,11 +25,12 @@ data class SettingsUiState(
     val currencySymbol: String = "₹",
     val currencyCode: String = "INR",
     val numberFormat: String = "millions",
-    val backupEnabled: Boolean = true,
+    val isHapticsEnabled: Boolean = true,
+    val isBackupEnabled: Boolean = true,
     val lastBackupDisplay: String = "Never",
     val userName: String = "",
     val userEmail: String = "",
-    val userPhotoUrl: String = ""
+    val userPhotoUrl: String = "",
 )
 
 @HiltViewModel
@@ -45,37 +51,43 @@ class SettingsViewModel @Inject constructor(
     private fun loadSettings() {
         viewModelScope.launch {
             combine(
-                userPreferencesRepository.themeMode,
-                userPreferencesRepository.useDynamicColor,
-                userPreferencesRepository.currencySymbol,
-                userPreferencesRepository.currencyCode,
-                userPreferencesRepository.numberFormat
-            ) { theme, dynamic, symbol, code, format ->
-                listOf(theme, dynamic.toString(), symbol, code, format)
-            }.collect { vals ->
+                userPreferencesRepository.themeMode, // args[0]: String
+                userPreferencesRepository.useDynamicColor,    // args[1]: Boolean
+                userPreferencesRepository.currencySymbol,     // args[2]: String
+                userPreferencesRepository.currencyCode,       // args[3]: String
+                userPreferencesRepository.numberFormat,       // args[4]: String
+                userPreferencesRepository.isHapticsEnabled    // args[5]: Boolean
+            ) { args: Array<Any?> ->
+                args
+            }.collect { args ->
                 _uiState.update {
                     it.copy(
-                        themeMode       = vals[0],
-                        useDynamicColor = vals[1].toBoolean(),
-                        currencySymbol  = vals[2],
-                        currencyCode    = vals[3],
-                        numberFormat    = vals[4]
+                        themeMode = args[0] as String,
+                        useDynamicColor = args[1] as Boolean,
+                        currencySymbol = args[2] as String,
+                        currencyCode = args[3] as String,
+                        numberFormat = args[4] as String,
+                        isHapticsEnabled = args[5] as Boolean
                     )
                 }
             }
         }
+
         viewModelScope.launch {
             combine(
-                userPreferencesRepository.backupEnabled,
+                userPreferencesRepository.isBackupEnabled,
                 userPreferencesRepository.lastBackupTimestamp
             ) { backupOn, lastBackup ->
                 val lastBackupStr = if (lastBackup == 0L) "Never"
-                else LocalDateTime.ofInstant(Instant.ofEpochMilli(lastBackup), ZoneId.systemDefault())
+                else LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(lastBackup),
+                    ZoneId.systemDefault()
+                )
                     .format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm"))
                 Pair(backupOn, lastBackupStr)
             }.collect { (backupOn, lastBackupStr) ->
                 _uiState.update {
-                    it.copy(backupEnabled = backupOn, lastBackupDisplay = lastBackupStr)
+                    it.copy(isBackupEnabled = backupOn, lastBackupDisplay = lastBackupStr)
                 }
             }
         }
@@ -113,10 +125,15 @@ class SettingsViewModel @Inject constructor(
         userPreferencesRepository.setCurrencySymbol(symbol)
     }
 
-    fun setBackupEnabled(enabled: Boolean) = viewModelScope.launch {
-        userPreferencesRepository.setBackupEnabled(enabled)
+    fun setIsBackupEnabled(enabled: Boolean) = viewModelScope.launch {
+        userPreferencesRepository.setIsBackupEnabled(enabled)
         if (enabled) driveBackupScheduler.scheduleMonthlyBackup()
         else driveBackupScheduler.cancelBackup()
+    }
+
+    fun setIsHapticsEnabled(enabled: Boolean) = viewModelScope.launch {
+        Log.e("SettingsViewModel", "setIsHapticsEnabled(enabled) = $enabled")
+        userPreferencesRepository.setIsHapticsEnabled(enabled)
     }
 
     fun triggerBackupNow() {

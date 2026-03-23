@@ -26,8 +26,10 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -204,6 +206,20 @@ fun SettingsScreen(
                             onCheckedChange = viewModel::setDynamicColor
                         )
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Haptics
+                    SettingsItem(
+                        icon = Icons.Default.TouchApp,
+                        title = "Haptics",
+                        subtitle = "Subtle taps when you interact with the app"
+                    ) {
+                        Switch(
+                            checked = uiState.isHapticsEnabled,
+                            onCheckedChange = viewModel::setIsHapticsEnabled
+                        )
+                    }
                 }
             }
 
@@ -218,8 +234,8 @@ fun SettingsScreen(
                         subtitle = "Back up monthly to Google Drive"
                     ) {
                         Switch(
-                            checked = uiState.backupEnabled,
-                            onCheckedChange = viewModel::setBackupEnabled
+                            checked = uiState.isBackupEnabled,
+                            onCheckedChange = viewModel::setIsBackupEnabled
                         )
                     }
 
