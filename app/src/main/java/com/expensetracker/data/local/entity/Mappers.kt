@@ -1,0 +1,142 @@
+package com.expensetracker.data.local.entity
+
+import com.expensetracker.domain.model.*
+import com.google.gson.Gson
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+
+private val gson = Gson()
+
+// ─── Transaction ──────────────────────────────────────────────────────────────
+
+fun TransactionEntity.toDomain(
+    categoryName: String = "",
+    categoryIcon: String = "category",
+    categoryColorHex: String = "#6750A4",
+    paymentModeName: String = "",
+    toPaymentModeName: String = "",
+    attachments: List<Attachment> = emptyList()
+): Transaction = Transaction(
+    id = id, type = type, amount = amount,
+    categoryId = categoryId,
+    categoryName = categoryName,
+    categoryIcon = categoryIcon,
+    categoryColorHex = categoryColorHex,
+    paymentModeId = paymentModeId,
+    creditCardId = creditCardId,
+    paymentModeName = paymentModeName,
+    toPaymentModeId = toPaymentModeId,
+    toCreditCardId = toCreditCardId,
+    toPaymentModeName = toPaymentModeName,
+    note = note,
+    dateTime = LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(dateTimeMillis), ZoneId.systemDefault()
+    ),
+    tags = gson.fromJson(tags, Array<String>::class.java)?.toList() ?: emptyList(),
+    attachments = attachments,
+    userId = userId
+)
+
+fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
+    id = id, type = type, amount = amount,
+    categoryId = categoryId,
+    paymentModeId = paymentModeId,
+    creditCardId = creditCardId,
+    toPaymentModeId = toPaymentModeId,
+    toCreditCardId = toCreditCardId,
+    note = note,
+    dateTimeMillis = dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    tags = gson.toJson(tags),
+    userId = userId
+)
+
+// ─── Category ─────────────────────────────────────────────────────────────────
+
+fun CategoryEntity.toDomain(): Category = Category(
+    id = id, name = name, icon = icon, colorHex = colorHex,
+    transactionType = transactionType, isDefault = isDefault, userId = userId
+)
+
+fun Category.toEntity(): CategoryEntity = CategoryEntity(
+    id = id, name = name, icon = icon, colorHex = colorHex,
+    transactionType = transactionType, isDefault = isDefault, userId = userId
+)
+
+// ─── BankAccount ─────────────────────────────────────────────────────────────
+
+fun BankAccountEntity.toDomain(): BankAccount =
+    BankAccount(id = id, name = name, balance = balance, colorHex = colorHex, userId = userId)
+
+fun BankAccount.toEntity(): BankAccountEntity =
+    BankAccountEntity(id = id, name = name, balance = balance, colorHex = colorHex, userId = userId)
+
+// ─── PaymentMode ──────────────────────────────────────────────────────────────
+
+fun PaymentModeEntity.toDomain(bankAccountName: String = ""): PaymentMode = PaymentMode(
+    id = id, bankAccountId = bankAccountId,
+    bankAccountName = bankAccountName,
+    type = type, identifier = identifier, userId = userId
+)
+
+fun PaymentMode.toEntity(): PaymentModeEntity = PaymentModeEntity(
+    id = id, bankAccountId = bankAccountId,
+    type = type, identifier = identifier, userId = userId
+)
+
+// ─── CreditCard ───────────────────────────────────────────────────────────────
+
+fun CreditCardEntity.toDomain(): CreditCard = CreditCard(
+    id = id, name = name,
+    availableLimit = availableLimit,
+    totalLimit = totalLimit,
+    billingCycleDate = billingCycleDate,
+    paymentDueDate = paymentDueDate,
+    colorHex = colorHex,
+    userId = userId
+)
+
+fun CreditCard.toEntity(): CreditCardEntity = CreditCardEntity(
+    id = id, name = name,
+    availableLimit = availableLimit,
+    totalLimit = totalLimit,
+    billingCycleDate = billingCycleDate,
+    paymentDueDate = paymentDueDate,
+    colorHex = colorHex,
+    userId = userId
+)
+
+// ─── Attachment ───────────────────────────────────────────────────────────────
+
+fun AttachmentEntity.toDomain(): Attachment = Attachment(
+    id = id, transactionId = transactionId, fileName = fileName,
+    filePath = filePath, mimeType = mimeType, fileSizeBytes = fileSizeBytes
+)
+
+fun Attachment.toEntity(): AttachmentEntity = AttachmentEntity(
+    id = id, transactionId = transactionId, fileName = fileName,
+    filePath = filePath, mimeType = mimeType, fileSizeBytes = fileSizeBytes
+)
+
+// ─── Budget ───────────────────────────────────────────────────────────────────
+
+fun BudgetEntity.toDomain(): Budget = Budget(
+    id = id, name = name, totalLimit = totalLimit, period = period,
+    year = year, month = month,
+    applicableCategoryIds = gson.fromJson(
+        applicableCategoryIds, Array<Long>::class.java
+    )?.toList() ?: emptyList(),
+    userId = userId
+)
+
+fun Budget.toEntity(): BudgetEntity = BudgetEntity(
+    id = id, name = name, totalLimit = totalLimit, period = period,
+    year = year, month = month,
+    applicableCategoryIds = gson.toJson(applicableCategoryIds),
+    userId = userId
+)
+
+// ─── Tag ──────────────────────────────────────────────────────────────────────
+
+fun TagEntity.toDomain(): Tag = Tag(id = id, name = name, userId = userId)
+fun Tag.toEntity(): TagEntity = TagEntity(id = id, name = name, userId = userId)

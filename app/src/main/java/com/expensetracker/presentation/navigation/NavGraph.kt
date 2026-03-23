@@ -1,0 +1,161 @@
+package com.expensetracker.presentation.navigation
+
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.*
+import androidx.navigation.compose.*
+import com.expensetracker.presentation.ui.accounts.AccountsScreen
+import com.expensetracker.presentation.ui.addtransaction.AddTransactionScreen
+import com.expensetracker.presentation.ui.analysis.AnalysisScreen
+import com.expensetracker.presentation.ui.auth.AuthScreen
+import com.expensetracker.presentation.ui.budget.BudgetScreen
+import com.expensetracker.presentation.ui.categories.CategoriesScreen
+import com.expensetracker.presentation.ui.dashboard.DashboardScreen
+import com.expensetracker.presentation.ui.settings.CurrencySelectionScreen
+import com.expensetracker.presentation.ui.settings.SettingsScreen
+import com.expensetracker.presentation.ui.transactions.TransactionsScreen
+import com.expensetracker.presentation.ui.MainViewModel
+
+sealed class Screen(val route: String) {
+    object Auth             : Screen("auth")
+    object Dashboard        : Screen("dashboard")
+    object Transactions     : Screen("transactions")
+    object AddTransaction   : Screen("add_transaction?transactionId={transactionId}") {
+        fun createRoute(transactionId: Long = -1L) = "add_transaction?transactionId=$transactionId"
+    }
+    object Categories       : Screen("categories")
+    object Accounts         : Screen("accounts")
+    object Budget           : Screen("budget")
+    object Settings         : Screen("settings")
+    object Analysis         : Screen("analysis")
+    object CurrencySelection: Screen("currency_selection")
+}
+
+@Composable
+fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) {
+    val isLoggedIn by mainViewModel.isLoggedIn.collectAsState()
+    val startDestination = if (isLoggedIn) Screen.Dashboard.route else Screen.Auth.route
+
+    NavHost(
+        navController    = navController,
+        startDestination = startDestination,
+        enterTransition  = {
+            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) +
+                    fadeIn(animationSpec = tween(300))
+        },
+        exitTransition   = {
+            slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween(300)) +
+                    fadeOut(animationSpec = tween(300))
+        },
+        popEnterTransition  = {
+            slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween(300)) +
+                    fadeIn(animationSpec = tween(300))
+        },
+        popExitTransition   = {
+            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300)) +
+                    fadeOut(animationSpec = tween(300))
+        }
+    ) {
+        composable(Screen.Auth.route) {
+            AuthScreen(
+                onLoginSuccess = {
+                    navController.navigate(Screen.Dashboard.route) {
+                        popUpTo(Screen.Auth.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.Dashboard.route) {
+            DashboardScreen(
+                onNavigateToAddTransaction = { navController.navigate(Screen.AddTransaction.createRoute()) },
+                onNavigateToTransactions   = { navController.navigate(Screen.Transactions.route) },
+                onNavigateToCategories     = { navController.navigate(Screen.Categories.route) },
+                onNavigateToAccounts       = { navController.navigate(Screen.Accounts.route) },
+                onNavigateToBudget         = { navController.navigate(Screen.Budget.route) },
+                onNavigateToSettings       = { navController.navigate(Screen.Settings.route) },
+                onNavigateToAnalysis       = { navController.navigate(Screen.Analysis.route) },
+                onLogout = {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.Transactions.route) {
+            TransactionsScreen(
+                onNavigateBack   = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    navController.navigate(Screen.AddTransaction.createRoute(id))
+                }
+            )
+        }
+
+        composable(
+            Screen.AddTransaction.route,
+            arguments = listOf(navArgument("transactionId") {
+                type = NavType.LongType; defaultValue = -1L
+            })
+        ) {
+            AddTransactionScreen(
+                onNavigateBack         = { navController.popBackStack() },
+                onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
+                onNavigateToAccounts   = { navController.navigate(Screen.Accounts.route) }
+            )
+        }
+
+        composable(Screen.Categories.route) {
+            CategoriesScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Accounts.route) {
+            AccountsScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Budget.route) {
+            BudgetScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onNavigateBack       = { navController.popBackStack() },
+                onNavigateToCurrency = { navController.navigate(Screen.CurrencySelection.route) },
+                onLogout = {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.Analysis.route) {
+            AnalysisScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.CurrencySelection.route) {
+            // Read current values from mainViewModel
+            val currencyCode by mainViewModel.currencySymbol.collectAsState()
+            val numberFormat by mainViewModel.numberFormat.collectAsState()
+
+            // We need SettingsViewModel here to save
+            val settingsVm: com.expensetracker.presentation.ui.settings.SettingsViewModel =
+                hiltViewModel()
+            val settingsState by settingsVm.uiState.collectAsState()
+
+            CurrencySelectionScreen(
+                currentCode   = settingsState.currencyCode,
+                currentFormat = settingsState.numberFormat,
+                onSave        = { code, symbol, format ->
+                    settingsVm.setCurrency(code, symbol, format)
+                    navController.popBackStack()
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+    }
+}

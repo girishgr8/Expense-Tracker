@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer ring -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 C35.2,20 20,35.2 20,54 C20,72.8 35.2,88 54,88 C72.8,88 88,72.8 88,54 C88,35.2 72.8,20 54,20Z" />
+    <!-- Currency symbol – vertical bar -->
+    <path
+        android:fillColor="#6750A4"
+        android:pathData="M56,26 L56,30.5 C63.2,31.8 68,36.5 68,43 C68,50 62.5,54.5 54,56.5 L54,70 C57.5,69 61,67 61,67 L63,71.5 C63,71.5 58.5,74 54,74.5 L54,82 L52,82 L52,74.5 C44.2,73.5 40,68.5 40,62 C40,54.5 45.8,50 54,47.5 L54,34.5 C51,35.2 48,37 48,37 L46,32.5 C46,32.5 50.5,29.5 52,29 L52,26 Z"
+        android:strokeColor="#6750A4"
+        android:strokeWidth="0.5" />
+    <!-- Top arc fill -->
+    <path
+        android:fillColor="#6750A4"
+        android:pathData="M54,34.5 C59,35.5 62,38.5 62,43 C62,47.5 58.5,51 54,52.5 Z" />
+    <!-- Bottom arc fill -->
+    <path
+        android:fillColor="#6750A4"
+        android:pathData="M54,49.5 C49,51 46,54.5 46,58.5 C46,62.5 49,65.5 54,66.5 Z" />
+</vector>
