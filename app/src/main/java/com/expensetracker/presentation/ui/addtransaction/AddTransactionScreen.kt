@@ -5,33 +5,94 @@ import android.app.TimePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.expensetracker.domain.model.*
-import com.expensetracker.presentation.components.TagChip
-import com.expensetracker.presentation.theme.*
+import com.expensetracker.domain.model.Attachment
+import com.expensetracker.domain.model.Category
+import com.expensetracker.domain.model.PaymentOption
+import com.expensetracker.domain.model.Tag
+import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.theme.ExpenseRed
+import com.expensetracker.presentation.theme.IncomeGreen
+import com.expensetracker.presentation.theme.TransferBlue
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -74,7 +135,7 @@ fun AddTransactionScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -98,83 +159,98 @@ fun AddTransactionScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
+            // Transaction Type Tabs
             TransactionTypeTabs(
                 selected = uiState.transactionType,
                 onSelect = viewModel::setTransactionType
             )
 
+            // Amount Input
             AmountInputField(
                 amount = uiState.amount,
                 onAmountChange = viewModel::setAmount,
                 type = uiState.transactionType
             )
 
+            // Category Selector — closes on selection
             SelectorField(
                 label = "Category",
                 value = uiState.selectedCategory?.name ?: "",
                 icon = Icons.Default.Category,
-                placeholder = "Select Category",
-                onClick = {}
-            ) {
+                placeholder = "Select Category"
+            ) { dismiss ->
                 CategoryDropdown(
                     categories = uiState.categories.filter {
                         it.transactionType == uiState.transactionType || it.transactionType == null
                     },
                     selected = uiState.selectedCategory,
-                    onSelect = viewModel::setCategory
+                    onSelect = { cat ->
+                        viewModel.setCategory(cat)
+                        dismiss()        // ← auto-close
+                    }
                 )
             }
 
+            // Payment Account Selector — closes on selection
             SelectorField(
-                label = if (uiState.transactionType == TransactionType.TRANSFER)
-                    "From Account" else "Payment Account",
+                label = if (uiState.transactionType == TransactionType.TRANSFER) "From Account" else "Payment Account",
                 value = uiState.selectedPaymentOption?.displayLabel ?: "",
                 icon = Icons.Default.AccountBalance,
-                placeholder = "Select Account",
-                onClick = {}
-            ) {
+                placeholder = "Select Account"
+            ) { dismiss ->
                 PaymentOptionDropdown(
                     options = uiState.paymentOptions,
                     selected = uiState.selectedPaymentOption,
-                    onSelect = viewModel::setPaymentOption
+                    onSelect = { opt ->
+                        viewModel.setPaymentOption(opt)
+                        dismiss()        // ← auto-close
+                    }
                 )
             }
 
+            // To Account (Transfer only) — closes on selection
             if (uiState.transactionType == TransactionType.TRANSFER) {
                 SelectorField(
                     label = "To Account",
                     value = uiState.selectedToPaymentOption?.displayLabel ?: "",
                     icon = Icons.Default.AccountBalance,
-                    placeholder = "Select Destination Account",
-                    onClick = {}
-                ) {
+                    placeholder = "Select Destination Account"
+                ) { dismiss ->
                     PaymentOptionDropdown(
-                        options = uiState.paymentOptions.filter {
-                            it.id != uiState.selectedPaymentOption?.id
-                        },
+                        options = uiState.paymentOptions.filter { it.id != uiState.selectedPaymentOption?.id },
                         selected = uiState.selectedToPaymentOption,
-                        onSelect = viewModel::setToPaymentOption
+                        onSelect = { opt ->
+                            viewModel.setToPaymentOption(opt)
+                            dismiss()    // ← auto-close
+                        }
                     )
                 }
             }
 
+            // Date & Time Picker
             DateTimePickerRow(
                 dateTime = uiState.dateTime,
                 onDateTimeChange = viewModel::setDateTime,
                 context = context
             )
 
-            OutlinedTextField(
-                value = uiState.note,
-                onValueChange = viewModel::setNote,
-                label = { Text("Note (optional)") },
-                leadingIcon = { Icon(Icons.Default.Notes, null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                maxLines = 3
+            // ── Other Details section ─────────────────────────────────────────
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Other details",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
             )
 
-            TagsSection(
+            // Seamless Note field
+            SeamlessNoteField(
+                note = uiState.note,
+                onNoteChange = viewModel::setNote
+            )
+
+            // Seamless Tags field
+            SeamlessTagsSection(
                 tags = uiState.tags,
                 suggestions = uiState.tagSuggestions,
                 onAddTag = viewModel::addTag,
@@ -182,7 +258,8 @@ fun AddTransactionScreen(
                 onSearchTag = viewModel::searchTags
             )
 
-            AttachmentsSection(
+            // Attachments row
+            SeamlessAttachmentRow(
                 attachments = uiState.attachments,
                 onAddAttachment = { fileLauncher.launch("*/*") },
                 onRemoveAttachment = viewModel::removeAttachment
@@ -190,9 +267,12 @@ fun AddTransactionScreen(
 
             Spacer(Modifier.height(24.dp))
 
+            // Save button
             Button(
                 onClick = viewModel::saveTransaction,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 enabled = !uiState.isLoading
             ) {
@@ -211,6 +291,8 @@ fun AddTransactionScreen(
     }
 }
 
+// ─── Transaction Type Tabs ────────────────────────────────────────────────────
+
 @Composable
 private fun TransactionTypeTabs(
     selected: TransactionType,
@@ -227,10 +309,10 @@ private fun TransactionTypeTabs(
         types.forEach { type ->
             val isSelected = type == selected
             val containerColor = when {
-                isSelected && type == TransactionType.EXPENSE  -> ExpenseRed
-                isSelected && type == TransactionType.INCOME   -> IncomeGreen
-                isSelected                                     -> TransferBlue
-                else                                           -> Color.Transparent
+                isSelected && type == TransactionType.EXPENSE -> ExpenseRed
+                isSelected && type == TransactionType.INCOME -> IncomeGreen
+                isSelected -> TransferBlue
+                else -> Color.Transparent
             }
             Box(
                 modifier = Modifier
@@ -252,6 +334,8 @@ private fun TransactionTypeTabs(
     }
 }
 
+// ─── Amount Input ─────────────────────────────────────────────────────────────
+
 @Composable
 private fun AmountInputField(
     amount: String,
@@ -259,15 +343,13 @@ private fun AmountInputField(
     type: TransactionType
 ) {
     val color = when (type) {
-        TransactionType.INCOME   -> IncomeGreen
-        TransactionType.EXPENSE  -> ExpenseRed
+        TransactionType.INCOME -> IncomeGreen
+        TransactionType.EXPENSE -> ExpenseRed
         TransactionType.TRANSFER -> TransferBlue
     }
     OutlinedTextField(
         value = amount,
-        onValueChange = {
-            if (it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) onAmountChange(it)
-        },
+        onValueChange = { if (it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) onAmountChange(it) },
         label = { Text("Amount") },
         leadingIcon = {
             Text(
@@ -288,6 +370,8 @@ private fun AmountInputField(
     )
 }
 
+// ─── Selector Field (category / payment account) ─────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SelectorField(
@@ -295,11 +379,15 @@ private fun SelectorField(
     value: String,
     icon: ImageVector,
     placeholder: String,
-    onClick: () -> Unit,
-    dropdownContent: @Composable ColumnScope.() -> Unit
+    // dropdownContent now receives a `dismiss` lambda so items can close the menu
+    dropdownContent: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
         OutlinedTextField(
             value = value,
             onValueChange = {},
@@ -310,14 +398,20 @@ private fun SelectorField(
             placeholder = { Text(placeholder) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             shape = RoundedCornerShape(12.dp)
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            dropdownContent()
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            // Pass dismiss = { expanded = false } so item clicks can close the menu
+            dropdownContent { expanded = false }
         }
     }
 }
+
+// ─── Category Dropdown ────────────────────────────────────────────────────────
 
 @Composable
 private fun ColumnScope.CategoryDropdown(
@@ -327,7 +421,7 @@ private fun ColumnScope.CategoryDropdown(
 ) {
     categories.forEach { cat ->
         val iconColor = runCatching {
-            Color(android.graphics.Color.parseColor(cat.colorHex))
+            Color(cat.colorHex.toColorInt().toLong() or 0xFF000000L)
         }.getOrDefault(Color.Gray)
 
         DropdownMenuItem(
@@ -357,6 +451,8 @@ private fun ColumnScope.CategoryDropdown(
     }
 }
 
+// ─── Payment Option Dropdown ──────────────────────────────────────────────────
+
 @Composable
 private fun ColumnScope.PaymentOptionDropdown(
     options: List<PaymentOption>,
@@ -375,7 +471,6 @@ private fun ColumnScope.PaymentOptionDropdown(
     val modes = options.filterIsInstance<PaymentOption.Mode>()
     val cards = options.filterIsInstance<PaymentOption.Card>()
 
-    // ── Payment Modes group ───────────────────────────────────────────────────
     if (modes.isNotEmpty()) {
         DropdownMenuItem(
             text = {
@@ -409,7 +504,6 @@ private fun ColumnScope.PaymentOptionDropdown(
         }
     }
 
-    // ── Credit Cards group ────────────────────────────────────────────────────
     if (cards.isNotEmpty()) {
         HorizontalDivider()
         DropdownMenuItem(
@@ -444,6 +538,8 @@ private fun ColumnScope.PaymentOptionDropdown(
         }
     }
 }
+
+// ─── Date & Time Picker ───────────────────────────────────────────────────────
 
 @Composable
 private fun DateTimePickerRow(
@@ -493,8 +589,64 @@ private fun DateTimePickerRow(
     }
 }
 
+// ─── Seamless Note Field ──────────────────────────────────────────────────────
+
 @Composable
-private fun TagsSection(
+private fun SeamlessNoteField(
+    note: String,
+    onNoteChange: (String) -> Unit
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        // Leading icon — matches the screenshot's three-line list icon
+        Icon(
+            Icons.AutoMirrored.Filled.Notes,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier
+                .padding(top = 14.dp)
+                .size(22.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            BasicTextField(
+                value = note,
+                onValueChange = onNoteChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
+                cursorBrush = SolidColor(accentColor),
+                maxLines = 5,
+                decorationBox = { inner ->
+                    if (note.isEmpty()) {
+                        Text(
+                            "Write a note",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = hintColor
+                        )
+                    }
+                    inner()
+                }
+            )
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                thickness = 0.5.dp
+            )
+        }
+    }
+}
+
+// ─── Seamless Tags Section ────────────────────────────────────────────────────
+
+@Composable
+private fun SeamlessTagsSection(
     tags: List<String>,
     suggestions: List<Tag>,
     onAddTag: (String) -> Unit,
@@ -502,79 +654,202 @@ private fun TagsSection(
     onSearchTag: (String) -> Unit
 ) {
     var tagInput by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Tags (max 5)", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = tagInput,
-                onValueChange = { tagInput = it; onSearchTag(it) },
-                placeholder = { Text("#tag") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
-            )
-            IconButton(
-                onClick = {
-                    if (tagInput.isNotBlank()) { onAddTag(tagInput); tagInput = "" }
-                },
-                enabled = tags.size < 5 && tagInput.isNotBlank()
+    val accentColor = MaterialTheme.colorScheme.primary
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        // Leading # icon
+        Icon(
+            Icons.Default.Tag,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier
+                .padding(top = 14.dp)
+                .size(22.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            // Input row
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Add, "Add Tag")
-            }
-        }
-        if (suggestions.isNotEmpty() && tagInput.isNotBlank()) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(suggestions) { tag ->
-                    SuggestionChip(
-                        onClick = { onAddTag(tag.name); tagInput = "" },
-                        label = { Text("#${tag.name}") }
-                    )
+                BasicTextField(
+                    value = tagInput,
+                    onValueChange = { tagInput = it; onSearchTag(it) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 12.dp),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
+                    cursorBrush = SolidColor(accentColor),
+                    singleLine = true,
+                    decorationBox = { inner ->
+                        if (tagInput.isEmpty()) {
+                            Text(
+                                "Add tags",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = hintColor
+                            )
+                        }
+                        inner()
+                    }
+                )
+                // Add tag on Enter key / button tap
+                if (tagInput.isNotBlank() && tags.size < 5) {
+                    IconButton(
+                        onClick = {
+                            onAddTag(tagInput.trimStart('#'))
+                            tagInput = ""
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add Tag",
+                            modifier = Modifier.size(18.dp),
+                            tint = accentColor
+                        )
+                    }
                 }
             }
-        }
-        if (tags.isNotEmpty()) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(tags) { tag ->
-                    TagChip(tag = tag, onRemove = { onRemoveTag(tag) })
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                thickness = 0.5.dp
+            )
+
+            // Suggestions row
+            if (suggestions.isNotEmpty() && tagInput.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(suggestions) { tag ->
+                        SuggestionChip(
+                            onClick = { onAddTag(tag.name); tagInput = "" },
+                            label = { Text("#${tag.name}") }
+                        )
+                    }
+                }
+            }
+
+            // Applied tag chips — pill style matching screenshot
+            if (tags.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(tags) { tag ->
+                        PillTagChip(
+                            tag = tag,
+                            onRemove = { onRemoveTag(tag) }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+// ─── Pill Tag Chip (matches screenshot style) ─────────────────────────────────
+
 @Composable
-private fun AttachmentsSection(
+private fun PillTagChip(tag: String, onRemove: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable { onRemove() }
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // Small filled circle — matches screenshot's black dot before tag name
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+        )
+        Text(
+            text = tag,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Icon(
+            Icons.Default.Close,
+            contentDescription = "Remove $tag",
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+    }
+}
+
+// ─── Seamless Attachment Row ──────────────────────────────────────────────────
+
+@Composable
+private fun SeamlessAttachmentRow(
     attachments: List<Attachment>,
     onAddAttachment: () -> Unit,
     onRemoveAttachment: (Attachment) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    Column {
+        // Tap-able row matching screenshot's "Add attachment >" style
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { if (attachments.size < 5) onAddAttachment() }
+                .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Attachments (max 5)", style = MaterialTheme.typography.labelLarge)
-            if (attachments.size < 5) {
-                TextButton(onClick = onAddAttachment) {
-                    Icon(Icons.Default.AttachFile, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add")
-                }
-            }
+            Icon(
+                Icons.Default.AttachFile,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(16.dp))
+            Text(
+                "Add attachment",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
         }
-        attachments.forEach { att ->
-            AttachmentItem(attachment = att, onRemove = { onRemoveAttachment(att) })
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            thickness = 0.5.dp
+        )
+
+        // Existing attachments
+        if (attachments.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            attachments.forEach { att ->
+                AttachmentItem(
+                    attachment = att,
+                    onRemove = { onRemoveAttachment(att) }
+                )
+            }
         }
     }
 }
 
+// ─── Attachment Item ──────────────────────────────────────────────────────────
+
 @Composable
 private fun AttachmentItem(attachment: Attachment, onRemove: () -> Unit) {
     val icon = when {
-        attachment.mimeType.contains("pdf")   -> Icons.Default.PictureAsPdf
+        attachment.mimeType.contains("pdf") -> Icons.Default.PictureAsPdf
         attachment.mimeType.contains("image") -> Icons.Default.Image
-        else                                   -> Icons.Default.Description
+        else -> Icons.Default.Description
     }
     Card(
         shape = RoundedCornerShape(8.dp),
@@ -583,7 +858,9 @@ private fun AttachmentItem(attachment: Attachment, onRemove: () -> Unit) {
         )
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(12.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, null, Modifier.size(24.dp))
@@ -610,6 +887,6 @@ private fun AttachmentItem(attachment: Attachment, onRemove: () -> Unit) {
 
 private fun formatFileSize(bytes: Long): String = when {
     bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576f)
-    bytes >= 1_024     -> "%.1f KB".format(bytes / 1_024f)
-    else               -> "$bytes B"
+    bytes >= 1024 -> "%.1f KB".format(bytes / 1024f)
+    else -> "$bytes B"
 }

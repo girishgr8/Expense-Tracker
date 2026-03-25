@@ -1,28 +1,17 @@
 package com.expensetracker.presentation.ui.accounts
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -34,89 +23,38 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.CurrencyRupee
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Payment
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.expensetracker.data.repository.AuthManager
-import com.expensetracker.data.repository.BankAccountRepository
-import com.expensetracker.data.repository.CreditCardRepository
-import com.expensetracker.data.repository.PaymentModeRepository
-import com.expensetracker.data.repository.TransactionRepository
-import com.expensetracker.data.repository.UserPreferencesRepository
-import com.expensetracker.domain.model.BankAccount
-import com.expensetracker.domain.model.CreditCard
-import com.expensetracker.domain.model.PaymentMode
-import com.expensetracker.domain.model.PaymentModeType
-import com.expensetracker.domain.model.Transaction
-import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.R
+import com.expensetracker.data.repository.*
+import com.expensetracker.domain.model.*
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlin.math.abs
@@ -149,6 +87,7 @@ data class AccountsUiState(
     val detailBalance: Double = 0.0,
     val detailLinkedModes: List<PaymentMode> = emptyList(),
     val showEditAccountSheet: Boolean = false,
+    val showCardTransactions: Boolean = false,
     val currencySymbol: String = "₹"
 )
 
@@ -284,9 +223,13 @@ class AccountsViewModel @Inject constructor(
             detailTransactions = emptyList(),
             detailBalance = 0.0,
             detailLinkedModes = emptyList(),
-            showEditAccountSheet = false
+            showEditAccountSheet = false,
+            showCardTransactions = false
         )
     }
+
+    fun openCardTransactions() = _uiState.update { it.copy(showCardTransactions = true) }
+    fun closeCardTransactions() = _uiState.update { it.copy(showCardTransactions = false) }
 
     fun openEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = true) }
     fun closeEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = false) }
@@ -516,9 +459,11 @@ fun AccountsScreen(
                 standaloneModes.isEmpty() && uiState.creditCards.isEmpty()
 
         if (isEmpty) {
-            Box(Modifier
-                .fillMaxSize()
-                .padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding), contentAlignment = Alignment.Center
+            ) {
                 EmptyState(
                     icon = Icons.Default.AccountBalance,
                     title = "No accounts yet",
@@ -733,6 +678,16 @@ fun AccountsScreen(
         )
     }
 
+    // ── BackHandler: layered back navigation ─────────────────────────────────
+    // Layer 1: card transactions screen — back closes it (returns to detail)
+    BackHandler(enabled = uiState.showCardTransactions) {
+        viewModel.closeCardTransactions()
+    }
+    // Layer 2: detail screen — back closes it (returns to accounts list)
+    BackHandler(enabled = showDetail && !uiState.showCardTransactions) {
+        viewModel.closeDetail()
+    }
+
     // ── Full-screen detail overlay ────────────────────────────────────────────
 
     AnimatedVisibility(
@@ -755,8 +710,10 @@ fun AccountsScreen(
             currencySymbol = sym,
             isCard = uiState.selectedDetailCard != null,
             account = uiState.selectedDetailAccount,
+            card = uiState.selectedDetailCard,
             linkedModes = uiState.detailLinkedModes,
             showEditSheet = uiState.showEditAccountSheet,
+            showCardTransactions = uiState.showCardTransactions,
             onNavigateBack = viewModel::closeDetail,
             onEditAccount = viewModel::openEditAccountSheet,
             onCloseEditSheet = viewModel::closeEditAccountSheet,
@@ -770,7 +727,9 @@ fun AccountsScreen(
             onLinkMode = { accId, type, id ->
                 viewModel.addModeToAccount(accId, type, id)
             },
-            onDeleteMode = viewModel::deleteModeFromDetail
+            onDeleteMode = viewModel::deleteModeFromDetail,
+            onOpenCardTransactions = viewModel::openCardTransactions,
+            onCloseCardTransactions = viewModel::closeCardTransactions
         )
     }
 }
@@ -935,16 +894,23 @@ private fun DetailScreen(
     currencySymbol: String,
     isCard: Boolean,
     account: BankAccount?,
+    card: CreditCard?,
     linkedModes: List<PaymentMode>,
     showEditSheet: Boolean,
+    showCardTransactions: Boolean,
     onNavigateBack: () -> Unit,
     onEditAccount: () -> Unit,
     onCloseEditSheet: () -> Unit,
     onSaveEditAccount: (BankAccount, String, Double) -> Unit,
     onDeleteAccount: (BankAccount) -> Unit,
     onLinkMode: (Long, PaymentModeType, String) -> Unit,
-    onDeleteMode: (PaymentMode) -> Unit
+    onDeleteMode: (PaymentMode) -> Unit,
+    onOpenCardTransactions: () -> Unit,
+    onCloseCardTransactions: () -> Unit
 ) {
+    // Intercept back when card transactions screen is open
+    BackHandler(enabled = showCardTransactions) { onCloseCardTransactions() }
+
     var selectedTab by remember { mutableIntStateOf(0) }
 
     val filteredTxns = when (selectedTab) {
@@ -954,7 +920,6 @@ private fun DetailScreen(
     }
 
     val dateFormatter = DateTimeFormatter.ofPattern("dd MMM")
-    val balanceLabel = if (isCard) "Available Limit" else "Available Balance"
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -972,8 +937,8 @@ private fun DetailScreen(
                     }
                 },
                 actions = {
-                    if (account != null) {
-                        // Edit account button
+                    // Edit button (bank accounts + credit cards)
+                    if (account != null || card != null) {
                         IconButton(
                             onClick = onEditAccount,
                             modifier = Modifier
@@ -987,9 +952,8 @@ private fun DetailScreen(
                             )
                         }
                         Spacer(Modifier.width(8.dp))
-                        // Add transaction shortcut
                         IconButton(
-                            onClick = { /* could navigate to add transaction */ },
+                            onClick = { },
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -1006,81 +970,92 @@ private fun DetailScreen(
             )
         }
     ) { padding ->
-        Column(Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
 
-            // ── Enhanced balance card ─────────────────────────────────────────
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        balanceLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "${if (balance < 0) "-" else ""}$currencySymbol${fmtAmt(abs(balance))}",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (balance >= 0) MaterialTheme.colorScheme.onSurface
-                        else ExpenseRed
-                    )
-                    // Always show "Incorrect balance? Edit" for bank accounts
-                    if (account != null) {
-                        Spacer(Modifier.height(4.dp))
-                        Row {
-                            Text(
-                                "Incorrect balance? ",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "Edit",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.clickable { onEditAccount() })
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        // Linked payment modes row
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "${linkedModes.size} Linked payment mode${if (linkedModes.size != 1) "s" else ""}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            OutlinedButton(
-                                onClick = onEditAccount,
-                                shape = RoundedCornerShape(20.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Icon(Icons.Default.Add, null, Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Link", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    } else if (balance < 0) {
-                        Spacer(Modifier.height(4.dp))
+            if (card != null) {
+                // ── Credit card summary card ──────────────────────────────────
+                CreditCardDetailCard(
+                    card = card,
+                    transactions = transactions,
+                    currencySymbol = currencySymbol,
+                    onSeeTransactions = onOpenCardTransactions
+                )
+            } else {
+                // ── Bank account / mode balance card ──────────────────────────
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
                         Text(
-                            "Incorrect balance? Edit",
+                            if (isCard) "Available Limit" else "Available Balance",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${if (balance < 0) "-" else ""}$currencySymbol${fmtAmt(abs(balance))}",
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (balance >= 0) MaterialTheme.colorScheme.onSurface
+                            else ExpenseRed
+                        )
+                        if (account != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Row {
+                                Text(
+                                    "Incorrect balance? ",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "Edit",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.clickable { onEditAccount() })
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "${linkedModes.size} Linked payment mode${if (linkedModes.size != 1) "s" else ""}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                OutlinedButton(
+                                    onClick = onEditAccount,
+                                    shape = RoundedCornerShape(20.dp),
+                                    contentPadding = PaddingValues(
+                                        horizontal = 14.dp,
+                                        vertical = 6.dp
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Add, null, Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Link", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        } else if (balance < 0) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Incorrect balance? Edit",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -1143,7 +1118,382 @@ private fun DetailScreen(
             onDeleteMode = onDeleteMode
         )
     }
+
+    // ── Card transactions screen (full-screen overlay) ────────────────────────
+    AnimatedVisibility(
+        visible = showCardTransactions && card != null,
+        enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) +
+                fadeIn(animationSpec = tween(300)),
+        exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(250)) +
+                fadeOut(animationSpec = tween(250))
+    ) {
+        if (card != null) {
+            CardTransactionsScreen(
+                card = card,
+                transactions = transactions,
+                currencySymbol = currencySymbol,
+                onNavigateBack = onCloseCardTransactions
+            )
+        }
+    }
 }
+
+// ─── Credit Card Detail Card (summary card in detail screen) ─────────────────
+
+@Composable
+private fun CreditCardDetailCard(
+    card: CreditCard,
+    transactions: List<Transaction>,
+    currencySymbol: String,
+    onSeeTransactions: () -> Unit
+) {
+    val usedLimit = card.totalLimit - card.availableLimit
+    val usagePct = if (card.totalLimit > 0)
+        (usedLimit / card.totalLimit).toFloat().coerceIn(0f, 1f) else 0f
+    val currentSpends = transactions
+        .filter { it.type == TransactionType.EXPENSE }
+        .sumOf { it.amount }
+
+    // Compute days until payment due
+    val today = LocalDate.now()
+    val dueDay = card.paymentDueDate
+    val candidateDue = today.withDayOfMonth(dueDay.coerceAtMost(today.lengthOfMonth()))
+    val dueDate = if (!candidateDue.isBefore(today)) candidateDue
+    else candidateDue.plusMonths(1)
+    val daysUntilDue = java.time.temporal.ChronoUnit.DAYS.between(today, dueDate).toInt()
+
+    // Compute previous billing cycle dates
+    val billingDay = card.billingCycleDate
+    val cycleEnd = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
+        .let { if (it.isBefore(today)) it else it.minusMonths(1) }
+    cycleEnd.minusMonths(1).plusDays(1)
+
+    val onTrack = usagePct < 0.8f
+    DateTimeFormatter.ofPattern("d MMM")
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+
+            // Available limit + on-track badge
+            Text(
+                "Available Credit Limit",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "$currencySymbol${fmtAmt(card.availableLimit)}",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (onTrack) Color(0xFF1B5E20) else Color(0xFF7F0000))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            if (onTrack) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            null,
+                            tint = if (onTrack) Color(0xFF69F0AE) else Color(0xFFFF5252),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            if (onTrack) "On Track" else "High Usage",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (onTrack) Color(0xFF69F0AE) else Color(0xFFFF5252)
+                        )
+                    }
+                }
+            }
+
+            // Incorrect? Edit
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "Incorrect? Edit",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // Usage progress bar
+            Spacer(Modifier.height(12.dp))
+            LinearProgressIndicator(
+                progress = { usagePct },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = if (onTrack) Color(0xFF69F0AE) else ExpenseRed,
+                trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            )
+
+            // Current spends + total limit
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.clickable { onSeeTransactions() }
+                    ) {
+                        Text(
+                            "Current Spends",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Icon(
+                            Icons.Default.ChevronRight, null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        "$currencySymbol${fmtAmt(currentSpends)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "Total Credit Limit",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "$currencySymbol${fmtAmt(card.totalLimit)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Payment due + see transactions
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                thickness = 0.5.dp
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Payment due in $daysUntilDue day${if (daysUntilDue != 1) "s" else ""}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onSeeTransactions() }
+                ) {
+                    Text(
+                        "See Transactions",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Icon(
+                        Icons.Default.ChevronRight, null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Record Payment + Bell button row
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { },
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp)
+                ) {
+                    Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Record Payment",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                IconButton(
+                    onClick = { },
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Icon(
+                        Icons.Default.Notifications, null,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── Card Transactions Screen ─────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CardTransactionsScreen(
+    card: CreditCard,
+    transactions: List<Transaction>,
+    currencySymbol: String,
+    onNavigateBack: () -> Unit
+) {
+    val today = LocalDate.now()
+    val billingDay = card.billingCycleDate
+    // Previous cycle end = last billing date that has already passed
+    val cycleEnd = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
+        .let { if (it.isBefore(today)) it else it.minusMonths(1) }
+    val cycleStart = cycleEnd.minusMonths(1).plusDays(1)
+    val dateFmt = DateTimeFormatter.ofPattern("d MMM")
+    val dateFormatter = DateTimeFormatter.ofPattern("dd MMM")
+
+    val cycleTotal = transactions.filter {
+        val d = it.dateTime.toLocalDate()
+        !d.isBefore(cycleStart) && !d.isAfter(cycleEnd)
+    }.sumOf { it.amount }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text("Transactions", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { },
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .size(40.dp)
+                    ) {
+                        Icon(Icons.Default.FilterList, null, Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
+        ) {
+            // Previous billing cycle card
+            item {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Previous Billing Cycle • ${cycleStart.format(dateFmt)} – ${
+                                cycleEnd.format(
+                                    dateFmt
+                                )
+                            }",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Total Amount *",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "$currencySymbol${fmtAmt(cycleTotal)}",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "* Please refer to your official credit card statement for the accurate Total Amount Due.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            if (transactions.isEmpty()) {
+                item {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 80.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ReceiptLong, null,
+                            modifier = Modifier.size(80.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                        Text(
+                            "No transactions",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "No transactions during this period!",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            } else {
+                items(transactions, key = { it.id }) { txn ->
+                    DetailTransactionRow(txn, dateFormatter, currencySymbol)
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        thickness = 0.5.dp
+                    )
+                }
+            }
+        }
+    }
+}
+
 
 // ─── Edit Account Bottom Sheet ────────────────────────────────────────────────
 
@@ -1335,24 +1685,17 @@ private fun EditAccountSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Mode icon
-                        val modeIcon = when (mode.type) {
-                            PaymentModeType.DEBIT_CARD -> Icons.Default.CreditCard
-                            PaymentModeType.UPI -> Icons.Default.PhoneAndroid
-                            PaymentModeType.NET_BANKING -> Icons.Default.Language
-                            PaymentModeType.CHEQUE -> Icons.Default.EditNote
-                            else -> Icons.Default.Payment
-                        }
                         Box(
                             Modifier
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                modeIcon, null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(18.dp)
+                            PaymentModeIcon(
+                                type = mode.type,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                         Spacer(Modifier.width(12.dp))
@@ -1481,9 +1824,7 @@ private fun EditAccountSheet(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete Account") },
-            text = {
-                Text("Delete ${account.name} and all its linked payment modes? This cannot be undone.")
-            },
+            text = { Text("Delete ${account.name} and all its linked payment modes? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = { onDelete(); showDeleteDialog = false }) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
@@ -1493,6 +1834,33 @@ private fun EditAccountSheet(
                 TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+// ─── Payment mode icon with UPI logo support ──────────────────────────────────
+
+@Composable
+private fun PaymentModeIcon(
+    type: PaymentModeType,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onPrimaryContainer
+) {
+    if (type == PaymentModeType.UPI) {
+        Image(
+            painter = painterResource(id = R.drawable.ic_upi_logo),
+            contentDescription = "UPI",
+            modifier = modifier
+        )
+    } else {
+        val icon = when (type) {
+            PaymentModeType.DEBIT_CARD -> Icons.Default.CreditCard
+            PaymentModeType.NET_BANKING -> Icons.Default.Language
+            PaymentModeType.CHEQUE -> Icons.Default.EditNote
+            PaymentModeType.CASH -> Icons.Default.Payments
+            PaymentModeType.WALLET -> Icons.Default.AccountBalanceWallet
+            else -> Icons.Default.Payment
+        }
+        Icon(icon, contentDescription = null, modifier = modifier, tint = tint)
     }
 }
 
@@ -1820,14 +2188,9 @@ private fun AddAccountSheet(
                                         .padding(vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        when (type) {
-                                            PaymentModeType.DEBIT_CARD -> Icons.Default.CreditCard
-                                            PaymentModeType.UPI -> Icons.Default.PhoneAndroid
-                                            PaymentModeType.NET_BANKING -> Icons.Default.Language
-                                            PaymentModeType.CHEQUE -> Icons.Default.EditNote
-                                            else -> Icons.Default.Payment
-                                        }, null, Modifier.size(18.dp),
+                                    PaymentModeIcon(
+                                        type = type,
+                                        modifier = Modifier.size(18.dp),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                     Spacer(Modifier.width(10.dp))
@@ -2371,7 +2734,7 @@ private fun AddEditAccountDialog(
                 Text("Colour", style = MaterialTheme.typography.labelLarge)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(colorOptions) { hex ->
-                        val c = Color(android.graphics.Color.parseColor(hex))
+                        val c = Color(hex.toColorInt())
                         Box(
                             modifier = Modifier
                                 .size(30.dp)
@@ -2493,7 +2856,7 @@ private fun AddEditCreditCardDialog(
                 Text("Card Colour", style = MaterialTheme.typography.labelLarge)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(colorOptions) { hex ->
-                        val c = Color(android.graphics.Color.parseColor(hex))
+                        val c = Color(hex.toColorInt())
                         Box(
                             modifier = Modifier
                                 .size(30.dp)
@@ -2602,7 +2965,7 @@ private fun AddEditPaymentModeDialog(
                             accounts.forEach { account ->
                                 val selected = account.id == selectedAccountId
                                 val accent = runCatching {
-                                    Color(android.graphics.Color.parseColor(account.colorHex))
+                                    Color(account.colorHex.toColorInt())
                                 }.getOrDefault(Color(0xFF6750A4))
                                 Row(
                                     modifier = Modifier

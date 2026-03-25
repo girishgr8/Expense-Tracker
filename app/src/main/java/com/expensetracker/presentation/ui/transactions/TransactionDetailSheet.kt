@@ -1,55 +1,19 @@
 package com.expensetracker.presentation.ui.transactions
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -60,9 +24,7 @@ import com.expensetracker.domain.model.Attachment
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.TagChip
-import com.expensetracker.presentation.theme.ExpenseRed
-import com.expensetracker.presentation.theme.IncomeGreen
-import com.expensetracker.presentation.theme.TransferBlue
+import com.expensetracker.presentation.theme.*
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,21 +46,21 @@ fun TransactionDetailSheet(
 ) {
     val dateFormatter = DateTimeFormatter.ofPattern("EEEE, MMM dd yyyy • hh:mm a")
     val headerColor = when (transaction.type) {
-        TransactionType.INCOME -> IncomeGreen
-        TransactionType.EXPENSE -> ExpenseRed
+        TransactionType.INCOME   -> IncomeGreen
+        TransactionType.EXPENSE  -> ExpenseRed
         TransactionType.TRANSFER -> TransferBlue
     }
     val prefix = when (transaction.type) {
-        TransactionType.INCOME -> "+"
-        TransactionType.EXPENSE -> "-"
+        TransactionType.INCOME   -> "+"
+        TransactionType.EXPENSE  -> "-"
         TransactionType.TRANSFER -> "↔"
     }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle       = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
             modifier = Modifier
@@ -124,21 +86,20 @@ fun TransactionDetailSheet(
                 ) {
                     // Real category icon bubble in the header
                     com.expensetracker.presentation.components.CategoryIconBubble(
-                        iconKey = transaction.categoryIcon.ifEmpty { "category" },
+                        iconKey  = transaction.categoryIcon.ifEmpty { "category" },
                         colorHex = transaction.categoryColorHex,
-                        size = 56
+                        size     = 56
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "$prefix₹${fmtAmt(transaction.amount)}",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = headerColor,
+                        text       = "$prefix₹${fmtAmt(transaction.amount)}",
+                        style      = MaterialTheme.typography.displaySmall,
+                        color      = headerColor,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = transaction.type.name.lowercase()
-                            .replaceFirstChar { it.uppercase() },
+                        text  = transaction.type.name.lowercase().replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.labelLarge,
                         color = headerColor.copy(alpha = 0.8f)
                     )
@@ -152,49 +113,27 @@ fun TransactionDetailSheet(
             ) {
                 // Use the category's own icon (from CategoryIcons map) instead of generic Category icon
                 DetailRow(
-                    icon = com.expensetracker.presentation.ui.categories.CategoryIcons
+                    icon  = com.expensetracker.presentation.ui.categories.CategoryIcons
                         .get(transaction.categoryIcon.ifEmpty { "category" }),
                     label = "Category",
                     value = transaction.categoryName
                 )
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                DetailRow(
-                    icon = Icons.Default.CalendarToday, label = "Date & Time",
-                    value = transaction.dateTime.format(dateFormatter)
-                )
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                DetailRow(icon = Icons.Default.CalendarToday, label = "Date & Time",
+                    value = transaction.dateTime.format(dateFormatter))
                 if (transaction.paymentModeName.isNotEmpty()) {
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    DetailRow(
-                        icon = Icons.Default.AccountBalance, label = "Account",
-                        value = transaction.paymentModeName
-                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    DetailRow(icon = Icons.Default.AccountBalance, label = "Account",
+                        value = transaction.paymentModeName)
                 }
                 if (transaction.toPaymentModeName.isNotEmpty()) {
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    DetailRow(
-                        icon = Icons.AutoMirrored.Filled.ArrowForward, label = "To Account",
-                        value = transaction.toPaymentModeName
-                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    DetailRow(icon = Icons.Default.ArrowForward, label = "To Account",
+                        value = transaction.toPaymentModeName)
                 }
                 if (transaction.note.isNotEmpty()) {
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    DetailRow(
-                        icon = Icons.AutoMirrored.Filled.Notes,
-                        label = "Note",
-                        value = transaction.note
-                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    DetailRow(icon = Icons.Default.Notes, label = "Note", value = transaction.note)
                 }
             }
 
@@ -269,7 +208,7 @@ fun TransactionDetailSheet(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete Transaction") },
-            text = { Text("This action cannot be undone.") },
+            text  = { Text("This action cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = { onDelete(); showDeleteDialog = false; onDismiss() }) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
@@ -315,18 +254,16 @@ private fun DetailRow(
 @Composable
 private fun AttachmentRow(attachment: Attachment) {
     val icon = when {
-        attachment.mimeType.contains("pdf") -> Icons.Default.PictureAsPdf
+        attachment.mimeType.contains("pdf")   -> Icons.Default.PictureAsPdf
         attachment.mimeType.contains("image") -> Icons.Default.Image
-        else -> Icons.Default.Description
+        else                                   -> Icons.Default.Description
     }
     Card(
-        shape = RoundedCornerShape(10.dp),
+        shape  = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
@@ -350,6 +287,6 @@ private fun AttachmentRow(attachment: Attachment) {
 
 private fun formatSize(bytes: Long) = when {
     bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576f)
-    bytes >= 1_024 -> "%.1f KB".format(bytes / 1_024f)
-    else -> "$bytes B"
+    bytes >= 1_024     -> "%.1f KB".format(bytes / 1_024f)
+    else               -> "$bytes B"
 }
