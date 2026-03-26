@@ -1,7 +1,18 @@
 package com.expensetracker.data.local.dao
 
-import androidx.room.*
-import com.expensetracker.data.local.entity.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
+import com.expensetracker.data.local.entity.AttachmentEntity
+import com.expensetracker.data.local.entity.BankAccountEntity
+import com.expensetracker.data.local.entity.BudgetEntity
+import com.expensetracker.data.local.entity.CategoryEntity
+import com.expensetracker.data.local.entity.CreditCardEntity
+import com.expensetracker.data.local.entity.PaymentModeEntity
+import com.expensetracker.data.local.entity.TagEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao

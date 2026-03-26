@@ -1,18 +1,63 @@
 package com.expensetracker.presentation.ui.dashboard
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +76,11 @@ import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.components.LoadingOverlay
-import com.expensetracker.presentation.theme.*
+import com.expensetracker.presentation.theme.CardGradientEnd
+import com.expensetracker.presentation.theme.CardGradientStart
+import com.expensetracker.presentation.theme.ExpenseRed
+import com.expensetracker.presentation.theme.IncomeGreen
+import com.expensetracker.presentation.theme.TransferBlue
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -72,8 +121,10 @@ fun DashboardScreen(
                 shape = CircleShape,
                 modifier = Modifier.size(60.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Transaction",
-                    modifier = Modifier.size(28.dp))
+                Icon(
+                    Icons.Default.Add, contentDescription = "Add Transaction",
+                    modifier = Modifier.size(28.dp)
+                )
             }
         },
         bottomBar = {
@@ -123,9 +174,9 @@ fun DashboardScreen(
                 Spacer(Modifier.height(20.dp))
                 QuickActionsGrid(
                     onTransactions = onNavigateToTransactions,
-                    onCategories   = onNavigateToCategories,
-                    onAccounts     = onNavigateToAccounts,
-                    onBudget       = onNavigateToBudget
+                    onCategories = onNavigateToCategories,
+                    onAccounts = onNavigateToAccounts,
+                    onBudget = onNavigateToBudget
                 )
             }
 
@@ -150,9 +201,11 @@ fun DashboardScreen(
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Icon(Icons.Default.ChevronRight, null,
+                        Icon(
+                            Icons.Default.ChevronRight, null,
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary)
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -167,7 +220,7 @@ fun DashboardScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         EmptyState(
-                            icon = Icons.Default.ReceiptLong,
+                            icon = Icons.AutoMirrored.Filled.ReceiptLong,
                             title = "No transactions yet",
                             subtitle = "Tap + to add your first transaction"
                         )
@@ -220,13 +273,16 @@ fun DashboardScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 listOf(
-                    Triple(Icons.Default.Settings,  "Settings",  onNavigateToSettings),
-                    Triple(Icons.Default.Logout,     "Logout",    { viewModel.logout(); onLogout() })
+                    Triple(Icons.Default.Settings, "Settings", onNavigateToSettings),
+                    Triple(
+                        Icons.AutoMirrored.Filled.Logout,
+                        "Logout"
+                    ) { viewModel.logout(); onLogout() }
                 ).forEach { (icon, label, action) ->
                     ListItem(
                         headlineContent = { Text(label) },
-                        leadingContent  = { Icon(icon, null) },
-                        modifier        = Modifier
+                        leadingContent = { Icon(icon, null) },
+                        modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { showMenu = false; action() }
                     )
@@ -246,11 +302,13 @@ private fun DashboardHeader(
     onAvatar: () -> Unit
 ) {
     val firstName = userName.split(" ").firstOrNull()?.ifEmpty { "User" } ?: "User"
-    val greeting  = run {
+    val greeting = run {
         val h = LocalTime.now().hour
-        when { h < 12 -> "Good Morning" ; h < 17 -> "Good Afternoon" ; else -> "Good Evening" }
+        when {
+            h < 12 -> "Good Morning"; h < 17 -> "Good Afternoon"; else -> "Good Evening"
+        }
     }
-    // Animated initials background colour cycling through brand palette
+    // Animated initials background color cycling through brand palette
     val initials = userName.split(" ")
         .take(2).joinToString("") { it.firstOrNull()?.uppercase() ?: "" }
         .ifEmpty { "U" }
@@ -281,8 +339,10 @@ private fun DashboardHeader(
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            Icon(Icons.Default.Search, contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                Icons.Default.Search, contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         Spacer(Modifier.width(8.dp))
@@ -335,10 +395,12 @@ private fun CashFlowCard(
                 val cardLabel = when (selectedPeriod) {
                     SummaryPeriod.THIS_MONTH -> {
                         val now = YearMonth.now()
-                        now.month.name.lowercase().replaceFirstChar { it.uppercase() } + " " + now.year
+                        now.month.name.lowercase()
+                            .replaceFirstChar { it.uppercase() } + " " + now.year
                     }
+
                     SummaryPeriod.THIS_YEAR -> "Year " + LocalDate.now().year.toString()
-                    SummaryPeriod.ALL_TIME  -> "All Time"
+                    SummaryPeriod.ALL_TIME -> "All Time"
                 }
                 Text(
                     cardLabel,
@@ -367,8 +429,10 @@ private fun CashFlowCard(
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold
                         )
-                        Icon(Icons.Default.KeyboardArrowDown, null,
-                            tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(
+                            Icons.Default.KeyboardArrowDown, null,
+                            tint = Color.White, modifier = Modifier.size(16.dp)
+                        )
                     }
                     DropdownMenu(
                         expanded = expanded,
@@ -461,17 +525,17 @@ private fun CashFlowCard(
 
 @Composable
 private fun BudgetCard(bp: BudgetProgress, onTap: () -> Unit) {
-    val pct      = (bp.percentage / 100f).coerceIn(0f, 1f)
+    val pct = (bp.percentage / 100f).coerceIn(0f, 1f)
     val barColor = when {
         bp.percentage >= 90f -> ExpenseRed
         bp.percentage >= 70f -> Color(0xFFFF9800)
-        else                 -> IncomeGreen
+        else -> IncomeGreen
     }
     Card(
-        onClick   = onTap,
-        shape     = RoundedCornerShape(20.dp),
+        onClick = onTap,
+        shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(2.dp),
-        modifier  = Modifier.padding(horizontal = 16.dp)
+        modifier = Modifier.padding(horizontal = 16.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -479,41 +543,57 @@ private fun BudgetCard(bp: BudgetProgress, onTap: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Box(
-                        Modifier.size(36.dp).clip(CircleShape)
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.PieChart, null,
+                        Icon(
+                            Icons.Default.PieChart, null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp))
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                     Column {
-                        Text("Monthly Budget",
+                        Text(
+                            "Monthly Budget",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold)
-                        Text("${bp.percentage.toInt()}% used",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "${bp.percentage.toInt()}% used",
                             style = MaterialTheme.typography.bodySmall,
-                            color = barColor)
+                            color = barColor
+                        )
                     }
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("₹${fmtAmt(bp.spent)}",
+                    Text(
+                        "₹${fmtAmt(bp.spent)}",
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold)
-                    Text("of ₹${fmtAmt(bp.budget.totalLimit)}",
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "of ₹${fmtAmt(bp.budget.totalLimit)}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
             Spacer(Modifier.height(12.dp))
             LinearProgressIndicator(
-                progress   = { pct },
-                modifier   = Modifier.fillMaxWidth().height(8.dp)
+                progress = { pct },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
                     .clip(RoundedCornerShape(4.dp)),
-                color      = barColor,
+                color = barColor,
                 trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
             )
         }
@@ -525,19 +605,30 @@ private fun BudgetCard(bp: BudgetProgress, onTap: () -> Unit) {
 @Composable
 private fun QuickActionsGrid(
     onTransactions: () -> Unit,
-    onCategories:   () -> Unit,
-    onAccounts:     () -> Unit,
-    onBudget:       () -> Unit
+    onCategories: () -> Unit,
+    onAccounts: () -> Unit,
+    onBudget: () -> Unit
 ) {
     val actions = listOf(
-        QuickAction(Icons.Default.ReceiptLong,  "Transactions",  MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,  onTransactions),
-        QuickAction(Icons.Default.Category,      "Categories",    MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.onSecondaryContainer, onCategories),
-        QuickAction(Icons.Default.AccountBalance,"Accounts",      MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,  onAccounts),
-        QuickAction(Icons.Default.PieChart,      "Budget",        MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer,     onBudget)
+        QuickAction(
+            Icons.AutoMirrored.Filled.ReceiptLong,
+            "Transactions",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            onTransactions
+        ),
+        QuickAction(
+            Icons.Default.Category, "Categories", MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer, onCategories
+        ),
+        QuickAction(
+            Icons.Default.AccountBalance, "Accounts", MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer, onAccounts
+        ),
+        QuickAction(
+            Icons.Default.PieChart, "Budget", MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer, onBudget
+        )
     )
 
     Row(
@@ -571,14 +662,18 @@ private fun QuickActionTile(action: QuickAction, modifier: Modifier = Modifier) 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Icon(action.icon, contentDescription = action.label,
-            tint     = action.contentColor,
-            modifier = Modifier.size(24.dp))
-        Text(action.label,
-            style    = MaterialTheme.typography.labelSmall,
-            color    = action.contentColor,
+        Icon(
+            action.icon, contentDescription = action.label,
+            tint = action.contentColor,
+            modifier = Modifier.size(24.dp)
+        )
+        Text(
+            action.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = action.contentColor,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis)
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -595,21 +690,23 @@ private fun DashboardTransactionRow(txn: Transaction) {
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Category icon bubble using the category's own colour
+        // Category icon bubble using the category's own color
         CategoryIconBubble(
-            iconKey  = txn.categoryIcon.ifEmpty { "category" },
+            iconKey = txn.categoryIcon.ifEmpty { "category" },
             colorHex = txn.categoryColorHex.ifEmpty { "#6750A4" },
-            size     = 44
+            size = 44
         )
 
         Spacer(Modifier.width(12.dp))
 
         Column(Modifier.weight(1f)) {
-            Text(title,
-                style    = MaterialTheme.typography.titleSmall,
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis)
+                overflow = TextOverflow.Ellipsis
+            )
             // Payment mode — strip any parenthetical balance info e.g. "(₹X,XXX available)"
             if (txn.paymentModeName.isNotEmpty()) {
                 val modeDisplay = txn.paymentModeName
@@ -618,14 +715,18 @@ private fun DashboardTransactionRow(txn: Transaction) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(Icons.Default.CreditCard, null,
+                    Icon(
+                        Icons.Default.CreditCard, null,
                         modifier = Modifier.size(11.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    Text(modeDisplay,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        modeDisplay,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -635,20 +736,20 @@ private fun DashboardTransactionRow(txn: Transaction) {
         // Right side: amount + date
         Column(horizontalAlignment = Alignment.End) {
             val amountColor = when (txn.type) {
-                TransactionType.INCOME   -> IncomeGreen
-                TransactionType.EXPENSE  -> ExpenseRed
+                TransactionType.INCOME -> IncomeGreen
+                TransactionType.EXPENSE -> ExpenseRed
                 TransactionType.TRANSFER -> TransferBlue
             }
             val prefix = when (txn.type) {
-                TransactionType.INCOME   -> "+"
-                TransactionType.EXPENSE  -> "-"
+                TransactionType.INCOME -> "+"
+                TransactionType.EXPENSE -> "-"
                 TransactionType.TRANSFER -> ""
             }
             Text(
                 "$prefix₹${fmtAmt(txn.amount)}",
-                style      = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color      = amountColor
+                color = amountColor
             )
             Text(
                 txn.dateTime.format(dateFormatter),
@@ -664,9 +765,9 @@ private fun DashboardTransactionRow(txn: Transaction) {
 @Composable
 private fun DashboardBottomBar(
     onTransactions: () -> Unit,
-    onAnalysis:     () -> Unit,
-    onAccounts:     () -> Unit,
-    onMore:         () -> Unit
+    onAnalysis: () -> Unit,
+    onAccounts: () -> Unit,
+    onMore: () -> Unit
 ) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -674,35 +775,35 @@ private fun DashboardBottomBar(
     ) {
         NavigationBarItem(
             selected = true,
-            onClick  = {},
-            icon     = { Icon(Icons.Default.Home, null) },
-            label    = { Text("Home") }
+            onClick = {},
+            icon = { Icon(Icons.Default.Home, null) },
+            label = { Text("Home") }
         )
         NavigationBarItem(
             selected = false,
-            onClick  = onAnalysis,
-            icon     = { Icon(Icons.Default.BarChart, null) },
-            label    = { Text("Analysis") }
+            onClick = onAnalysis,
+            icon = { Icon(Icons.Default.BarChart, null) },
+            label = { Text("Analysis") }
         )
         // Centre placeholder for FAB
         NavigationBarItem(
             selected = false,
-            onClick  = {},
-            icon     = { Spacer(Modifier.size(24.dp)) },
-            label    = { Text("") },
-            enabled  = false
+            onClick = {},
+            icon = { Spacer(Modifier.size(24.dp)) },
+            label = { Text("") },
+            enabled = false
         )
         NavigationBarItem(
             selected = false,
-            onClick  = onAccounts,
-            icon     = { Icon(Icons.Default.AccountBalance, null) },
-            label    = { Text("Accounts") }
+            onClick = onAccounts,
+            icon = { Icon(Icons.Default.AccountBalance, null) },
+            label = { Text("Accounts") }
         )
         NavigationBarItem(
             selected = false,
-            onClick  = onMore,
-            icon     = { Icon(Icons.Default.MoreHoriz, null) },
-            label    = { Text("More") }
+            onClick = onMore,
+            icon = { Icon(Icons.Default.MoreHoriz, null) },
+            label = { Text("More") }
         )
     }
 }

@@ -3,13 +3,31 @@ package com.expensetracker.presentation.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,10 +39,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.core.graphics.toColorInt
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
-import com.expensetracker.presentation.theme.*
+import com.expensetracker.presentation.theme.CardGradientEnd
+import com.expensetracker.presentation.theme.CardGradientStart
+import com.expensetracker.presentation.theme.ExpenseRed
+import com.expensetracker.presentation.theme.IncomeGreen
+import com.expensetracker.presentation.theme.TransferBlue
 
 // ─── Amount Display ───────────────────────────────────────────────────────────
 
@@ -40,8 +62,8 @@ private fun fmtAmt(amount: Double): String {
 fun AmountText(
     amount: Double,
     type: TransactionType,
-    style: TextStyle = MaterialTheme.typography.titleMedium,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.titleMedium
 ) {
     val color = when (type) {
         TransactionType.INCOME -> IncomeGreen
@@ -96,7 +118,7 @@ fun TransactionListItem(
         ) {
             // Category icon bubble using the category's own color
             CategoryIconBubble(
-                iconKey  = transaction.categoryIcon.ifEmpty { "category" },
+                iconKey = transaction.categoryIcon.ifEmpty { "category" },
                 colorHex = transaction.categoryColorHex.ifEmpty { "#6750A4" }
             )
 
@@ -105,14 +127,14 @@ fun TransactionListItem(
             // Left column — title + optional category subtitle
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text     = title,
-                    style    = MaterialTheme.typography.titleSmall,
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (subtitle != null) {
                     Text(
-                        text  = subtitle,
+                        text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -124,14 +146,14 @@ fun TransactionListItem(
             Spacer(Modifier.width(8.dp))
 
             // Right column — amount on top, date below
-            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            Column(horizontalAlignment = Alignment.End) {
                 AmountText(
                     amount = transaction.amount,
-                    type   = transaction.type,
-                    style  = MaterialTheme.typography.titleSmall
+                    type = transaction.type,
+                    style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    text  = dateLabel,
+                    text = dateLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -146,7 +168,7 @@ fun CategoryIconBubble(
     colorHex: String,
     size: Int = 44
 ) {
-    val color = runCatching { Color(android.graphics.Color.parseColor(colorHex)) }
+    val color = runCatching { Color(colorHex.toColorInt()) }
         .getOrDefault(MaterialTheme.colorScheme.primary)
 
     val imageVector = com.expensetracker.presentation.ui.categories.CategoryIcons.get(iconKey)
@@ -175,9 +197,9 @@ fun CategoryIconBubble(
     size: Int = 44
 ) {
     CategoryIconBubble(
-        iconKey   = category.icon,
-        colorHex  = category.colorHex,
-        size      = size
+        iconKey = category.icon,
+        colorHex = category.colorHex,
+        size = size
     )
 }
 
@@ -248,16 +270,31 @@ fun GradientSummaryCard(
             )
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth()) {
-                SummaryPill(label = "Income", amount = income, color = IncomeGreen, Modifier.weight(1f))
+                SummaryPill(
+                    label = "Income",
+                    amount = income,
+                    color = IncomeGreen,
+                    Modifier.weight(1f)
+                )
                 Spacer(Modifier.width(12.dp))
-                SummaryPill(label = "Expense", amount = expense, color = ExpenseRed, Modifier.weight(1f))
+                SummaryPill(
+                    label = "Expense",
+                    amount = expense,
+                    color = ExpenseRed,
+                    Modifier.weight(1f)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SummaryPill(label: String, amount: Double, color: Color, modifier: Modifier = Modifier) {
+private fun SummaryPill(
+    label: String,
+    amount: Double,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -266,9 +303,16 @@ private fun SummaryPill(label: String, amount: Double, color: Color, modifier: M
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+                Box(modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(color))
                 Spacer(Modifier.width(6.dp))
-                Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(0.8f))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(0.8f)
+                )
             }
             Spacer(Modifier.height(2.dp))
             Text(
@@ -294,7 +338,14 @@ fun TagChip(
         onClick = {},
         label = { Text("#$tag", style = MaterialTheme.typography.labelSmall) },
         trailingIcon = if (onRemove != null) {
-            { Icon(Icons.Default.Close, contentDescription = "Remove tag", modifier = Modifier.size(14.dp).clickable { onRemove() }) }
+            {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Remove tag",
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clickable { onRemove() })
+            }
         } else null,
         modifier = modifier
     )
@@ -311,7 +362,9 @@ fun EmptyState(
     action: (@Composable () -> Unit)? = null
 ) {
     Column(
-        modifier = modifier.fillMaxWidth().padding(32.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -322,7 +375,11 @@ fun EmptyState(
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
         )
         Spacer(Modifier.height(16.dp))
-        Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             text = subtitle,
@@ -343,7 +400,9 @@ fun EmptyState(
 fun LoadingOverlay(isLoading: Boolean) {
     if (isLoading) {
         Box(
-            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f)),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator()

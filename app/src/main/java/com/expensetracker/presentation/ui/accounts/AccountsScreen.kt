@@ -11,7 +11,20 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -24,9 +37,57 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.CurrencyRupee
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,14 +105,27 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.R
-import com.expensetracker.data.repository.*
-import com.expensetracker.domain.model.*
+import com.expensetracker.data.repository.AuthManager
+import com.expensetracker.data.repository.BankAccountRepository
+import com.expensetracker.data.repository.CreditCardRepository
+import com.expensetracker.data.repository.PaymentModeRepository
+import com.expensetracker.data.repository.TransactionRepository
+import com.expensetracker.data.repository.UserPreferencesRepository
+import com.expensetracker.domain.model.BankAccount
+import com.expensetracker.domain.model.CreditCard
+import com.expensetracker.domain.model.PaymentMode
+import com.expensetracker.domain.model.PaymentModeType
+import com.expensetracker.domain.model.Transaction
+import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -459,11 +533,9 @@ fun AccountsScreen(
                 standaloneModes.isEmpty() && uiState.creditCards.isEmpty()
 
         if (isEmpty) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding), contentAlignment = Alignment.Center
-            ) {
+            Box(Modifier
+                .fillMaxSize()
+                .padding(padding), contentAlignment = Alignment.Center) {
                 EmptyState(
                     icon = Icons.Default.AccountBalance,
                     title = "No accounts yet",
@@ -970,11 +1042,9 @@ private fun DetailScreen(
             )
         }
     ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Column(Modifier
+            .fillMaxSize()
+            .padding(padding)) {
 
             if (card != null) {
                 // ── Credit card summary card ──────────────────────────────────
@@ -1684,20 +1754,12 @@ private fun EditAccountSheet(
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Mode icon
-                        Box(
-                            Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            PaymentModeIcon(
-                                type = mode.type,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
+                        // Mode icon — no background so UPI logo and other icons render cleanly
+                        PaymentModeIcon(
+                            type = mode.type,
+                            modifier = Modifier.size(26.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(Modifier.width(12.dp))
                         Text(
                             mode.type.displayName() +
@@ -1708,32 +1770,19 @@ private fun EditAccountSheet(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        // Edit mode button
-                        IconButton(
-                            onClick = { /* future: edit mode inline */ },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
+                        // Edit mode button — no background, no fixed size clip, just plain IconButton
+                        IconButton(onClick = { /* future: edit mode inline */ }) {
                             Icon(
-                                Icons.Default.Edit, null,
-                                Modifier.size(15.dp),
+                                Icons.Default.Edit, "Edit",
+                                Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Spacer(Modifier.width(6.dp))
                         // Delete mode button
-                        IconButton(
-                            onClick = { onDeleteMode(mode) },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
+                        IconButton(onClick = { onDeleteMode(mode) }) {
                             Icon(
-                                Icons.Default.Delete, null,
-                                Modifier.size(15.dp),
+                                Icons.Default.Delete, "Delete",
+                                Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -1836,8 +1885,6 @@ private fun EditAccountSheet(
         )
     }
 }
-
-// ─── Payment mode icon with UPI logo support ──────────────────────────────────
 
 @Composable
 private fun PaymentModeIcon(

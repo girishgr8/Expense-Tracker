@@ -1,7 +1,6 @@
 package com.expensetracker.util
 
 import androidx.compose.ui.graphics.Color
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 

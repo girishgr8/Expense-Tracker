@@ -42,7 +42,7 @@ class AddTransactionViewModel @Inject constructor(
     private val creditCardRepository: CreditCardRepository,
     private val tagRepository: TagRepository,
     private val authManager: AuthManager,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -152,35 +152,44 @@ class AddTransactionViewModel @Inject constructor(
     }
 
     fun addAttachment(uri: Uri) {
-        val current = _uiState.value.attachments
-        if (current.size >= 5) {
-            _uiState.update { it.copy(error = "Maximum 5 attachments allowed") }
-            return
-        }
         viewModelScope.launch {
             try {
-                _uiState.update { it.copy(attachments = current + saveAttachmentFromUri(uri)) }
+                val att = saveAttachmentFromUri(uri)
+                // Replace any existing attachment — only one allowed
+                _uiState.update { it.copy(attachments = listOf(att)) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Failed to add attachment: ${e.message}") }
+                _uiState.update { it.copy(error = e.message ?: "Failed to add attachment") }
             }
         }
     }
 
     private fun saveAttachmentFromUri(uri: Uri): Attachment {
-        val cr = context.contentResolver
+        val cr       = context.contentResolver
         val mimeType = cr.getType(uri) ?: "application/octet-stream"
-        val allowed = listOf(
-            "application/pdf", "image/jpeg", "image/jpg",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        if (mimeType !in allowed) throw IllegalArgumentException("Unsupported file type: $mimeType")
-        val fileName = uri.lastPathSegment ?: "attachment_${System.currentTimeMillis()}"
-        val dir = File(context.filesDir, "attachments").also { it.mkdirs() }
+
+        // Only PDF and common image formats allowed
+        val allowed = setOf("application/pdf", "image/jpeg", "image/jpg", "image/png")
+        if (mimeType !in allowed) {
+            throw IllegalArgumentException(
+                "Only PDF, JPEG and PNG files are supported. Got: $mimeType"
+            )
+        }
+
+        // Derive a clean file name from the content URI
+        val rawName = uri.lastPathSegment ?: "attachment"
+        val fileName = rawName.substringAfterLast('/').substringAfterLast(':')
+            .ifBlank { "attachment_${System.currentTimeMillis()}" }
+
+        val dir  = File(context.filesDir, "attachments").also { it.mkdirs() }
         val dest = File(dir, "${System.currentTimeMillis()}_$fileName")
-        cr.openInputStream(uri)?.use { i -> dest.outputStream().use { o -> i.copyTo(o) } }
+        cr.openInputStream(uri)?.use { it.copyTo(dest.outputStream()) }
+
         return Attachment(
-            transactionId = 0, fileName = fileName,
-            filePath = dest.absolutePath, mimeType = mimeType, fileSizeBytes = dest.length()
+            transactionId = 0,
+            fileName      = fileName,
+            filePath      = dest.absolutePath,
+            mimeType      = mimeType,
+            fileSizeBytes = dest.length()
         )
     }
 

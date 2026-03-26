@@ -4,8 +4,22 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.expensetracker.data.local.converter.Converters
-import com.expensetracker.data.local.dao.*
-import com.expensetracker.data.local.entity.*
+import com.expensetracker.data.local.dao.AttachmentDao
+import com.expensetracker.data.local.dao.BankAccountDao
+import com.expensetracker.data.local.dao.BudgetDao
+import com.expensetracker.data.local.dao.CategoryDao
+import com.expensetracker.data.local.dao.CreditCardDao
+import com.expensetracker.data.local.dao.PaymentModeDao
+import com.expensetracker.data.local.dao.TagDao
+import com.expensetracker.data.local.dao.TransactionDao
+import com.expensetracker.data.local.entity.AttachmentEntity
+import com.expensetracker.data.local.entity.BankAccountEntity
+import com.expensetracker.data.local.entity.BudgetEntity
+import com.expensetracker.data.local.entity.CategoryEntity
+import com.expensetracker.data.local.entity.CreditCardEntity
+import com.expensetracker.data.local.entity.PaymentModeEntity
+import com.expensetracker.data.local.entity.TagEntity
+import com.expensetracker.data.local.entity.TransactionEntity
 
 @Database(
     entities = [

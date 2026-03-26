@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,19 +32,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -56,7 +59,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -78,6 +80,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -85,6 +88,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.expensetracker.domain.model.Attachment
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.PaymentOption
@@ -93,6 +97,7 @@ import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
+import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -107,6 +112,7 @@ fun AddTransactionScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
+    // Accepts only PDF and images
     val fileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { viewModel.addAttachment(it) } }
@@ -149,10 +155,12 @@ fun AddTransactionScreen(
             )
         }
     ) { padding ->
+        // Fix 2: imePadding() ensures the scroll area shrinks above the keyboard
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -165,6 +173,13 @@ fun AddTransactionScreen(
                 onSelect = viewModel::setTransactionType
             )
 
+            // Fix 1: Date & Time first — styled card row
+            DateTimeCard(
+                dateTime = uiState.dateTime,
+                onDateTimeChange = viewModel::setDateTime,
+                context = context
+            )
+
             // Amount Input
             AmountInputField(
                 amount = uiState.amount,
@@ -172,7 +187,7 @@ fun AddTransactionScreen(
                 type = uiState.transactionType
             )
 
-            // Category Selector — closes on selection
+            // Category Selector
             SelectorField(
                 label = "Category",
                 value = uiState.selectedCategory?.name ?: "",
@@ -184,14 +199,11 @@ fun AddTransactionScreen(
                         it.transactionType == uiState.transactionType || it.transactionType == null
                     },
                     selected = uiState.selectedCategory,
-                    onSelect = { cat ->
-                        viewModel.setCategory(cat)
-                        dismiss()        // ← auto-close
-                    }
+                    onSelect = { cat -> viewModel.setCategory(cat); dismiss() }
                 )
             }
 
-            // Payment Account Selector — closes on selection
+            // Payment Account Selector
             SelectorField(
                 label = if (uiState.transactionType == TransactionType.TRANSFER) "From Account" else "Payment Account",
                 value = uiState.selectedPaymentOption?.displayLabel ?: "",
@@ -201,14 +213,11 @@ fun AddTransactionScreen(
                 PaymentOptionDropdown(
                     options = uiState.paymentOptions,
                     selected = uiState.selectedPaymentOption,
-                    onSelect = { opt ->
-                        viewModel.setPaymentOption(opt)
-                        dismiss()        // ← auto-close
-                    }
+                    onSelect = { opt -> viewModel.setPaymentOption(opt); dismiss() }
                 )
             }
 
-            // To Account (Transfer only) — closes on selection
+            // To Account (Transfer only)
             if (uiState.transactionType == TransactionType.TRANSFER) {
                 SelectorField(
                     label = "To Account",
@@ -219,37 +228,21 @@ fun AddTransactionScreen(
                     PaymentOptionDropdown(
                         options = uiState.paymentOptions.filter { it.id != uiState.selectedPaymentOption?.id },
                         selected = uiState.selectedToPaymentOption,
-                        onSelect = { opt ->
-                            viewModel.setToPaymentOption(opt)
-                            dismiss()    // ← auto-close
-                        }
+                        onSelect = { opt -> viewModel.setToPaymentOption(opt); dismiss() }
                     )
                 }
             }
 
-            // Date & Time Picker
-            DateTimePickerRow(
-                dateTime = uiState.dateTime,
-                onDateTimeChange = viewModel::setDateTime,
-                context = context
-            )
-
-            // ── Other Details section ─────────────────────────────────────────
+            // ── Other Details ─────────────────────────────────────────────────
             Spacer(Modifier.height(4.dp))
             Text(
                 "Other details",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.Bold
             )
 
-            // Seamless Note field
-            SeamlessNoteField(
-                note = uiState.note,
-                onNoteChange = viewModel::setNote
-            )
+            SeamlessNoteField(note = uiState.note, onNoteChange = viewModel::setNote)
 
-            // Seamless Tags field
             SeamlessTagsSection(
                 tags = uiState.tags,
                 suggestions = uiState.tagSuggestions,
@@ -258,16 +251,20 @@ fun AddTransactionScreen(
                 onSearchTag = viewModel::searchTags
             )
 
-            // Attachments row
+            // Fix 3: single attachment, image preview, proper PDF display
             SeamlessAttachmentRow(
-                attachments = uiState.attachments,
-                onAddAttachment = { fileLauncher.launch("*/*") },
-                onRemoveAttachment = viewModel::removeAttachment
+                attachment = uiState.attachments.firstOrNull(),
+                onPickAttachment = {
+                    // MIME filter: only PDF + images
+                    fileLauncher.launch("*/*")
+                },
+                onRemoveAttachment = {
+                    uiState.attachments.firstOrNull()?.let { viewModel.removeAttachment(it) }
+                }
             )
 
             Spacer(Modifier.height(24.dp))
 
-            // Save button
             Button(
                 onClick = viewModel::saveTransaction,
                 modifier = Modifier
@@ -294,11 +291,7 @@ fun AddTransactionScreen(
 // ─── Transaction Type Tabs ────────────────────────────────────────────────────
 
 @Composable
-private fun TransactionTypeTabs(
-    selected: TransactionType,
-    onSelect: (TransactionType) -> Unit
-) {
-    val types = TransactionType.entries.toTypedArray()
+private fun TransactionTypeTabs(selected: TransactionType, onSelect: (TransactionType) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -306,9 +299,9 @@ private fun TransactionTypeTabs(
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        types.forEach { type ->
+        TransactionType.entries.forEach { type ->
             val isSelected = type == selected
-            val containerColor = when {
+            val bg = when {
                 isSelected && type == TransactionType.EXPENSE -> ExpenseRed
                 isSelected && type == TransactionType.INCOME -> IncomeGreen
                 isSelected -> TransferBlue
@@ -317,18 +310,128 @@ private fun TransactionTypeTabs(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .background(containerColor, RoundedCornerShape(8.dp))
+                    .background(bg, RoundedCornerShape(8.dp))
                     .clickable { onSelect(type) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = type.name.lowercase().replaceFirstChar { it.uppercase() },
+                    type.name.lowercase().replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.labelLarge,
                     color = if (isSelected) Color.White
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
+            }
+        }
+    }
+}
+
+// ─── Fix 1: Date & Time Card ──────────────────────────────────────────────────
+
+@Composable
+private fun DateTimeCard(
+    dateTime: LocalDateTime,
+    onDateTimeChange: (LocalDateTime) -> Unit,
+    context: android.content.Context
+) {
+    val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM dd yyyy")
+    val timeFmt = DateTimeFormatter.ofPattern("hh:mm a")
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            // Date button
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        DatePickerDialog(
+                            context,
+                            { _, y, m, d ->
+                                onDateTimeChange(
+                                    dateTime.withYear(y).withMonth(m + 1).withDayOfMonth(d)
+                                )
+                            },
+                            dateTime.year, dateTime.monthValue - 1, dateTime.dayOfMonth
+                        ).show()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.CalendarMonth,
+                    contentDescription = "Pick date",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Column {
+                    Text(
+                        "Date",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        dateTime.format(dateFmt),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // Vertical divider
+            HorizontalDivider(
+                modifier = Modifier
+                    .height(48.dp)
+                    .width(0.5.dp)
+                    .align(Alignment.CenterVertically),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            // Time button
+            Row(
+                modifier = Modifier
+                    .weight(0.65f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        TimePickerDialog(
+                            context,
+                            { _, h, min -> onDateTimeChange(dateTime.withHour(h).withMinute(min)) },
+                            dateTime.hour, dateTime.minute, false
+                        ).show()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Schedule,
+                    contentDescription = "Pick time",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Column {
+                    Text(
+                        "Time",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        dateTime.format(timeFmt),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -353,9 +456,7 @@ private fun AmountInputField(
         label = { Text("Amount") },
         leadingIcon = {
             Text(
-                "₹",
-                style = MaterialTheme.typography.titleLarge,
-                color = color,
+                "₹", style = MaterialTheme.typography.titleLarge, color = color,
                 modifier = Modifier.padding(start = 8.dp)
             )
         },
@@ -370,7 +471,7 @@ private fun AmountInputField(
     )
 }
 
-// ─── Selector Field (category / payment account) ─────────────────────────────
+// ─── Selector Field ───────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -379,19 +480,12 @@ private fun SelectorField(
     value: String,
     icon: ImageVector,
     placeholder: String,
-    // dropdownContent now receives a `dismiss` lambda so items can close the menu
     dropdownContent: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
         OutlinedTextField(
-            value = value,
-            onValueChange = {},
-            readOnly = true,
+            value = value, onValueChange = {}, readOnly = true,
             label = { Text(label) },
             leadingIcon = { Icon(icon, null) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
@@ -401,11 +495,7 @@ private fun SelectorField(
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             shape = RoundedCornerShape(12.dp)
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            // Pass dismiss = { expanded = false } so item clicks can close the menu
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             dropdownContent { expanded = false }
         }
     }
@@ -421,25 +511,21 @@ private fun ColumnScope.CategoryDropdown(
 ) {
     categories.forEach { cat ->
         val iconColor = runCatching {
-            Color(cat.colorHex.toColorInt().toLong() or 0xFF000000L)
+            Color(cat.colorHex.toColorInt())
         }.getOrDefault(Color.Gray)
-
         DropdownMenuItem(
             text = { Text(cat.name) },
             leadingIcon = {
                 Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
+                    Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(iconColor.copy(alpha = 0.15f))
+                        .background(iconColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = com.expensetracker.presentation.ui.categories
-                            .CategoryIcons.get(cat.icon),
-                        contentDescription = null,
-                        tint = iconColor,
-                        modifier = Modifier.size(18.dp)
+                        com.expensetracker.presentation.ui.categories.CategoryIcons.get(cat.icon),
+                        null, tint = iconColor, modifier = Modifier.size(18.dp)
                     )
                 }
             },
@@ -454,137 +540,68 @@ private fun ColumnScope.CategoryDropdown(
 // ─── Payment Option Dropdown ──────────────────────────────────────────────────
 
 @Composable
-private fun ColumnScope.PaymentOptionDropdown(
+private fun PaymentOptionDropdown(
     options: List<PaymentOption>,
     selected: PaymentOption?,
     onSelect: (PaymentOption) -> Unit
 ) {
     if (options.isEmpty()) {
-        DropdownMenuItem(
-            text = { Text("No payment options added") },
-            onClick = {},
-            enabled = false
-        )
+        DropdownMenuItem(text = { Text("No payment options added") }, onClick = {}, enabled = false)
         return
     }
-
     val modes = options.filterIsInstance<PaymentOption.Mode>()
     val cards = options.filterIsInstance<PaymentOption.Card>()
-
     if (modes.isNotEmpty()) {
         DropdownMenuItem(
             text = {
                 Text(
-                    "Payment Modes",
-                    style = MaterialTheme.typography.labelSmall,
+                    "Payment Modes", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
-            onClick = {},
-            enabled = false
+            onClick = {}, enabled = false
         )
         modes.forEach { option ->
-            val isSelected = selected is PaymentOption.Mode &&
-                    selected.mode.id == option.mode.id
             DropdownMenuItem(
                 text = { Text(option.displayLabel) },
                 leadingIcon = {
                     Icon(
-                        Icons.Default.AccountBalance,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
+                        Icons.Default.AccountBalance, null, Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 },
-                trailingIcon = if (isSelected) {
+                trailingIcon = if (selected is PaymentOption.Mode && selected.mode.id == option.mode.id) {
                     { Icon(Icons.Default.Check, null) }
                 } else null,
                 onClick = { onSelect(option) }
             )
         }
     }
-
     if (cards.isNotEmpty()) {
         HorizontalDivider()
         DropdownMenuItem(
             text = {
                 Text(
-                    "Credit Cards",
-                    style = MaterialTheme.typography.labelSmall,
+                    "Credit Cards", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
-            onClick = {},
-            enabled = false
+            onClick = {}, enabled = false
         )
         cards.forEach { option ->
-            val isSelected = selected is PaymentOption.Card &&
-                    selected.card.id == option.card.id
             DropdownMenuItem(
                 text = { Text(option.displayLabel) },
                 leadingIcon = {
                     Icon(
-                        Icons.Default.CreditCard,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
+                        Icons.Default.CreditCard, null, Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.error
                     )
                 },
-                trailingIcon = if (isSelected) {
+                trailingIcon = if (selected is PaymentOption.Card && selected.card.id == option.card.id) {
                     { Icon(Icons.Default.Check, null) }
                 } else null,
                 onClick = { onSelect(option) }
             )
-        }
-    }
-}
-
-// ─── Date & Time Picker ───────────────────────────────────────────────────────
-
-@Composable
-private fun DateTimePickerRow(
-    dateTime: LocalDateTime,
-    onDateTimeChange: (LocalDateTime) -> Unit,
-    context: android.content.Context
-) {
-    val dateFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
-    val timeFormatter = DateTimeFormatter.ofPattern("hh:mm a")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(
-            onClick = {
-                DatePickerDialog(
-                    context,
-                    { _, year, month, day ->
-                        onDateTimeChange(
-                            dateTime.withYear(year).withMonth(month + 1).withDayOfMonth(day)
-                        )
-                    },
-                    dateTime.year, dateTime.monthValue - 1, dateTime.dayOfMonth
-                ).show()
-            },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(dateTime.format(dateFormatter), style = MaterialTheme.typography.bodySmall)
-        }
-        OutlinedButton(
-            onClick = {
-                TimePickerDialog(
-                    context,
-                    { _, hour, minute ->
-                        onDateTimeChange(dateTime.withHour(hour).withMinute(minute))
-                    },
-                    dateTime.hour, dateTime.minute, false
-                ).show()
-            },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Default.AccessTime, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(dateTime.format(timeFormatter), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -592,23 +609,14 @@ private fun DateTimePickerRow(
 // ─── Seamless Note Field ──────────────────────────────────────────────────────
 
 @Composable
-private fun SeamlessNoteField(
-    note: String,
-    onNoteChange: (String) -> Unit
-) {
-    val accentColor = MaterialTheme.colorScheme.primary
-    val textColor = MaterialTheme.colorScheme.onSurface
-    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+private fun SeamlessNoteField(note: String, onNoteChange: (String) -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
-        // Leading icon — matches the screenshot's three-line list icon
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Icon(
-            Icons.AutoMirrored.Filled.Notes,
-            contentDescription = null,
-            tint = accentColor,
+            Icons.AutoMirrored.Filled.Notes, null, tint = accent,
             modifier = Modifier
                 .padding(top = 14.dp)
                 .size(22.dp)
@@ -616,22 +624,18 @@ private fun SeamlessNoteField(
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             BasicTextField(
-                value = note,
-                onValueChange = onNoteChange,
+                value = note, onValueChange = onNoteChange,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 12.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
-                cursorBrush = SolidColor(accentColor),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = onSurface),
+                cursorBrush = SolidColor(accent),
                 maxLines = 5,
                 decorationBox = { inner ->
-                    if (note.isEmpty()) {
-                        Text(
-                            "Write a note",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = hintColor
-                        )
-                    }
+                    if (note.isEmpty()) Text(
+                        "Write a note",
+                        style = MaterialTheme.typography.bodyLarge, color = hint
+                    )
                     inner()
                 }
             )
@@ -654,64 +658,45 @@ private fun SeamlessTagsSection(
     onSearchTag: (String) -> Unit
 ) {
     var tagInput by remember { mutableStateOf("") }
-    val accentColor = MaterialTheme.colorScheme.primary
-    val textColor = MaterialTheme.colorScheme.onSurface
-    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val accent = MaterialTheme.colorScheme.primary
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
-        // Leading # icon
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Icon(
-            Icons.Default.Tag,
-            contentDescription = null,
-            tint = accentColor,
+            Icons.Default.Tag, null, tint = accent,
             modifier = Modifier
                 .padding(top = 14.dp)
                 .size(22.dp)
         )
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            // Input row
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 BasicTextField(
                     value = tagInput,
                     onValueChange = { tagInput = it; onSearchTag(it) },
                     modifier = Modifier
                         .weight(1f)
                         .padding(vertical = 12.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
-                    cursorBrush = SolidColor(accentColor),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = onSurface),
+                    cursorBrush = SolidColor(accent),
                     singleLine = true,
                     decorationBox = { inner ->
-                        if (tagInput.isEmpty()) {
-                            Text(
-                                "Add tags",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = hintColor
-                            )
-                        }
+                        if (tagInput.isEmpty()) Text(
+                            "Add tags",
+                            style = MaterialTheme.typography.bodyLarge, color = hint
+                        )
                         inner()
                     }
                 )
-                // Add tag on Enter key / button tap
                 if (tagInput.isNotBlank() && tags.size < 5) {
                     IconButton(
-                        onClick = {
-                            onAddTag(tagInput.trimStart('#'))
-                            tagInput = ""
-                        },
+                        onClick = { onAddTag(tagInput.trimStart('#')); tagInput = "" },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Add Tag",
-                            modifier = Modifier.size(18.dp),
-                            tint = accentColor
+                            Icons.Default.Add, "Add Tag",
+                            Modifier.size(18.dp), tint = accent
                         )
                     }
                 }
@@ -720,37 +705,27 @@ private fun SeamlessTagsSection(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 thickness = 0.5.dp
             )
-
-            // Suggestions row
             if (suggestions.isNotEmpty() && tagInput.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(suggestions) { tag ->
                         SuggestionChip(
                             onClick = { onAddTag(tag.name); tagInput = "" },
-                            label = { Text("#${tag.name}") }
-                        )
+                            label = { Text("#${tag.name}") })
                     }
                 }
             }
-
-            // Applied tag chips — pill style matching screenshot
             if (tags.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(tags) { tag ->
-                        PillTagChip(
-                            tag = tag,
-                            onRemove = { onRemoveTag(tag) }
-                        )
+                        PillTagChip(tag = tag, onRemove = { onRemoveTag(tag) })
                     }
                 }
             }
         }
     }
 }
-
-// ─── Pill Tag Chip (matches screenshot style) ─────────────────────────────────
 
 @Composable
 private fun PillTagChip(tag: String, onRemove: () -> Unit) {
@@ -763,123 +738,202 @@ private fun PillTagChip(tag: String, onRemove: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Small filled circle — matches screenshot's black dot before tag name
         Box(
-            modifier = Modifier
+            Modifier
                 .size(8.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
         )
         Text(
-            text = tag,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
+            tag, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
         Icon(
-            Icons.Default.Close,
-            contentDescription = "Remove $tag",
-            modifier = Modifier.size(14.dp),
+            Icons.Default.Close, "Remove $tag",
+            Modifier.size(14.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
     }
 }
 
-// ─── Seamless Attachment Row ──────────────────────────────────────────────────
+// ─── Fix 3: Seamless Attachment Row — single file, image preview, PDF card ───
 
 @Composable
 private fun SeamlessAttachmentRow(
-    attachments: List<Attachment>,
-    onAddAttachment: () -> Unit,
-    onRemoveAttachment: (Attachment) -> Unit
+    attachment: Attachment?,
+    onPickAttachment: () -> Unit,
+    onRemoveAttachment: () -> Unit
 ) {
-    val accentColor = MaterialTheme.colorScheme.primary
+    val accent = MaterialTheme.colorScheme.primary
 
     Column {
-        // Tap-able row matching screenshot's "Add attachment >" style
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { if (attachments.size < 5) onAddAttachment() }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.AttachFile,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(Modifier.width(16.dp))
-            Text(
-                "Add attachment",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            thickness = 0.5.dp
-        )
-
-        // Existing attachments
-        if (attachments.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            attachments.forEach { att ->
-                AttachmentItem(
-                    attachment = att,
-                    onRemove = { onRemoveAttachment(att) }
+        // Tap row — shown always if no attachment yet, or if we want to replace
+        if (attachment == null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onPickAttachment() }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.AttachFile, null, tint = accent,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    "Add attachment",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+                Icon(
+                    Icons.Default.ChevronRight, null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(20.dp)
                 )
             }
-        }
-    }
-}
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                thickness = 0.5.dp
+            )
+        } else {
+            Spacer(Modifier.height(4.dp))
+            val isImage = attachment.mimeType.startsWith("image/")
+            val isPdf = attachment.mimeType == "application/pdf"
 
-// ─── Attachment Item ──────────────────────────────────────────────────────────
-
-@Composable
-private fun AttachmentItem(attachment: Attachment, onRemove: () -> Unit) {
-    val icon = when {
-        attachment.mimeType.contains("pdf") -> Icons.Default.PictureAsPdf
-        attachment.mimeType.contains("image") -> Icons.Default.Image
-        else -> Icons.Default.Description
-    }
-    Card(
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, null, Modifier.size(24.dp))
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    attachment.fileName,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    formatFileSize(attachment.fileSizeBytes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (isImage) {
+                // Full-width image preview card with remove + replace buttons
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Box(Modifier.fillMaxWidth()) {
+                        AsyncImage(
+                            model = File(attachment.filePath),
+                            contentDescription = attachment.fileName,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 120.dp, max = 240.dp)
+                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        // Remove button overlaid top-right
+                        IconButton(
+                            onClick = onRemoveAttachment,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.5f))
+                        ) {
+                            Icon(
+                                Icons.Default.Close, "Remove",
+                                Modifier.size(16.dp), tint = Color.White
+                            )
+                        }
+                    }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Image, null,
+                            Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            attachment.fileName,
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            formatFileSize(attachment.fileSizeBytes),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                // Replace link
+                TextButton(
+                    onClick = onPickAttachment,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Icon(Icons.Default.SwapHoriz, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Replace", style = MaterialTheme.typography.labelMedium)
+                }
             }
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Default.Close, null, Modifier.size(16.dp))
+
+            if (isPdf) {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // PDF logo box
+                        Box(
+                            Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFB71C1C).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.PictureAsPdf, null,
+                                Modifier.size(28.dp), tint = Color(0xFFB71C1C)
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                attachment.fileName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                formatFileSize(attachment.fileSizeBytes),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            IconButton(
+                                onClick = onRemoveAttachment,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close, "Remove",
+                                    Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            TextButton(
+                                onClick = onPickAttachment,
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text("Replace", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
