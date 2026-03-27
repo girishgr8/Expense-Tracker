@@ -2,6 +2,7 @@ package com.expensetracker.presentation.ui.settings
 
 import android.app.TimePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +31,6 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AlertDialog
@@ -49,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.expensetracker.util.HapticManager
 import com.expensetracker.util.LocalHapticManager
 import java.util.Locale
 
@@ -78,18 +80,33 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val hapticManager = LocalHapticManager.current
+    var showTimePicker by remember { mutableStateOf(false) }
 
-    val timePickerDialog = TimePickerDialog(
-        context,
-        { _, hour, minute ->
-            viewModel.setBudgetReminderTime(hour, minute)
-        },
-        uiState.dailyReminderHour,
-        uiState.dailyReminderMinute,
-        false
-    )
+    if (showTimePicker) {
+        val context = LocalContext.current
+
+        DisposableEffect(Unit) {
+            val timePickerDialog = TimePickerDialog(
+                context,
+                { _, hour, minute ->
+                    viewModel.setBudgetReminderTime(hour, minute)
+                },
+                uiState.dailyReminderHour,
+                uiState.dailyReminderMinute,
+                false
+            )
+
+            timePickerDialog.setOnDismissListener {
+                showTimePicker = false
+            }
+
+            timePickerDialog.show()
+
+            onDispose { timePickerDialog.dismiss() }
+        }
+    }
+
 
     Scaffold(
         topBar = {
@@ -246,44 +263,56 @@ fun SettingsScreen(
 
             item {
                 SettingsCard {
-
-                    SettingsItem(
-                        icon = Icons.Default.Sync,
-                        title = "Daily Reminder",
-                        subtitle = "Get notified to log expenses"
-                    ) {
-                        Switch(
-                            checked = uiState.isDailyReminderEnabled,
-                            onCheckedChange = { isEnabled ->
-                                if (isEnabled) {
-                                    hapticManager.perform(HapticFeedbackType.ToggleOn)
-                                } else {
-                                    hapticManager.perform(HapticFeedbackType.ToggleOff)
-                                }
-                                viewModel.setIsDailyReminderEnabled(isEnabled)
-                            }
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    SettingsItem(
-                        icon = Icons.Default.Schedule,
-                        title = "Reminder Time",
-                        subtitle = String.format(
+                    DailyReminderSettingItem(
+                        isEnabled = uiState.isDailyReminderEnabled,
+                        time = String.format(
                             Locale.getDefault(),
                             "%02d:%02d",
                             uiState.dailyReminderHour,
                             uiState.dailyReminderMinute
-                        )
-                    ) {
-                        TextButton(
-                            onClick = { timePickerDialog.show() },
-                            enabled = uiState.isDailyReminderEnabled
-                        ) {
-                            Text("Change")
-                        }
-                    }
+                        ),
+                        onToggle = viewModel::setIsDailyReminderEnabled,
+                        onTimeClick = { showTimePicker = true },
+                        hapticManager = hapticManager
+                    )
+
+//                    SettingsItem(
+//                        icon = Icons.Default.Sync,
+//                        title = "Daily Reminder",
+//                        subtitle = "Get notified to log expenses"
+//                    ) {
+//                        Switch(
+//                            checked = uiState.isDailyReminderEnabled,
+//                            onCheckedChange = { isEnabled ->
+//                                if (isEnabled) {
+//                                    hapticManager.perform(HapticFeedbackType.ToggleOn)
+//                                } else {
+//                                    hapticManager.perform(HapticFeedbackType.ToggleOff)
+//                                }
+//                                viewModel.setIsDailyReminderEnabled(isEnabled)
+//                            }
+//                        )
+//                    }
+//
+//                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+//
+//                    SettingsItem(
+//                        icon = Icons.Default.Schedule,
+//                        title = "Reminder Time",
+//                        subtitle = String.format(
+//                            Locale.getDefault(),
+//                            "%02d:%02d",
+//                            uiState.dailyReminderHour,
+//                            uiState.dailyReminderMinute
+//                        )
+//                    ) {
+//                        TextButton(
+//                            onClick = { timePickerDialog.show() },
+//                            enabled = uiState.isDailyReminderEnabled
+//                        ) {
+//                            Text("Change")
+//                        }
+//                    }
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
@@ -409,6 +438,68 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth(), content = content)
+    }
+}
+
+@Composable
+fun DailyReminderSettingItem(
+    isEnabled: Boolean,
+    time: String,
+    hapticManager: HapticManager,
+    onToggle: (Boolean) -> Unit,
+    onTimeClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                enabled = isEnabled, // 🚨 only clickable if enabled
+                onClick = { onTimeClick() }
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        val dailyReminderIcon = if (isEnabled) {
+            Icons.Default.NotificationsActive
+        } else {
+            Icons.Default.NotificationsOff
+        }
+
+        // Icon
+        Icon(
+            imageVector = dailyReminderIcon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp)
+        )
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+
+            Text(
+                text = "Daily Reminder",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = if (isEnabled) "Reminder me daily at $time" else "Disabled",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = { isEnabled ->
+                if (isEnabled) {
+                    hapticManager.perform(HapticFeedbackType.ToggleOn)
+                } else {
+                    hapticManager.perform(HapticFeedbackType.ToggleOff)
+                }
+                onToggle(isEnabled)
+            }
+        )
     }
 }
 

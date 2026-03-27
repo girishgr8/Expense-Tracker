@@ -17,7 +17,6 @@ class ExpenseReminderWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        Log.d("ExpenseReminderWorker", "Worker triggered")
         notificationHelper.showExpenseReminder()
         return Result.success()
     }
