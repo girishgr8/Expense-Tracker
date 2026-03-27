@@ -21,7 +21,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     private object Keys {
         val CURRENCY_SYMBOL = stringPreferencesKey("currency_symbol")
@@ -33,6 +33,7 @@ class UserPreferencesRepository @Inject constructor(
         val DEFAULT_ACCOUNT_ID = longPreferencesKey("default_account_id")
         val IS_BACKUP_ENABLED = booleanPreferencesKey("is_backup_enabled")
         val IS_HAPTICS_ENABLED = booleanPreferencesKey("is_haptics_enabled")
+
     }
 
     val currencySymbol: Flow<String> = context.dataStore.data

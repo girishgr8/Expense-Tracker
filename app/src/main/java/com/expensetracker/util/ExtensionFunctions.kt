@@ -3,11 +3,14 @@ package com.expensetracker.util
 import androidx.compose.ui.graphics.Color
 import java.time.LocalDateTime
 import java.time.YearMonth
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import androidx.core.graphics.toColorInt
 
 // ─── Color ───────────────────────────────────────────────────────────────────
 
 fun String.toComposeColor(fallback: Color = Color.Gray): Color =
-    runCatching { Color(android.graphics.Color.parseColor(this)) }.getOrDefault(fallback)
+    runCatching { Color(this.toColorInt()) }.getOrDefault(fallback)
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -41,6 +44,6 @@ fun String.capitalizeWords(): String =
 // ─── Number helpers ───────────────────────────────────────────────────────────
 
 fun Double.roundTo(decimals: Int): Double {
-    val factor = Math.pow(10.0, decimals.toDouble())
-    return Math.round(this * factor) / factor
+    val factor = 10.0.pow(decimals.toDouble())
+    return (this * factor).roundToInt() / factor
 }
