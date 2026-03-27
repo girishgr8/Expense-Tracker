@@ -1,5 +1,6 @@
 package com.expensetracker.presentation.ui.settings
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +27,10 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AlertDialog
@@ -55,10 +59,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.expensetracker.util.LocalHapticManager
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +78,18 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val hapticManager = LocalHapticManager.current
+
+    val timePickerDialog = TimePickerDialog(
+        context,
+        { _, hour, minute ->
+            viewModel.setBudgetReminderTime(hour, minute)
+        },
+        uiState.dailyReminderHour,
+        uiState.dailyReminderMinute,
+        false
+    )
 
     Scaffold(
         topBar = {
@@ -222,6 +242,77 @@ fun SettingsScreen(
                 }
             }
 
+            item { SettingsSectionHeader("Notifications") }
+
+            item {
+                SettingsCard {
+
+                    SettingsItem(
+                        icon = Icons.Default.Sync,
+                        title = "Daily Reminder",
+                        subtitle = "Get notified to log expenses"
+                    ) {
+                        Switch(
+                            checked = uiState.isDailyReminderEnabled,
+                            onCheckedChange = { isEnabled ->
+                                if (isEnabled) {
+                                    hapticManager.perform(HapticFeedbackType.ToggleOn)
+                                } else {
+                                    hapticManager.perform(HapticFeedbackType.ToggleOff)
+                                }
+                                viewModel.setIsDailyReminderEnabled(isEnabled)
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsItem(
+                        icon = Icons.Default.Schedule,
+                        title = "Reminder Time",
+                        subtitle = String.format(
+                            Locale.getDefault(),
+                            "%02d:%02d",
+                            uiState.dailyReminderHour,
+                            uiState.dailyReminderMinute
+                        )
+                    ) {
+                        TextButton(
+                            onClick = { timePickerDialog.show() },
+                            enabled = uiState.isDailyReminderEnabled
+                        ) {
+                            Text("Change")
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    val budgetAlertIcon = if (uiState.isBudgetAlertEnabled) {
+                        Icons.Default.NotificationsActive
+                    } else {
+                        Icons.Default.NotificationsOff
+                    }
+
+                    SettingsItem(
+                        icon = budgetAlertIcon,
+                        title = "Budget Alerts",
+                        subtitle = "Notify me when I go off-track with my budget"
+                    ) {
+                        Switch(
+                            checked = uiState.isBudgetAlertEnabled,
+                            onCheckedChange = { isEnabled ->
+                                if (isEnabled) {
+                                    hapticManager.perform(HapticFeedbackType.ToggleOn)
+                                } else {
+                                    hapticManager.perform(HapticFeedbackType.ToggleOff)
+                                }
+                                viewModel.setIsBudgetAlertEnabled(isEnabled)
+                            }
+                        )
+                    }
+                }
+            }
+
             // Data Section
             item { SettingsSectionHeader("Data & Backup") }
 
@@ -344,6 +435,7 @@ private fun SettingsItem(
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = titleColor)
+            Spacer(Modifier.height(2.dp))
             if (subtitle.isNotEmpty()) {
                 Text(
                     subtitle,

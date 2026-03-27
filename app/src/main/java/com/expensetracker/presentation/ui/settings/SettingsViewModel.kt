@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -31,6 +32,10 @@ data class SettingsUiState(
     val userName: String = "",
     val userEmail: String = "",
     val userPhotoUrl: String = "",
+    val isDailyReminderEnabled: Boolean = true,
+    val dailyReminderHour: Int = 19,
+    val dailyReminderMinute: Int = 0,
+    val isBudgetAlertEnabled: Boolean = true
 )
 
 @HiltViewModel
@@ -56,7 +61,7 @@ class SettingsViewModel @Inject constructor(
                 userPreferencesRepository.currencySymbol,     // args[2]: String
                 userPreferencesRepository.currencyCode,       // args[3]: String
                 userPreferencesRepository.numberFormat,       // args[4]: String
-                userPreferencesRepository.isHapticsEnabled    // args[5]: Boolean
+                userPreferencesRepository.isHapticsEnabled,   // args[5]: Boolean
             ) { args: Array<Any?> ->
                 args
             }.collect { args ->
@@ -68,6 +73,26 @@ class SettingsViewModel @Inject constructor(
                         currencyCode = args[3] as String,
                         numberFormat = args[4] as String,
                         isHapticsEnabled = args[5] as Boolean
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            combine(
+                userPreferencesRepository.isReminderEnabled,   // args[0]: Boolean
+                userPreferencesRepository.reminderHour,                 // args[1]: Integer
+                userPreferencesRepository.reminderMinute,               // args[2]: Integer
+                userPreferencesRepository.isBudgetAlertEnabled,         // args[3]: Boolean
+            ) { args: Array<Any?> ->
+                args
+            }.collect { args ->
+                _uiState.update {
+                    it.copy(
+                        isDailyReminderEnabled       = args[0] as Boolean,
+                        dailyReminderHour            = args[1] as Int,
+                        dailyReminderMinute          = args[2] as Int,
+                        isBudgetAlertEnabled         = args[3] as Boolean,
                     )
                 }
             }
@@ -132,8 +157,29 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setIsHapticsEnabled(enabled: Boolean) = viewModelScope.launch {
-        Log.e("SettingsViewModel", "setIsHapticsEnabled(enabled) = $enabled")
         userPreferencesRepository.setIsHapticsEnabled(enabled)
+    }
+
+    fun setIsDailyReminderEnabled(enabled: Boolean) = viewModelScope.launch {
+        userPreferencesRepository.setDailyReminderEnabled(enabled)
+
+        if (enabled) {
+            val hour = userPreferencesRepository.reminderHour.first()
+            val minute = userPreferencesRepository.reminderMinute.first()
+
+            driveBackupScheduler.scheduleDailyReminder(hour, minute)
+        } else {
+            driveBackupScheduler.cancelDailyReminder()
+        }
+    }
+
+    fun setBudgetReminderTime(hour: Int, minute: Int) = viewModelScope.launch {
+        userPreferencesRepository.setDailyReminderTime(hour, minute)
+        driveBackupScheduler.scheduleDailyReminder(hour, minute)
+    }
+
+    fun setIsBudgetAlertEnabled(enabled: Boolean) = viewModelScope.launch {
+        userPreferencesRepository.setIsBudgetAlertEnabled(enabled)
     }
 
     fun triggerBackupNow() {

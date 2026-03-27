@@ -9,14 +9,13 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 object ReminderScheduler {
-
-    fun schedule(context: Context) {
+    fun schedule(context: Context, hour: Int, minute: Int) {
 
         val now = Calendar.getInstance()
 
         val target = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 19) // 7 PM
-            set(Calendar.MINUTE, 0)
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
 
             if (before(now)) {
@@ -24,12 +23,12 @@ object ReminderScheduler {
             }
         }
 
-        val initialDelay = target.timeInMillis - now.timeInMillis
+        val delay = target.timeInMillis - now.timeInMillis
 
         val request = PeriodicWorkRequestBuilder<ExpenseReminderWorker>(
             1, TimeUnit.DAYS
         )
-            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -37,5 +36,10 @@ object ReminderScheduler {
             ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
+    }
+
+    fun cancel(context: Context) {
+        WorkManager.getInstance(context)
+            .cancelUniqueWork("expense_reminder")
     }
 }

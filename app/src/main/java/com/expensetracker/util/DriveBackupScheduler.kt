@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 @Singleton
 class DriveBackupScheduler @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     fun scheduleMonthlyBackup() {
         val constraints = Constraints.Builder()
@@ -51,5 +51,13 @@ class DriveBackupScheduler @Inject constructor(
 
     fun cancelBackup() {
         WorkManager.getInstance(context).cancelUniqueWork(DriveBackupWorker.WORK_NAME)
+    }
+
+    fun scheduleDailyReminder(hour: Int, minute: Int) {
+        ReminderScheduler.schedule(context, hour, minute)
+    }
+
+    fun cancelDailyReminder() {
+        ReminderScheduler.cancel(context)
     }
 }

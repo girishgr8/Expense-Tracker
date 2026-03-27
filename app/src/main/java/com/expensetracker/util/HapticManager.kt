@@ -10,9 +10,9 @@ class HapticManager(
     private val haptic: androidx.compose.ui.hapticfeedback.HapticFeedback
 ) {
 
-    fun perform() {
+    fun perform(hapticFeedbackType: HapticFeedbackType) {
         if (enabled) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            haptic.performHapticFeedback(hapticFeedbackType)
         }
     }
 }

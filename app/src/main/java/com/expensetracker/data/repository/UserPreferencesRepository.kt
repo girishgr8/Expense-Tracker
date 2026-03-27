@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -33,7 +34,12 @@ class UserPreferencesRepository @Inject constructor(
         val DEFAULT_ACCOUNT_ID = longPreferencesKey("default_account_id")
         val IS_BACKUP_ENABLED = booleanPreferencesKey("is_backup_enabled")
         val IS_HAPTICS_ENABLED = booleanPreferencesKey("is_haptics_enabled")
+        // ✅ ADD THESE
+        val DAILY_REMINDER_HOUR = intPreferencesKey("daily_reminder_hour")
+        val DAILY_REMINDER_MINUTE = intPreferencesKey("daily_reminder_minute")
+        val IS_DAILY_REMINDER_ENABLED = booleanPreferencesKey("is_daily_reminder_enabled")
 
+        val IS_BUDGET_ALERT_ENABLED = booleanPreferencesKey("is_budget_alert_enabled")
     }
 
     val currencySymbol: Flow<String> = context.dataStore.data
@@ -68,6 +74,22 @@ class UserPreferencesRepository @Inject constructor(
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { it[Keys.IS_HAPTICS_ENABLED] ?: true }
 
+    val reminderHour: Flow<Int> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.DAILY_REMINDER_HOUR] ?: 19 } // default 7 PM
+
+    val reminderMinute: Flow<Int> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.DAILY_REMINDER_MINUTE] ?: 0 }
+
+    val isReminderEnabled: Flow<Boolean> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.IS_DAILY_REMINDER_ENABLED] ?: true }
+
+    val isBudgetAlertEnabled: Flow<Boolean> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.IS_BUDGET_ALERT_ENABLED] ?: true }
+
     suspend fun setCurrencySymbol(symbol: String) {
         context.dataStore.edit { it[Keys.CURRENCY_SYMBOL] = symbol }
     }
@@ -98,5 +120,24 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setIsHapticsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.IS_HAPTICS_ENABLED] = enabled }
+    }
+
+    suspend fun setDailyReminderTime(hour: Int, minute: Int) {
+        context.dataStore.edit {
+            it[Keys.DAILY_REMINDER_HOUR] = hour
+            it[Keys.DAILY_REMINDER_MINUTE] = minute
+        }
+    }
+
+    suspend fun setDailyReminderEnabled(enabled: Boolean) {
+        context.dataStore.edit {
+            it[Keys.IS_DAILY_REMINDER_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setIsBudgetAlertEnabled(enabled: Boolean) {
+        context.dataStore.edit {
+            it[Keys.IS_BUDGET_ALERT_ENABLED] = enabled
+        }
     }
 }

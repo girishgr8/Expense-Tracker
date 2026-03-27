@@ -21,7 +21,6 @@ class ExpenseTrackerApp : Application(), Configuration.Provider {
         driveBackupScheduler.scheduleMonthlyBackup()
 
         notificationHelper.createChannel()
-        ReminderScheduler.schedule(this)
     }
 
     override val workManagerConfiguration: Configuration
