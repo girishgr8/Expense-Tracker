@@ -28,14 +28,17 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +53,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +70,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.expensetracker.domain.model.ExportFormat
+import com.expensetracker.presentation.ui.export.ExportFormatBottomSheet
+import com.expensetracker.presentation.ui.export.ExportOptionsBottomSheet
+import com.expensetracker.presentation.ui.export.ExportSuccessBottomSheet
+import com.expensetracker.presentation.ui.export.ExportViewModel
 import com.expensetracker.util.HapticManager
 import com.expensetracker.util.LocalHapticManager
 import java.util.Locale
@@ -76,12 +85,22 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
     onNavigateToCurrency: () -> Unit = {},
-    viewModel: SettingsViewModel = hiltViewModel()
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
+    exportViewModel: ExportViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    var showLogoutDialog by remember { mutableStateOf(false) }
+    val uiState by settingsViewModel.uiState.collectAsState()
+    val exportResult by exportViewModel.exportResult.collectAsState()
+    val filters by exportViewModel.filters.collectAsState()
+    val context = LocalContext.current
     val hapticManager = LocalHapticManager.current
+    var showLogoutDialog by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    var showFormatSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        exportViewModel.loadFilters()
+    }
 
     if (showTimePicker) {
         val context = LocalContext.current
@@ -90,7 +109,7 @@ fun SettingsScreen(
             val timePickerDialog = TimePickerDialog(
                 context,
                 { _, hour, minute ->
-                    viewModel.setBudgetReminderTime(hour, minute)
+                    settingsViewModel.setBudgetReminderTime(hour, minute)
                 },
                 uiState.dailyReminderHour,
                 uiState.dailyReminderMinute,
@@ -107,174 +126,213 @@ fun SettingsScreen(
         }
     }
 
+    if (showFilterSheet) {
+        ExportOptionsBottomSheet(
+            options = filters,
+            onDismiss = { showFilterSheet = false },
+            onOptionSelected = { filter ->
+                exportViewModel.setFilter(filter)
+                showFilterSheet = false
+                showFormatSheet = true
+            }
+        )
+    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        LazyColumn(
+    if (showFormatSheet) {
+        ExportFormatBottomSheet(
+            onDismiss = { showFormatSheet = false },
+            onFormatSelected = { format ->
+                exportViewModel.export(
+                    context,
+                    uiState.userName,
+                    uiState.userEmail,
+                    format == ExportFormat.PDF
+                )
+                showFormatSheet = false
+            }
+        )
+    }
+
+    if (exportViewModel.isExporting) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .background(Color.Black.copy(0.5f)),
+            contentAlignment = Alignment.Center
         ) {
-            // User Profile Card
-            item {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (uiState.userPhotoUrl.isNotEmpty()) {
-                            AsyncImage(
-                                model = uiState.userPhotoUrl,
-                                contentDescription = "Profile photo",
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    uiState.userName.firstOrNull()?.toString() ?: "U",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                uiState.userName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                uiState.userEmail,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
+            CircularProgressIndicator()
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                }
+                )
             }
-
-            // Appearance Section
-            item { SettingsSectionHeader("Appearance") }
-
-            item {
-                SettingsCard {
-                    // Currency
-                    SettingsItem(
-                        icon = Icons.Default.CurrencyRupee,
-                        title = "Currency",
-                        subtitle = "${uiState.currencyCode} • ${uiState.currencySymbol}"
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // User Profile Card
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
                     ) {
-                        IconButton(onClick = onNavigateToCurrency) {
-                            Icon(Icons.Default.ChevronRight, null)
-                        }
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // Theme mode
-                    SettingsItem(
-                        icon = Icons.Default.DarkMode,
-                        title = "Theme",
-                        subtitle = uiState.themeMode.replaceFirstChar { it.uppercase() }
-                    ) {
-                        var expanded by remember { mutableStateOf(false) }
-                        Box {
-                            TextButton(onClick = { expanded = true }) {
-                                Text(uiState.themeMode.replaceFirstChar { it.uppercase() })
-                            }
-                            DropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false }) {
-                                listOf("system", "light", "dark").forEach { mode ->
-                                    DropdownMenuItem(
-                                        text = { Text(mode.replaceFirstChar { it.uppercase() }) },
-                                        onClick = {
-                                            viewModel.setThemeMode(mode); expanded = false
-                                        },
-                                        trailingIcon = if (mode == uiState.themeMode) {
-                                            { Icon(Icons.Default.Check, null) }
-                                        } else null
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (uiState.userPhotoUrl.isNotEmpty()) {
+                                AsyncImage(
+                                    model = uiState.userPhotoUrl,
+                                    contentDescription = "Profile photo",
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(CircleShape)
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        uiState.userName.firstOrNull()?.toString() ?: "U",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    uiState.userName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    uiState.userEmail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
+                }
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                // Appearance Section
+                item { SettingsSectionHeader("Appearance") }
 
-                    // Dynamic color
-                    SettingsItem(
-                        icon = Icons.Default.Palette,
-                        title = "Dynamic Color",
-                        subtitle = "Use Material You colors from wallpaper"
-                    ) {
-                        Switch(
-                            checked = uiState.useDynamicColor,
-                            onCheckedChange = viewModel::setDynamicColor
-                        )
-                    }
+                item {
+                    SettingsCard {
+                        // Currency
+                        SettingsItem(
+                            icon = Icons.Default.CurrencyRupee,
+                            title = "Currency",
+                            subtitle = "${uiState.currencyCode} • ${uiState.currencySymbol}"
+                        ) {
+                            IconButton(onClick = onNavigateToCurrency) {
+                                Icon(Icons.Default.ChevronRight, null)
+                            }
+                        }
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    // Haptics
-                    SettingsItem(
-                        icon = Icons.Default.TouchApp,
-                        title = "Haptics",
-                        subtitle = "Subtle taps when you interact with the app"
-                    ) {
-                        Switch(
-                            checked = uiState.isHapticsEnabled,
-                            onCheckedChange = viewModel::setIsHapticsEnabled
-                        )
+                        // Theme mode
+                        SettingsItem(
+                            icon = Icons.Default.DarkMode,
+                            title = "Theme",
+                            subtitle = uiState.themeMode.replaceFirstChar { it.uppercase() }
+                        ) {
+                            var expanded by remember { mutableStateOf(false) }
+                            Box {
+                                TextButton(onClick = { expanded = true }) {
+                                    Text(uiState.themeMode.replaceFirstChar { it.uppercase() })
+                                }
+                                DropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false }) {
+                                    listOf("system", "light", "dark").forEach { mode ->
+                                        DropdownMenuItem(
+                                            text = { Text(mode.replaceFirstChar { it.uppercase() }) },
+                                            onClick = {
+                                                settingsViewModel.setThemeMode(mode); expanded =
+                                                false
+                                            },
+                                            trailingIcon = if (mode == uiState.themeMode) {
+                                                { Icon(Icons.Default.Check, null) }
+                                            } else null
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // Dynamic color
+                        SettingsItem(
+                            icon = Icons.Default.Palette,
+                            title = "Dynamic Color",
+                            subtitle = "Use Material You colors from wallpaper"
+                        ) {
+                            Switch(
+                                checked = uiState.useDynamicColor,
+                                onCheckedChange = settingsViewModel::setDynamicColor
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // Haptics
+                        SettingsItem(
+                            icon = Icons.Default.TouchApp,
+                            title = "Haptics",
+                            subtitle = "Subtle taps when you interact with the app"
+                        ) {
+                            Switch(
+                                checked = uiState.isHapticsEnabled,
+                                onCheckedChange = settingsViewModel::setIsHapticsEnabled
+                            )
+                        }
                     }
                 }
-            }
 
-            item { SettingsSectionHeader("Notifications") }
+                item { SettingsSectionHeader("Notifications") }
 
-            item {
-                SettingsCard {
-                    DailyReminderSettingItem(
-                        isEnabled = uiState.isDailyReminderEnabled,
-                        time = String.format(
-                            Locale.getDefault(),
-                            "%02d:%02d",
-                            uiState.dailyReminderHour,
-                            uiState.dailyReminderMinute
-                        ),
-                        onToggle = viewModel::setIsDailyReminderEnabled,
-                        onTimeClick = { showTimePicker = true },
-                        hapticManager = hapticManager
-                    )
+                item {
+                    SettingsCard {
+                        DailyReminderSettingItem(
+                            isEnabled = uiState.isDailyReminderEnabled,
+                            time = String.format(
+                                Locale.getDefault(),
+                                "%02d:%02d",
+                                uiState.dailyReminderHour,
+                                uiState.dailyReminderMinute
+                            ),
+                            onToggle = settingsViewModel::setIsDailyReminderEnabled,
+                            onTimeClick = { showTimePicker = true },
+                            hapticManager = hapticManager
+                        )
 
 //                    SettingsItem(
 //                        icon = Icons.Default.Sync,
@@ -314,87 +372,118 @@ fun SettingsScreen(
 //                        }
 //                    }
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    val budgetAlertIcon = if (uiState.isBudgetAlertEnabled) {
-                        Icons.Default.NotificationsActive
-                    } else {
-                        Icons.Default.NotificationsOff
-                    }
-
-                    SettingsItem(
-                        icon = budgetAlertIcon,
-                        title = "Budget Alerts",
-                        subtitle = "Notify me when I go off-track with my budget"
-                    ) {
-                        Switch(
-                            checked = uiState.isBudgetAlertEnabled,
-                            onCheckedChange = { isEnabled ->
-                                if (isEnabled) {
-                                    hapticManager.perform(HapticFeedbackType.ToggleOn)
-                                } else {
-                                    hapticManager.perform(HapticFeedbackType.ToggleOff)
-                                }
-                                viewModel.setIsBudgetAlertEnabled(isEnabled)
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Data Section
-            item { SettingsSectionHeader("Data & Backup") }
-
-            item {
-                SettingsCard {
-                    SettingsItem(
-                        icon = Icons.Default.CloudUpload,
-                        title = "Auto Google Drive Backup",
-                        subtitle = "Back up monthly to Google Drive"
-                    ) {
-                        Switch(
-                            checked = uiState.isBackupEnabled,
-                            onCheckedChange = viewModel::setIsBackupEnabled
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    SettingsItem(
-                        icon = Icons.Default.Backup,
-                        title = "Back Up Now",
-                        subtitle = "Last backup: ${uiState.lastBackupDisplay}"
-                    ) {
-                        IconButton(onClick = viewModel::triggerBackupNow) {
-                            Icon(Icons.Default.Sync, contentDescription = "Backup Now")
+                        val budgetAlertIcon = if (uiState.isBudgetAlertEnabled) {
+                            Icons.Default.NotificationsActive
+                        } else {
+                            Icons.Default.NotificationsOff
                         }
-                    }
-                }
-            }
 
-            // Account Section
-            item { SettingsSectionHeader("Account") }
-
-            item {
-                SettingsCard {
-                    SettingsItem(
-                        icon = Icons.AutoMirrored.Filled.Logout,
-                        title = "Sign Out",
-                        subtitle = "Sign out of your Google account",
-                        titleColor = MaterialTheme.colorScheme.error
-                    ) {
-                        IconButton(onClick = { showLogoutDialog = true }) {
-                            Icon(
-                                Icons.Default.ChevronRight,
-                                contentDescription = "Sign Out",
-                                tint = MaterialTheme.colorScheme.error
+                        SettingsItem(
+                            icon = budgetAlertIcon,
+                            title = "Budget Alerts",
+                            subtitle = "Notify me when I go off-track with my budget"
+                        ) {
+                            Switch(
+                                checked = uiState.isBudgetAlertEnabled,
+                                onCheckedChange = { isEnabled ->
+                                    if (isEnabled) {
+                                        hapticManager.perform(HapticFeedbackType.ToggleOn)
+                                    } else {
+                                        hapticManager.perform(HapticFeedbackType.ToggleOff)
+                                    }
+                                    settingsViewModel.setIsBudgetAlertEnabled(isEnabled)
+                                }
                             )
                         }
                     }
                 }
+
+                // Data Section
+                item { SettingsSectionHeader("Backup, Restore & Export") }
+
+                item {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Default.CloudUpload,
+                            title = "Auto Google Drive Backup",
+                            subtitle = "Back up monthly to Google Drive"
+                        ) {
+                            Switch(
+                                checked = uiState.isBackupEnabled,
+                                onCheckedChange = settingsViewModel::setIsBackupEnabled
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        SettingsItem(
+                            icon = Icons.Default.Backup,
+                            title = "Back Up Now",
+                            subtitle = "Last backup: ${uiState.lastBackupDisplay}"
+                        ) {
+                            IconButton(onClick = settingsViewModel::triggerBackupNow) {
+                                Icon(Icons.Default.Sync, contentDescription = "Backup Now")
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        SettingsItem(
+                            icon = Icons.Default.Upload,
+                            title = "Export Transactions",
+                            subtitle = "Export data to a spreadsheet(.csv) or a PDF",
+                        ) {
+                            IconButton(onClick = { showFilterSheet = true }) {
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = "Export Transactions"
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        SettingsItem(
+                            icon = Icons.Default.Download,
+                            title = "Import Transactions",
+                            subtitle = "Import data from a spreadsheet(.csv)"
+                        ) { }
+                    }
+                }
+
+                // Account Section
+                item { SettingsSectionHeader("Account") }
+
+                item {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.AutoMirrored.Filled.Logout,
+                            title = "Sign Out",
+                            subtitle = "Sign out of your Google account",
+                            titleColor = MaterialTheme.colorScheme.error
+                        ) {
+                            IconButton(onClick = { showLogoutDialog = true }) {
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = "Sign Out",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item { Spacer(Modifier.height(32.dp)) }
             }
 
-            item { Spacer(Modifier.height(32.dp)) }
+            if (exportResult.isSuccess && exportResult.uri != null) {
+                ExportSuccessBottomSheet(
+                    uri = exportResult.uri!!,
+                    onDismiss = { exportViewModel.resetExportState() }
+                )
+            }
         }
     }
 
@@ -407,7 +496,7 @@ fun SettingsScreen(
                 TextButton(
                     onClick = {
                         showLogoutDialog = false
-                        viewModel.logout()
+                        settingsViewModel.logout()
                         onLogout()
                     }
                 ) {

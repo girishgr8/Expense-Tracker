@@ -1,5 +1,9 @@
 package com.expensetracker.data.repository
 
+import android.content.Context
+import android.net.Uri
+import com.expensetracker.data.export.CsvExporter
+import com.expensetracker.data.export.PdfExporter
 import com.expensetracker.data.local.dao.AttachmentDao
 import com.expensetracker.data.local.dao.BankAccountDao
 import com.expensetracker.data.local.dao.BudgetDao
@@ -16,6 +20,7 @@ import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.Budget
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.CreditCard
+import com.expensetracker.domain.model.ExportFilter
 import com.expensetracker.domain.model.PaymentMode
 import com.expensetracker.domain.model.PaymentModeType
 import com.expensetracker.domain.model.Tag
@@ -38,10 +43,25 @@ interface TransactionRepository {
     suspend fun insertTransaction(transaction: Transaction): Long
     suspend fun updateTransaction(transaction: Transaction)
     suspend fun deleteTransaction(id: Long)
-    suspend fun getTotalByType(userId: String, type: TransactionType, start: LocalDateTime?, end: LocalDateTime?): Double
-    suspend fun getExpenseByCategories(userId: String, categoryIds: List<Long>, start: LocalDateTime?, end: LocalDateTime?): Double
+    suspend fun getTotalByType(
+        userId: String,
+        type: TransactionType,
+        start: LocalDateTime?,
+        end: LocalDateTime?
+    ): Double
+
+    suspend fun getExpenseByCategories(
+        userId: String,
+        categoryIds: List<Long>,
+        start: LocalDateTime?,
+        end: LocalDateTime?
+    ): Double
+
     suspend fun getAllExpense(userId: String, start: LocalDateTime?, end: LocalDateTime?): Double
+
     suspend fun getAllTransactionsOneShot(userId: String): List<Transaction>
+
+    suspend fun getAvailableFilters(userId: String): List<ExportFilter>
 }
 
 interface CategoryRepository {
@@ -103,6 +123,17 @@ interface TagRepository {
     suspend fun deleteTag(tag: Tag)
 }
 
+interface ExportRepository {
+    suspend fun exportTransactions(
+        context: Context,
+        userId: String,
+        userName: String,
+        userEmail: String,
+        filter: ExportFilter,
+        isPdf: Boolean
+    ): Uri?
+}
+
 // ─── Implementations ──────────────────────────────────────────────────────────
 
 @Singleton
@@ -129,18 +160,22 @@ class TransactionRepositoryImpl @Inject constructor(
 
     private suspend fun TransactionEntity.enriched(): Transaction {
         val category = categoryDao.getCategoryById(categoryId)
-        val attachments = attachmentDao.getAttachmentsForTransactionOneShot(id).map { it.toDomain() }
+        val attachments =
+            attachmentDao.getAttachmentsForTransactionOneShot(id).map { it.toDomain() }
 
         // Resolve the "from" payment label — either a PaymentMode or CreditCard
         val fromLabel = when {
             paymentModeId != null -> {
                 val mode = paymentModeDao.getModeById(paymentModeId)
-                val bankName = mode?.bankAccountId?.let { bankAccountDao.getAccountById(it)?.name } ?: ""
+                val bankName =
+                    mode?.bankAccountId?.let { bankAccountDao.getAccountById(it)?.name } ?: ""
                 mode?.toDomain(bankName)?.displayLabel ?: ""
             }
+
             creditCardId != null -> {
                 creditCardDao.getCardById(creditCardId)?.toDomain()?.displayLabel ?: ""
             }
+
             else -> ""
         }
 
@@ -148,22 +183,25 @@ class TransactionRepositoryImpl @Inject constructor(
         val toLabel = when {
             toPaymentModeId != null -> {
                 val mode = paymentModeDao.getModeById(toPaymentModeId)
-                val bankName = mode?.bankAccountId?.let { bankAccountDao.getAccountById(it)?.name } ?: ""
+                val bankName =
+                    mode?.bankAccountId?.let { bankAccountDao.getAccountById(it)?.name } ?: ""
                 mode?.toDomain(bankName)?.displayLabel ?: ""
             }
+
             toCreditCardId != null -> {
                 creditCardDao.getCardById(toCreditCardId)?.toDomain()?.displayLabel ?: ""
             }
+
             else -> ""
         }
 
         return toDomain(
-            categoryName      = category?.name     ?: "",
-            categoryIcon      = category?.icon     ?: "category",
-            categoryColorHex  = category?.colorHex ?: "#6750A4",
-            paymentModeName   = fromLabel,
+            categoryName = category?.name ?: "",
+            categoryIcon = category?.icon ?: "category",
+            categoryColorHex = category?.colorHex ?: "#6750A4",
+            paymentModeName = fromLabel,
             toPaymentModeName = toLabel,
-            attachments       = attachments
+            attachments = attachments
         )
     }
 
@@ -225,6 +263,7 @@ class TransactionRepositoryImpl @Inject constructor(
                     adjustCardAvailableLimit(cardId, -amount)
                 }
             }
+
             TransactionType.INCOME -> {
                 txn.paymentModeId?.let { modeId ->
                     adjustBankBalance(modeId, +amount)
@@ -234,6 +273,7 @@ class TransactionRepositoryImpl @Inject constructor(
                     adjustCardAvailableLimit(cardId, +amount)
                 }
             }
+
             TransactionType.TRANSFER -> {
                 // Deduct from source
                 txn.paymentModeId?.let { modeId -> adjustBankBalance(modeId, -amount) }
@@ -281,6 +321,38 @@ class TransactionRepositoryImpl @Inject constructor(
 
     override suspend fun getAllTransactionsOneShot(userId: String): List<Transaction> =
         transactionDao.getAllTransactionsOneShot(userId).map { it.enriched() }
+
+    override suspend fun getAvailableFilters(userId: String): List<ExportFilter> {
+        val result = transactionDao.getAvailableYearMonths(userId)
+
+        val filters = mutableListOf<ExportFilter>()
+
+        // Always include All Time
+        filters.add(ExportFilter.AllTime)
+
+        // Group by year
+        val grouped = result.groupBy { it.year }
+
+        grouped.forEach { (year, months) ->
+
+            val yearInt = year.toInt()
+
+            // Add year filter
+            filters.add(ExportFilter.Year(yearInt))
+
+            // Add months under that year
+            months.forEach {
+                filters.add(
+                    ExportFilter.Month(
+                        year = yearInt,
+                        month = it.month.toInt()
+                    )
+                )
+            }
+        }
+
+        return filters
+    }
 }
 
 @Singleton
@@ -289,16 +361,22 @@ class CategoryRepositoryImpl @Inject constructor(
 ) : CategoryRepository {
     override fun getAllCategories(userId: String): Flow<List<Category>> =
         categoryDao.getAllCategories(userId).map { it.map { e -> e.toDomain() } }
+
     override fun getCategoriesByType(userId: String, type: TransactionType): Flow<List<Category>> =
         categoryDao.getCategoriesByType(userId, type.name).map { it.map { e -> e.toDomain() } }
+
     override suspend fun getCategoryById(id: Long): Category? =
         categoryDao.getCategoryById(id)?.toDomain()
+
     override suspend fun insertCategory(category: Category): Long =
         categoryDao.insertCategory(category.toEntity())
+
     override suspend fun updateCategory(category: Category) =
         categoryDao.updateCategory(category.toEntity())
+
     override suspend fun deleteCategory(category: Category) =
         categoryDao.deleteCategory(category.toEntity())
+
     override suspend fun seedDefaultCategories(userId: String) {
         if (categoryDao.getCategoryCount(userId) > 0) return
         categoryDao.insertCategories(DefaultCategories.list.map { it.toEntity() })
@@ -311,12 +389,16 @@ class BankAccountRepositoryImpl @Inject constructor(
 ) : BankAccountRepository {
     override fun getAllAccounts(userId: String): Flow<List<BankAccount>> =
         dao.getAllAccounts(userId).map { it.map { e -> e.toDomain() } }
+
     override suspend fun getAccountById(id: Long): BankAccount? =
         dao.getAccountById(id)?.toDomain()
+
     override suspend fun insertAccount(account: BankAccount): Long =
         dao.insertAccount(account.toEntity())
+
     override suspend fun updateAccount(account: BankAccount) =
         dao.updateAccount(account.toEntity())
+
     override suspend fun deleteAccount(account: BankAccount) =
         dao.deleteAccount(account.toEntity())
 }
@@ -334,17 +416,20 @@ class PaymentModeRepositoryImpl @Inject constructor(
                 entity.toDomain(bankName)
             }
         }
+
     override fun getModesForAccount(bankAccountId: Long, userId: String): Flow<List<PaymentMode>> =
         modeDao.getModesForAccount(bankAccountId, userId).map { list ->
             val bankName = bankAccountDao.getAccountById(bankAccountId)?.name ?: ""
             list.map { it.toDomain(bankName) }
         }
+
     override suspend fun getModeById(id: Long): PaymentMode? =
         modeDao.getModeById(id)?.let { entity ->
             val bankName = entity.bankAccountId
                 ?.let { bankAccountDao.getAccountById(it)?.name } ?: ""
             entity.toDomain(bankName)
         }
+
     override suspend fun insertMode(mode: PaymentMode): Long = modeDao.insertMode(mode.toEntity())
     override suspend fun updateMode(mode: PaymentMode) = modeDao.updateMode(mode.toEntity())
     override suspend fun deleteMode(mode: PaymentMode) = modeDao.deleteMode(mode.toEntity())
@@ -356,9 +441,9 @@ class PaymentModeRepositoryImpl @Inject constructor(
             modeDao.insertMode(
                 com.expensetracker.data.local.entity.PaymentModeEntity(
                     bankAccountId = null,
-                    type          = PaymentModeType.CASH,
-                    identifier    = "",
-                    userId        = userId
+                    type = PaymentModeType.CASH,
+                    identifier = "",
+                    userId = userId
                 )
             )
         }
@@ -371,12 +456,16 @@ class CreditCardRepositoryImpl @Inject constructor(
 ) : CreditCardRepository {
     override fun getAllCards(userId: String): Flow<List<CreditCard>> =
         dao.getAllCards(userId).map { it.map { e -> e.toDomain() } }
+
     override suspend fun getCardById(id: Long): CreditCard? =
         dao.getCardById(id)?.toDomain()
+
     override suspend fun insertCard(card: CreditCard): Long =
         dao.insertCard(card.toEntity())
+
     override suspend fun updateCard(card: CreditCard) =
         dao.updateCard(card.toEntity())
+
     override suspend fun deleteCard(card: CreditCard) =
         dao.deleteCard(card.toEntity())
 }
@@ -387,12 +476,16 @@ class AttachmentRepositoryImpl @Inject constructor(
 ) : AttachmentRepository {
     override fun getAttachmentsForTransaction(transactionId: Long): Flow<List<Attachment>> =
         dao.getAttachmentsForTransaction(transactionId).map { it.map { e -> e.toDomain() } }
+
     override suspend fun insertAttachment(attachment: Attachment): Long =
         dao.insertAttachment(attachment.toEntity())
+
     override suspend fun insertAttachments(attachments: List<Attachment>) =
         dao.insertAttachments(attachments.map { it.toEntity() })
+
     override suspend fun deleteAttachment(attachment: Attachment) =
         dao.deleteAttachment(attachment.toEntity())
+
     override suspend fun deleteAttachmentsForTransaction(transactionId: Long) =
         dao.deleteAttachmentsForTransaction(transactionId)
 }
@@ -403,8 +496,10 @@ class BudgetRepositoryImpl @Inject constructor(
 ) : BudgetRepository {
     override fun getAllBudgets(userId: String): Flow<List<Budget>> =
         dao.getAllBudgets(userId).map { it.map { e -> e.toDomain() } }
+
     override suspend fun getBudgetForPeriod(userId: String, year: Int, month: Int?): Budget? =
         dao.getBudgetForPeriod(userId, year, month)?.toDomain()
+
     override suspend fun insertBudget(budget: Budget): Long = dao.insertBudget(budget.toEntity())
     override suspend fun updateBudget(budget: Budget) = dao.updateBudget(budget.toEntity())
     override suspend fun deleteBudget(budget: Budget) = dao.deleteBudget(budget.toEntity())
@@ -416,8 +511,72 @@ class TagRepositoryImpl @Inject constructor(
 ) : TagRepository {
     override fun getAllTags(userId: String): Flow<List<Tag>> =
         dao.getAllTags(userId).map { it.map { e -> e.toDomain() } }
+
     override suspend fun searchTags(userId: String, query: String): List<Tag> =
         dao.searchTags(userId, query).map { it.toDomain() }
+
     override suspend fun insertTag(tag: Tag): Long = dao.insertTag(tag.toEntity())
     override suspend fun deleteTag(tag: Tag) = dao.deleteTag(tag.toEntity())
+}
+
+@Singleton
+class ExportRepositoryImpl @Inject constructor(
+    private val transactionRepository: TransactionRepository,
+) : ExportRepository {
+
+    override suspend fun exportTransactions(
+        context: Context,
+        userId: String,
+        userName: String,
+        userEmail: String,
+        filter: ExportFilter,
+        isPdf: Boolean
+    ): Uri? {
+        // 1️⃣ Fetch all transactions (already enriched in your repo)
+        val allTransactions = transactionRepository
+            .getAllTransactionsOneShot(userId)
+
+        // 2️⃣ Apply filter
+        val filteredTransactions = applyFilter(allTransactions, filter)
+
+        // 3️⃣ Sort (important for clean export)
+        val sortedTransactions = filteredTransactions.sortedByDescending {
+            it.dateTime
+        }
+
+        val uri = if (isPdf) {
+            PdfExporter.generate(context, sortedTransactions, userName, userEmail, filter.displayName)
+        } else {
+            CsvExporter.generate(context, sortedTransactions)
+        }
+        return uri
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // FILTER LOGIC (CLEAN + CENTRALIZED)
+    // ─────────────────────────────────────────────────────────────
+
+    private fun applyFilter(
+        transactions: List<Transaction>,
+        filter: ExportFilter
+    ): List<Transaction> {
+
+        return when (filter) {
+
+            is ExportFilter.AllTime -> transactions
+
+            is ExportFilter.Year -> {
+                transactions.filter {
+                    it.dateTime.year == filter.year
+                }
+            }
+
+            is ExportFilter.Month -> {
+                transactions.filter {
+                    it.dateTime.year == filter.year &&
+                            it.dateTime.monthValue == filter.month
+                }
+            }
+        }
+    }
 }

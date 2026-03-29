@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -102,15 +103,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.expensetracker.R
-import com.expensetracker.data.repository.AuthManager
-import com.expensetracker.data.repository.BankAccountRepository
-import com.expensetracker.data.repository.CreditCardRepository
-import com.expensetracker.data.repository.PaymentModeRepository
-import com.expensetracker.data.repository.TransactionRepository
-import com.expensetracker.data.repository.UserPreferencesRepository
 import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.CreditCard
 import com.expensetracker.domain.model.PaymentMode
@@ -120,361 +113,9 @@ import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import javax.inject.Inject
 import kotlin.math.abs
-
-// ─── ViewModel ────────────────────────────────────────────────────────────────
-
-data class AccountsUiState(
-    val accounts: List<BankAccount> = emptyList(),
-    val allModes: List<PaymentMode> = emptyList(),
-    val creditCards: List<CreditCard> = emptyList(),
-    // Pre-computed balance per standalone mode id (income − expense)
-    val modeBalances: Map<Long, Double> = emptyMap(),
-    // Summary tiles
-    val totalBankBalance: Double = 0.0,
-    val totalCreditAvailable: Double = 0.0,
-    // Dialogs
-    val showAddSheet: Boolean = false,   // unified Add Account bottom sheet
-    val showAccountDialog: Boolean = false,
-    val showModeDialog: Boolean = false,
-    val showCreditCardDialog: Boolean = false,
-    val editingAccount: BankAccount? = null,
-    val editingMode: PaymentMode? = null,
-    val editingCreditCard: CreditCard? = null,
-    val preselectedAccountId: Long? = null,
-    // Full-screen detail
-    val selectedDetailMode: PaymentMode? = null,
-    val selectedDetailAccount: BankAccount? = null,
-    val selectedDetailCard: CreditCard? = null,
-    val detailTransactions: List<Transaction> = emptyList(),
-    val detailBalance: Double = 0.0,
-    val detailLinkedModes: List<PaymentMode> = emptyList(),
-    val showEditAccountSheet: Boolean = false,
-    val showCardTransactions: Boolean = false,
-    val currencySymbol: String = "₹"
-)
-
-@HiltViewModel
-class AccountsViewModel @Inject constructor(
-    private val bankAccountRepository: BankAccountRepository,
-    private val paymentModeRepository: PaymentModeRepository,
-    private val creditCardRepository: CreditCardRepository,
-    private val transactionRepository: TransactionRepository,
-    private val userPreferencesRepository: UserPreferencesRepository,
-    private val authManager: AuthManager
-) : ViewModel() {
-
-    private val userId get() = authManager.userId
-    private val _uiState = MutableStateFlow(AccountsUiState())
-    val uiState: StateFlow<AccountsUiState> = _uiState.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            bankAccountRepository.getAllAccounts(userId).collect { accounts ->
-                _uiState.update {
-                    it.copy(
-                        accounts = accounts,
-                        totalBankBalance = accounts.sumOf { a -> a.balance }
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            paymentModeRepository.getAllModes(userId).collect { modes ->
-                _uiState.update { it.copy(allModes = modes) }
-            }
-        }
-        viewModelScope.launch {
-            creditCardRepository.getAllCards(userId).collect { cards ->
-                _uiState.update {
-                    it.copy(
-                        creditCards = cards,
-                        totalCreditAvailable = cards.sumOf { c -> c.availableLimit }
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            userPreferencesRepository.currencySymbol.collect { sym ->
-                _uiState.update { it.copy(currencySymbol = sym) }
-            }
-        }
-        // Eagerly compute balance per standalone mode
-        viewModelScope.launch {
-            transactionRepository.getAllTransactions(userId).collect { txns ->
-                val standalone = _uiState.value.allModes.filter { it.bankAccountId == null }
-                val balances = standalone.associate { mode ->
-                    val income =
-                        txns.filter { it.paymentModeId == mode.id && it.type == TransactionType.INCOME }
-                            .sumOf { it.amount }
-                    val expense =
-                        txns.filter { it.paymentModeId == mode.id && it.type == TransactionType.EXPENSE }
-                            .sumOf { it.amount }
-                    mode.id to (income - expense)
-                }
-                _uiState.update { it.copy(modeBalances = balances) }
-            }
-        }
-    }
-
-    // ── Detail screens ────────────────────────────────────────────────────────
-
-    fun openModeDetail(mode: PaymentMode) {
-        viewModelScope.launch {
-            val txns = withContext(Dispatchers.IO) {
-                transactionRepository.getAllTransactionsOneShot(userId)
-                    .filter { it.paymentModeId == mode.id }
-                    .sortedByDescending { it.dateTime }
-            }
-            val income = txns.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
-            val expense = txns.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
-            _uiState.update {
-                it.copy(
-                    selectedDetailMode = mode,
-                    detailTransactions = txns,
-                    detailBalance = income - expense
-                )
-            }
-        }
-    }
-
-    fun openAccountDetail(account: BankAccount) {
-        viewModelScope.launch {
-            // Collect all payment mode ids linked to this account
-            val modeIds = _uiState.value.allModes
-                .filter { it.bankAccountId == account.id }
-                .map { it.id }.toSet()
-            val txns = withContext(Dispatchers.IO) {
-                transactionRepository.getAllTransactionsOneShot(userId)
-                    .filter { it.paymentModeId != null && it.paymentModeId in modeIds }
-                    .sortedByDescending { it.dateTime }
-            }
-            val linkedModes = _uiState.value.allModes.filter { it.bankAccountId == account.id }
-            _uiState.update {
-                it.copy(
-                    selectedDetailAccount = account,
-                    detailTransactions = txns,
-                    detailBalance = account.balance,
-                    detailLinkedModes = linkedModes
-                )
-            }
-        }
-    }
-
-    fun openCardDetail(card: CreditCard) {
-        viewModelScope.launch {
-            val txns = withContext(Dispatchers.IO) {
-                transactionRepository.getAllTransactionsOneShot(userId)
-                    .filter { it.creditCardId == card.id }
-                    .sortedByDescending { it.dateTime }
-            }
-            _uiState.update {
-                it.copy(
-                    selectedDetailCard = card,
-                    detailTransactions = txns,
-                    detailBalance = card.availableLimit
-                )
-            }
-        }
-    }
-
-    fun closeDetail() = _uiState.update {
-        it.copy(
-            selectedDetailMode = null,
-            selectedDetailAccount = null,
-            selectedDetailCard = null,
-            detailTransactions = emptyList(),
-            detailBalance = 0.0,
-            detailLinkedModes = emptyList(),
-            showEditAccountSheet = false,
-            showCardTransactions = false
-        )
-    }
-
-    fun openCardTransactions() = _uiState.update { it.copy(showCardTransactions = true) }
-    fun closeCardTransactions() = _uiState.update { it.copy(showCardTransactions = false) }
-
-    fun openEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = true) }
-    fun closeEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = false) }
-
-    fun saveEditedAccount(account: BankAccount, name: String, balance: Double) {
-        viewModelScope.launch {
-            bankAccountRepository.updateAccount(account.copy(name = name, balance = balance))
-            // Refresh linked modes for new detail state
-            val linkedModes = _uiState.value.allModes.filter { it.bankAccountId == account.id }
-            _uiState.update {
-                it.copy(
-                    showEditAccountSheet = false,
-                    detailBalance = balance,
-                    selectedDetailAccount = it.selectedDetailAccount?.copy(
-                        name = name,
-                        balance = balance
-                    ),
-                    detailLinkedModes = linkedModes
-                )
-            }
-        }
-    }
-
-    fun deleteModeFromDetail(mode: PaymentMode) {
-        viewModelScope.launch {
-            paymentModeRepository.deleteMode(mode)
-            _uiState.update { state ->
-                state.copy(detailLinkedModes = state.detailLinkedModes.filter { it.id != mode.id })
-            }
-        }
-    }
-
-    fun addModeToAccount(accountId: Long, type: PaymentModeType, identifier: String) {
-        viewModelScope.launch {
-            paymentModeRepository.insertMode(
-                PaymentMode(
-                    bankAccountId = accountId,
-                    type = type,
-                    identifier = identifier,
-                    userId = userId
-                )
-            )
-            val linkedModes = _uiState.value.allModes.filter { it.bankAccountId == accountId }
-            _uiState.update { it.copy(detailLinkedModes = linkedModes) }
-        }
-    }
-
-    // ── Bank account actions ──────────────────────────────────────────────────
-
-    fun openAddSheet() =
-        _uiState.update { it.copy(showAddSheet = true) }
-
-    fun closeAddSheet() =
-        _uiState.update { it.copy(showAddSheet = false) }
-
-    /** Saves a bank account then atomically inserts linked payment modes. */
-    fun saveAccountWithModes(
-        name: String, balance: Double, colorHex: String,
-        pendingModes: List<Pair<PaymentModeType, String>>   // type to identifier
-    ) {
-        viewModelScope.launch {
-            val accountId = bankAccountRepository.insertAccount(
-                BankAccount(name = name, balance = balance, colorHex = colorHex, userId = userId)
-            )
-            pendingModes.forEach { (type, identifier) ->
-                paymentModeRepository.insertMode(
-                    PaymentMode(
-                        bankAccountId = accountId, type = type,
-                        identifier = identifier, userId = userId
-                    )
-                )
-            }
-            closeAddSheet()
-        }
-    }
-
-    fun showAccountDialog(account: BankAccount? = null) =
-        _uiState.update { it.copy(showAccountDialog = true, editingAccount = account) }
-
-    fun hideAccountDialog() =
-        _uiState.update { it.copy(showAccountDialog = false, editingAccount = null) }
-
-    fun saveAccount(name: String, balance: Double, colorHex: String) {
-        viewModelScope.launch {
-            val editing = _uiState.value.editingAccount
-            val account = BankAccount(
-                id = editing?.id ?: 0,
-                name = name,
-                balance = balance,
-                colorHex = colorHex,
-                userId = userId
-            )
-            if (editing != null) bankAccountRepository.updateAccount(account)
-            else bankAccountRepository.insertAccount(account)
-            hideAccountDialog()
-        }
-    }
-
-    fun deleteAccount(account: BankAccount) =
-        viewModelScope.launch { bankAccountRepository.deleteAccount(account) }
-
-    // ── Payment mode actions ──────────────────────────────────────────────────
-
-    fun showModeDialog(mode: PaymentMode? = null, forAccountId: Long? = null) =
-        _uiState.update {
-            it.copy(
-                showModeDialog = true, editingMode = mode,
-                preselectedAccountId = forAccountId ?: mode?.bankAccountId
-            )
-        }
-
-    fun hideModeDialog() =
-        _uiState.update {
-            it.copy(
-                showModeDialog = false,
-                editingMode = null,
-                preselectedAccountId = null
-            )
-        }
-
-    fun saveMode(bankAccountId: Long?, type: PaymentModeType, identifier: String) {
-        viewModelScope.launch {
-            val editing = _uiState.value.editingMode
-            val mode = PaymentMode(
-                id = editing?.id ?: 0, bankAccountId = bankAccountId,
-                type = type, identifier = identifier, userId = userId
-            )
-            if (editing != null) paymentModeRepository.updateMode(mode)
-            else paymentModeRepository.insertMode(mode)
-            hideModeDialog()
-        }
-    }
-
-    fun deleteMode(mode: PaymentMode) =
-        viewModelScope.launch { paymentModeRepository.deleteMode(mode) }
-
-    fun modesForAccount(accountId: Long) =
-        _uiState.value.allModes.filter { it.bankAccountId == accountId }
-
-    fun standaloneModes() =
-        _uiState.value.allModes.filter { it.bankAccountId == null }
-
-    // ── Credit card actions ───────────────────────────────────────────────────
-
-    fun showCreditCardDialog(card: CreditCard? = null) =
-        _uiState.update { it.copy(showCreditCardDialog = true, editingCreditCard = card) }
-
-    fun hideCreditCardDialog() =
-        _uiState.update { it.copy(showCreditCardDialog = false, editingCreditCard = null) }
-
-    fun saveCreditCard(
-        name: String, availableLimit: Double, totalLimit: Double,
-        billingCycleDate: Int, paymentDueDate: Int, colorHex: String
-    ) {
-        viewModelScope.launch {
-            val editing = _uiState.value.editingCreditCard
-            val card = CreditCard(
-                id = editing?.id ?: 0, name = name,
-                availableLimit = availableLimit, totalLimit = totalLimit,
-                billingCycleDate = billingCycleDate, paymentDueDate = paymentDueDate,
-                colorHex = colorHex, userId = userId
-            )
-            if (editing != null) creditCardRepository.updateCard(card)
-            else creditCardRepository.insertCard(card)
-            hideCreditCardDialog()
-        }
-    }
-
-    fun deleteCreditCard(card: CreditCard) =
-        viewModelScope.launch { creditCardRepository.deleteCard(card) }
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -491,6 +132,7 @@ private fun fmtAmt(amount: Double): String {
 @Composable
 fun AccountsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToAddTransaction: () -> Unit,
     viewModel: AccountsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -533,9 +175,11 @@ fun AccountsScreen(
                 standaloneModes.isEmpty() && uiState.creditCards.isEmpty()
 
         if (isEmpty) {
-            Box(Modifier
-                .fillMaxSize()
-                .padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding), contentAlignment = Alignment.Center
+            ) {
                 EmptyState(
                     icon = Icons.Default.AccountBalance,
                     title = "No accounts yet",
@@ -785,10 +429,25 @@ fun AccountsScreen(
             card = uiState.selectedDetailCard,
             linkedModes = uiState.detailLinkedModes,
             showEditSheet = uiState.showEditAccountSheet,
+            showEditCardSheet = uiState.showEditCardSheet,
+            showEditLimitSheet = uiState.showEditLimitSheet,
             showCardTransactions = uiState.showCardTransactions,
             onNavigateBack = viewModel::closeDetail,
             onEditAccount = viewModel::openEditAccountSheet,
+            onEditCard = viewModel::openEditCardSheet,
             onCloseEditSheet = viewModel::closeEditAccountSheet,
+            onCloseEditCardSheet = viewModel::closeEditCardSheet,
+            onOpenEditLimitSheet = viewModel::openEditLimitSheet,
+            onCloseEditLimitSheet = viewModel::closeEditLimitSheet,
+            onSaveCardAvailableLimit = { card, limit ->
+                viewModel.saveCardAvailableLimit(card, limit)
+            },
+            onSaveEditCard = { name, avail, total, billing, due, color ->
+                uiState.selectedDetailCard?.let { card ->
+                    viewModel.saveCreditCard(name, avail, total, billing, due, color)
+                    viewModel.closeEditCardSheet()
+                }
+            },
             onSaveEditAccount = { acc, name, bal ->
                 viewModel.saveEditedAccount(acc, name, bal)
             },
@@ -796,12 +455,17 @@ fun AccountsScreen(
                 viewModel.deleteAccount(acc)
                 viewModel.closeDetail()
             },
+            onDeleteCard = { card ->
+                viewModel.deleteCreditCard(card)
+                viewModel.closeDetail()
+            },
             onLinkMode = { accId, type, id ->
                 viewModel.addModeToAccount(accId, type, id)
             },
             onDeleteMode = viewModel::deleteModeFromDetail,
             onOpenCardTransactions = viewModel::openCardTransactions,
-            onCloseCardTransactions = viewModel::closeCardTransactions
+            onCloseCardTransactions = viewModel::closeCardTransactions,
+            onNavigateToAddTransaction = onNavigateToAddTransaction
         )
     }
 }
@@ -969,16 +633,26 @@ private fun DetailScreen(
     card: CreditCard?,
     linkedModes: List<PaymentMode>,
     showEditSheet: Boolean,
+    showEditCardSheet: Boolean,
+    showEditLimitSheet: Boolean,
     showCardTransactions: Boolean,
     onNavigateBack: () -> Unit,
     onEditAccount: () -> Unit,
+    onEditCard: () -> Unit,
     onCloseEditSheet: () -> Unit,
+    onCloseEditCardSheet: () -> Unit,
+    onOpenEditLimitSheet: () -> Unit,
+    onCloseEditLimitSheet: () -> Unit,
+    onSaveCardAvailableLimit: (CreditCard, Double) -> Unit,
+    onSaveEditCard: (String, Double, Double, Int, Int, String) -> Unit,
     onSaveEditAccount: (BankAccount, String, Double) -> Unit,
     onDeleteAccount: (BankAccount) -> Unit,
+    onDeleteCard: (CreditCard) -> Unit,
     onLinkMode: (Long, PaymentModeType, String) -> Unit,
     onDeleteMode: (PaymentMode) -> Unit,
     onOpenCardTransactions: () -> Unit,
-    onCloseCardTransactions: () -> Unit
+    onCloseCardTransactions: () -> Unit,
+    onNavigateToAddTransaction: () -> Unit
 ) {
     // Intercept back when card transactions screen is open
     BackHandler(enabled = showCardTransactions) { onCloseCardTransactions() }
@@ -1009,10 +683,10 @@ private fun DetailScreen(
                     }
                 },
                 actions = {
-                    // Edit button (bank accounts + credit cards)
                     if (account != null || card != null) {
+                        // Edit — opens card edit sheet for cards, account edit sheet for bank accounts
                         IconButton(
-                            onClick = onEditAccount,
+                            onClick = if (card != null) onEditCard else onEditAccount,
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -1024,15 +698,16 @@ private fun DetailScreen(
                             )
                         }
                         Spacer(Modifier.width(8.dp))
+                        // + → navigate to Add Transaction
                         IconButton(
-                            onClick = { },
+                            onClick = onNavigateToAddTransaction,
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .size(40.dp)
                         ) {
                             Icon(
-                                Icons.Default.Add, contentDescription = "Add",
+                                Icons.Default.Add, contentDescription = "Add Transaction",
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -1042,9 +717,11 @@ private fun DetailScreen(
             )
         }
     ) { padding ->
-        Column(Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
 
             if (card != null) {
                 // ── Credit card summary card ──────────────────────────────────
@@ -1052,7 +729,8 @@ private fun DetailScreen(
                     card = card,
                     transactions = transactions,
                     currencySymbol = currencySymbol,
-                    onSeeTransactions = onOpenCardTransactions
+                    onSeeTransactions = onOpenCardTransactions,
+                    onEditLimit = onOpenEditLimitSheet
                 )
             } else {
                 // ── Bank account / mode balance card ──────────────────────────
@@ -1189,6 +867,27 @@ private fun DetailScreen(
         )
     }
 
+    // ── Edit Credit Card bottom sheet (full card details) ─────────────────────
+    if (showEditCardSheet && card != null) {
+        EditCreditCardSheet(
+            card = card,
+            onDismiss = onCloseEditCardSheet,
+            onSave = { name, avail, total, billing, due, color ->
+                onSaveEditCard(name, avail, total, billing, due, color)
+            },
+            onDelete = { onDeleteCard(card) }
+        )
+    }
+
+    // ── Edit Available Limit bottom sheet (quick edit) ────────────────────────
+    if (showEditLimitSheet && card != null) {
+        EditAvailableLimitSheet(
+            card = card,
+            onDismiss = onCloseEditLimitSheet,
+            onSave = { newLimit -> onSaveCardAvailableLimit(card, newLimit) }
+        )
+    }
+
     // ── Card transactions screen (full-screen overlay) ────────────────────────
     AnimatedVisibility(
         visible = showCardTransactions && card != null,
@@ -1215,31 +914,40 @@ private fun CreditCardDetailCard(
     card: CreditCard,
     transactions: List<Transaction>,
     currencySymbol: String,
-    onSeeTransactions: () -> Unit
+    onSeeTransactions: () -> Unit,
+    onEditLimit: () -> Unit
 ) {
     val usedLimit = card.totalLimit - card.availableLimit
     val usagePct = if (card.totalLimit > 0)
         (usedLimit / card.totalLimit).toFloat().coerceIn(0f, 1f) else 0f
+
+    // Fix 4: Current cycle spends (not previous cycle)
+    val today = LocalDate.now()
+    val billingDay = card.billingCycleDate
+    // Current cycle start = most recent billing date that has already passed (or today if exactly today)
+    val cycleStart = run {
+        val candidate = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
+        if (!candidate.isAfter(today)) candidate else candidate.minusMonths(1)
+    }
     val currentSpends = transactions
         .filter { it.type == TransactionType.EXPENSE }
+        .filter { !it.dateTime.toLocalDate().isBefore(cycleStart) }
         .sumOf { it.amount }
 
-    // Compute days until payment due
-    val today = LocalDate.now()
+    // Fix 3: Days until payment due
     val dueDay = card.paymentDueDate
     val candidateDue = today.withDayOfMonth(dueDay.coerceAtMost(today.lengthOfMonth()))
-    val dueDate = if (!candidateDue.isBefore(today)) candidateDue
-    else candidateDue.plusMonths(1)
+    val dueDate = if (!candidateDue.isBefore(today)) candidateDue else candidateDue.plusMonths(1)
     val daysUntilDue = java.time.temporal.ChronoUnit.DAYS.between(today, dueDate).toInt()
 
-    // Compute previous billing cycle dates
-    val billingDay = card.billingCycleDate
-    val cycleEnd = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
-        .let { if (it.isBefore(today)) it else it.minusMonths(1) }
-    cycleEnd.minusMonths(1).plusDays(1)
+    // Fix 3: Payment due text color based on urgency
+    val dueTextColor = when {
+        daysUntilDue <= 2 -> ExpenseRed
+        daysUntilDue in 3..7 -> Color(0xFFFF6F00)  // warning orange
+        else -> MaterialTheme.colorScheme.onSurface
+    }
 
     val onTrack = usagePct < 0.8f
-    DateTimeFormatter.ofPattern("d MMM")
 
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -1290,13 +998,21 @@ private fun CreditCardDetailCard(
                 }
             }
 
-            // Incorrect? Edit
+            // Fix 2: "Incorrect? Edit" opens the available limit bottom sheet
             Spacer(Modifier.height(2.dp))
-            Text(
-                "Incorrect? Edit",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row {
+                Text(
+                    "Incorrect? ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Edit",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onEditLimit() })
+            }
 
             // Usage progress bar
             Spacer(Modifier.height(12.dp))
@@ -1310,12 +1026,9 @@ private fun CreditCardDetailCard(
                 trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
             )
 
-            // Current spends + total limit
+            // Fix 4: Current cycle spends (label updated) + total limit
             Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1353,7 +1066,7 @@ private fun CreditCardDetailCard(
                 }
             }
 
-            // Payment due + see transactions
+            // Fix 3: Payment due text with urgency color
             Spacer(Modifier.height(12.dp))
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
@@ -1368,7 +1081,8 @@ private fun CreditCardDetailCard(
                 Text(
                     "Payment due in $daysUntilDue day${if (daysUntilDue != 1) "s" else ""}",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    color = dueTextColor     // ← urgency colour
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1394,8 +1108,7 @@ private fun CreditCardDetailCard(
                     onClick = { },
                     shape = RoundedCornerShape(24.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
+                        containerColor = Color.White, contentColor = Color.Black
                     ),
                     modifier = Modifier
                         .weight(1f)
@@ -1416,10 +1129,7 @@ private fun CreditCardDetailCard(
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    Icon(
-                        Icons.Default.Notifications, null,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    Icon(Icons.Default.Notifications, null, modifier = Modifier.size(22.dp))
                 }
             }
         }
@@ -1438,10 +1148,12 @@ private fun CardTransactionsScreen(
 ) {
     val today = LocalDate.now()
     val billingDay = card.billingCycleDate
-    // Previous cycle end = last billing date that has already passed
-    val cycleEnd = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
-        .let { if (it.isBefore(today)) it else it.minusMonths(1) }
-    val cycleStart = cycleEnd.minusMonths(1).plusDays(1)
+    // Fix 4: Current billing cycle — from last billing date up to today
+    val cycleStart = run {
+        val candidate = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
+        if (!candidate.isAfter(today)) candidate else candidate.minusMonths(1)
+    }
+    val cycleEnd = today   // current cycle ends today
     val dateFmt = DateTimeFormatter.ofPattern("d MMM")
     val dateFormatter = DateTimeFormatter.ofPattern("dd MMM")
 
@@ -1493,7 +1205,7 @@ private fun CardTransactionsScreen(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            "Previous Billing Cycle • ${cycleStart.format(dateFmt)} – ${
+                            "Current Billing Cycle • ${cycleStart.format(dateFmt)} – ${
                                 cycleEnd.format(
                                     dateFmt
                                 )
@@ -1886,6 +1598,8 @@ private fun EditAccountSheet(
     }
 }
 
+// ─── Payment mode icon with UPI logo support ──────────────────────────────────
+
 @Composable
 private fun PaymentModeIcon(
     type: PaymentModeType,
@@ -1993,7 +1707,7 @@ private fun AddAccountSheet(
     var cardDue by remember { mutableStateOf("15") }
     var cardColor by remember { mutableStateOf("#EA4335") }
 
-    listOf(
+    val cardColors = listOf(
         "#EA4335", "#E91E63", "#9C27B0", "#3F51B5",
         "#2196F3", "#009688", "#FF9800", "#795548"
     )
@@ -2219,7 +1933,8 @@ private fun AddAccountSheet(
                                         .copy(alpha = 0.7f)
                                 )
                                 Text(
-                                    "You can add a Debit Card, UPI or other payment modes to use with this bank account.",
+                                    "You can add a Debit Card, UPI or other payment " +
+                                            "modes to use with this bank account.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                         .copy(alpha = 0.5f),
@@ -2735,6 +2450,279 @@ private fun AddAccountSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+// ─── Edit Credit Card Sheet (full card details) ───────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditCreditCardSheet(
+    card: CreditCard,
+    onDismiss: () -> Unit,
+    onSave: (String, Double, Double, Int, Int, String) -> Unit,
+    onDelete: () -> Unit
+) {
+    var name by remember(card) { mutableStateOf(card.name) }
+    var availableLimit by remember(card) { mutableStateOf(card.availableLimit.toString()) }
+    var totalLimit by remember(card) { mutableStateOf(card.totalLimit.toString()) }
+    var billingDate by remember(card) { mutableStateOf(card.billingCycleDate.toString()) }
+    var dueDate by remember(card) { mutableStateOf(card.paymentDueDate.toString()) }
+    var colorHex by remember(card) { mutableStateOf(card.colorHex) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val cardColors = listOf(
+        "#EA4335", "#E91E63", "#9C27B0", "#3F51B5",
+        "#2196F3", "#009688", "#FF9800", "#795548"
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+        ) {
+            // Header
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 12.dp, top = 20.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Edit Card", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { showDeleteDialog = true }) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Delete, "Delete", Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = onDismiss) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Close, "Close", Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            Column(
+                Modifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Card Name") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                    leadingIcon = { Icon(Icons.Default.CreditCard, null) })
+                OutlinedTextField(
+                    value = availableLimit, onValueChange = { availableLimit = it },
+                    label = { Text("Available Limit") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                    leadingIcon = { Icon(Icons.Default.CurrencyRupee, null) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                OutlinedTextField(
+                    value = totalLimit, onValueChange = { totalLimit = it },
+                    label = { Text("Total Credit Limit") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                    leadingIcon = { Icon(Icons.Default.CurrencyRupee, null) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = billingDate,
+                        onValueChange = { v ->
+                            val d = v.filter { it.isDigit() }; if (d.isEmpty() || (d.toIntOrNull()
+                                ?: 0) <= 31
+                        ) billingDate = d
+                        },
+                        label = { Text("Billing Date") }, placeholder = { Text("1–31") },
+                        singleLine = true, modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        supportingText = { Text("Day of month") })
+                    OutlinedTextField(
+                        value = dueDate,
+                        onValueChange = { v ->
+                            val d = v.filter { it.isDigit() }; if (d.isEmpty() || (d.toIntOrNull()
+                                ?: 0) <= 31
+                        ) dueDate = d
+                        },
+                        label = { Text("Due Date") }, placeholder = { Text("1–31") },
+                        singleLine = true, modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        supportingText = { Text("Day of month") })
+                }
+                Text("Card Colour", style = MaterialTheme.typography.labelLarge)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(cardColors) { hex ->
+                        val c = Color(hex.toColorInt())
+                        Box(
+                            Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(c)
+                                .then(
+                                    if (hex == colorHex) Modifier.border(
+                                        3.dp,
+                                        Color.White,
+                                        CircleShape
+                                    ) else Modifier
+                                )
+                                .clickable { colorHex = hex })
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                val bInt = billingDate.toIntOrNull() ?: 0
+                val dInt = dueDate.toIntOrNull() ?: 0
+                Button(
+                    onClick = {
+                        onSave(
+                            name, availableLimit.toDoubleOrNull() ?: card.availableLimit,
+                            totalLimit.toDoubleOrNull() ?: card.totalLimit, bInt, dInt, colorHex
+                        )
+                    },
+                    enabled = name.isNotBlank() && availableLimit.toDoubleOrNull() != null &&
+                            totalLimit.toDoubleOrNull() != null && bInt in 1..31 && dInt in 1..31,
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .height(52.dp)
+                        .width(140.dp)
+                        .align(Alignment.End)
+                ) {
+                    Text(
+                        "Save",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Credit Card") },
+            text = { Text("Remove \"${card.name}\"? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = { onDelete(); showDeleteDialog = false }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+// ─── Edit Available Limit Sheet (quick edit, matching image 2) ────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditAvailableLimitSheet(
+    card: CreditCard,
+    onDismiss: () -> Unit,
+    onSave: (Double) -> Unit
+) {
+    var limitInput by remember(card) { mutableStateOf(card.availableLimit.toString()) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Edit available limit",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Close, "Close", Modifier.size(16.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Current available limit for ${card.name}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = limitInput,
+                onValueChange = { limitInput = it },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                textStyle = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Tip: Track all your transactions to keep your limit in sync.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = { limitInput.toDoubleOrNull()?.let { onSave(it) } },
+                enabled = limitInput.toDoubleOrNull() != null,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier
+                    .height(52.dp)
+                    .width(140.dp)
+                    .align(Alignment.End)
+            ) {
+                Text(
+                    "Save",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(12.dp))
         }
     }
 }

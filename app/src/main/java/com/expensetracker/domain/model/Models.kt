@@ -23,19 +23,29 @@ enum class PaymentModeType {
     OTHER;
 
     fun displayName(): String = when (this) {
-        DEBIT_CARD  -> "Debit Card"
-        UPI         -> "UPI"
+        DEBIT_CARD -> "Debit Card"
+        UPI -> "UPI"
         NET_BANKING -> "Net Banking"
-        CHEQUE      -> "Cheque"
-        CASH        -> "Cash"
-        WALLET      -> "Wallet"
-        OTHER       -> "Other"
+        CHEQUE -> "Cheque"
+        CASH -> "Cash"
+        WALLET -> "Wallet"
+        OTHER -> "Other"
     }
 
     /** True if this mode must be linked to a BankAccount. */
     fun requiresBankAccount(): Boolean = this in setOf(
         DEBIT_CARD, UPI, NET_BANKING, CHEQUE
     )
+}
+
+enum class ExportFormat {
+    CSV,
+    PDF;
+
+    fun displayName(): String = when (this) {
+        CSV -> "CSV"
+        PDF -> "PDF"
+    }
 }
 
 // ─── Core Domain Models ─────────────────────────────────────────────────────
@@ -92,11 +102,16 @@ data class PaymentMode(
     val identifier: String = "",
     val userId: String = ""
 ) {
-    val displayLabel: String get() = buildString {
-        if (bankAccountName.isNotEmpty()) { append(bankAccountName); append(" – ") }
-        append(type.displayName())
-        if (identifier.isNotEmpty()) { append(" ("); append(identifier); append(")") }
-    }
+    val displayLabel: String
+        get() = buildString {
+            if (bankAccountName.isNotEmpty()) {
+                append(bankAccountName); append(" – ")
+            }
+            append(type.displayName())
+            if (identifier.isNotEmpty()) {
+                append(" ("); append(identifier); append(")")
+            }
+        }
 }
 
 /**
@@ -120,10 +135,11 @@ data class CreditCard(
     val colorHex: String = "#EA4335",
     val userId: String = ""
 ) {
-    val displayLabel: String get() = buildString {
-        append(name)
-        append(" (₹${String.format("%,.0f", availableLimit)} available)")
-    }
+    val displayLabel: String
+        get() = buildString {
+            append(name)
+            append(" (₹${String.format("%,.0f", availableLimit)} available)")
+        }
 }
 
 /**
@@ -191,4 +207,16 @@ data class TransactionFilter(
     val paymentModeIds: List<Long> = emptyList(),
     val tags: List<String> = emptyList(),
     val transactionTypes: List<TransactionType> = emptyList()
+)
+
+sealed class ExportFilter(val displayName: String) {
+    object AllTime : ExportFilter("All time")
+    data class Year(val year: Int) : ExportFilter(year.toString())
+    data class Month(val year: Int, val month: Int) :
+        ExportFilter("${java.time.Month.of(month)} $year")
+}
+
+data class YearMonthTuple(
+    val year: String,
+    val month: String
 )

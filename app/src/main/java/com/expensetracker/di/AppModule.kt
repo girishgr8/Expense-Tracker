@@ -21,6 +21,8 @@ import com.expensetracker.data.repository.CategoryRepository
 import com.expensetracker.data.repository.CategoryRepositoryImpl
 import com.expensetracker.data.repository.CreditCardRepository
 import com.expensetracker.data.repository.CreditCardRepositoryImpl
+import com.expensetracker.data.repository.ExportRepository
+import com.expensetracker.data.repository.ExportRepositoryImpl
 import com.expensetracker.data.repository.PaymentModeRepository
 import com.expensetracker.data.repository.PaymentModeRepositoryImpl
 import com.expensetracker.data.repository.TagRepository
@@ -39,47 +41,84 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
             .fallbackToDestructiveMigration()
             .build()
 
-    @Provides fun provideTransactionDao(db: AppDatabase): TransactionDao = db.transactionDao()
-    @Provides fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
-    @Provides fun provideBankAccountDao(db: AppDatabase): BankAccountDao = db.bankAccountDao()
-    @Provides fun providePaymentModeDao(db: AppDatabase): PaymentModeDao = db.paymentModeDao()
-    @Provides fun provideCreditCardDao(db: AppDatabase): CreditCardDao = db.creditCardDao()
-    @Provides fun provideAttachmentDao(db: AppDatabase): AttachmentDao = db.attachmentDao()
-    @Provides fun provideBudgetDao(db: AppDatabase): BudgetDao = db.budgetDao()
-    @Provides fun provideTagDao(db: AppDatabase): TagDao = db.tagDao()
+    @Provides
+    fun provideTransactionDao(db: AppDatabase): TransactionDao = db.transactionDao()
+
+    @Provides
+    fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
+
+    @Provides
+    fun provideBankAccountDao(db: AppDatabase): BankAccountDao = db.bankAccountDao()
+
+    @Provides
+    fun providePaymentModeDao(db: AppDatabase): PaymentModeDao = db.paymentModeDao()
+
+    @Provides
+    fun provideCreditCardDao(db: AppDatabase): CreditCardDao = db.creditCardDao()
+
+    @Provides
+    fun provideAttachmentDao(db: AppDatabase): AttachmentDao = db.attachmentDao()
+
+    @Provides
+    fun provideBudgetDao(db: AppDatabase): BudgetDao = db.budgetDao()
+
+    @Provides
+    fun provideTagDao(db: AppDatabase): TagDao = db.tagDao()
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+object ExportModule {
+
+    @Provides
+    @Singleton
+    fun provideExportRepository(
+        transactionRepository: TransactionRepository
+    ): ExportRepository {
+        return ExportRepositoryImpl(transactionRepository)
+    }
 }
 
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindTransactionRepository(impl: TransactionRepositoryImpl): TransactionRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindCategoryRepository(impl: CategoryRepositoryImpl): CategoryRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindBankAccountRepository(impl: BankAccountRepositoryImpl): BankAccountRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindPaymentModeRepository(impl: PaymentModeRepositoryImpl): PaymentModeRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindCreditCardRepository(impl: CreditCardRepositoryImpl): CreditCardRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindAttachmentRepository(impl: AttachmentRepositoryImpl): AttachmentRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindBudgetRepository(impl: BudgetRepositoryImpl): BudgetRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindTagRepository(impl: TagRepositoryImpl): TagRepository
 }
