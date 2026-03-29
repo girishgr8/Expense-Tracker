@@ -113,6 +113,7 @@ import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
+import com.expensetracker.presentation.theme.TextWarning
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -432,6 +433,7 @@ fun AccountsScreen(
             showEditCardSheet = uiState.showEditCardSheet,
             showEditLimitSheet = uiState.showEditLimitSheet,
             showCardTransactions = uiState.showCardTransactions,
+            cardTransactionsIsCurrentCycle = uiState.cardTransactionsIsCurrentCycle,
             onNavigateBack = viewModel::closeDetail,
             onEditAccount = viewModel::openEditAccountSheet,
             onEditCard = viewModel::openEditCardSheet,
@@ -444,7 +446,7 @@ fun AccountsScreen(
             },
             onSaveEditCard = { name, avail, total, billing, due, color ->
                 uiState.selectedDetailCard?.let { card ->
-                    viewModel.saveCreditCard(name, avail, total, billing, due, color)
+                    viewModel.saveEditedCard(card, name, avail, total, billing, due, color)
                     viewModel.closeEditCardSheet()
                 }
             },
@@ -463,7 +465,8 @@ fun AccountsScreen(
                 viewModel.addModeToAccount(accId, type, id)
             },
             onDeleteMode = viewModel::deleteModeFromDetail,
-            onOpenCardTransactions = viewModel::openCardTransactions,
+            onOpenCardTransactions = { viewModel.openCardTransactions(isCurrentCycle = false) },
+            onOpenCurrentSpends = { viewModel.openCardTransactions(isCurrentCycle = true) },
             onCloseCardTransactions = viewModel::closeCardTransactions,
             onNavigateToAddTransaction = onNavigateToAddTransaction
         )
@@ -636,6 +639,7 @@ private fun DetailScreen(
     showEditCardSheet: Boolean,
     showEditLimitSheet: Boolean,
     showCardTransactions: Boolean,
+    cardTransactionsIsCurrentCycle: Boolean,
     onNavigateBack: () -> Unit,
     onEditAccount: () -> Unit,
     onEditCard: () -> Unit,
@@ -651,6 +655,7 @@ private fun DetailScreen(
     onLinkMode: (Long, PaymentModeType, String) -> Unit,
     onDeleteMode: (PaymentMode) -> Unit,
     onOpenCardTransactions: () -> Unit,
+    onOpenCurrentSpends: () -> Unit,
     onCloseCardTransactions: () -> Unit,
     onNavigateToAddTransaction: () -> Unit
 ) {
@@ -730,6 +735,7 @@ private fun DetailScreen(
                     transactions = transactions,
                     currencySymbol = currencySymbol,
                     onSeeTransactions = onOpenCardTransactions,
+                    onSeeCurrentSpends = onOpenCurrentSpends,
                     onEditLimit = onOpenEditLimitSheet
                 )
             } else {
@@ -737,7 +743,7 @@ private fun DetailScreen(
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -901,6 +907,7 @@ private fun DetailScreen(
                 card = card,
                 transactions = transactions,
                 currencySymbol = currencySymbol,
+                isCurrentCycle = cardTransactionsIsCurrentCycle,
                 onNavigateBack = onCloseCardTransactions
             )
         }
@@ -915,43 +922,55 @@ private fun CreditCardDetailCard(
     transactions: List<Transaction>,
     currencySymbol: String,
     onSeeTransactions: () -> Unit,
+    onSeeCurrentSpends: () -> Unit,
     onEditLimit: () -> Unit
 ) {
     val usedLimit = card.totalLimit - card.availableLimit
     val usagePct = if (card.totalLimit > 0)
         (usedLimit / card.totalLimit).toFloat().coerceIn(0f, 1f) else 0f
 
-    // Fix 4: Current cycle spends (not previous cycle)
+    // Fix: Current cycle spends (not previous cycle)
     val today = LocalDate.now()
     val billingDay = card.billingCycleDate
-    // Current cycle start = most recent billing date that has already passed (or today if exactly today)
+
+    // Determine the start date of the current billing cycle
     val cycleStart = run {
-        val candidate = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
+        val candidate = try {
+            today.withDayOfMonth(billingDay)
+        } catch (e: Exception) {
+            today.withDayOfMonth(today.lengthOfMonth()) // Handle months with fewer days
+        }
         if (!candidate.isAfter(today)) candidate else candidate.minusMonths(1)
     }
+
     val currentSpends = transactions
         .filter { it.type == TransactionType.EXPENSE }
         .filter { !it.dateTime.toLocalDate().isBefore(cycleStart) }
         .sumOf { it.amount }
 
-    // Fix 3: Days until payment due
     val dueDay = card.paymentDueDate
-    val candidateDue = today.withDayOfMonth(dueDay.coerceAtMost(today.lengthOfMonth()))
+
+    val candidateDue = try {
+        today.withDayOfMonth(dueDay)
+    } catch (e: Exception) {
+        today.withDayOfMonth(today.lengthOfMonth())
+    }
+
     val dueDate = if (!candidateDue.isBefore(today)) candidateDue else candidateDue.plusMonths(1)
     val daysUntilDue = java.time.temporal.ChronoUnit.DAYS.between(today, dueDate).toInt()
 
-    // Fix 3: Payment due text color based on urgency
+    // Apply urgency colors
     val dueTextColor = when {
-        daysUntilDue <= 2 -> ExpenseRed
-        daysUntilDue in 3..7 -> Color(0xFFFF6F00)  // warning orange
+        daysUntilDue <= 2 -> ExpenseRed // Critical
+        daysUntilDue in 3..7 -> TextWarning // Warning Orange
         else -> MaterialTheme.colorScheme.onSurface
     }
 
-    val onTrack = usagePct < 0.8f
+    val onTrack = (usagePct < 0.8f) // Toggle "High Usage" warning at 80%
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -1033,12 +1052,12 @@ private fun CreditCardDetailCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        modifier = Modifier.clickable { onSeeTransactions() }
+                        modifier = Modifier.clickable { onSeeCurrentSpends() }
                     ) {
                         Text(
                             "Current Spends",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Icon(
                             Icons.Default.ChevronRight, null,
@@ -1067,7 +1086,7 @@ private fun CreditCardDetailCard(
             }
 
             // Fix 3: Payment due text with urgency color
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                 thickness = 0.5.dp
@@ -1091,24 +1110,29 @@ private fun CreditCardDetailCard(
                     Text(
                         "See Transactions",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
                     )
                     Icon(
-                        Icons.Default.ChevronRight, null,
-                        modifier = Modifier.size(14.dp),
+                        Icons.Default.ChevronRight,
+                        null,
+                        modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
             // Record Payment + Bell button row
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Button(
                     onClick = { },
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White, contentColor = Color.Black
+                        containerColor = Color.White,
+                        contentColor = Color.Black
                     ),
                     modifier = Modifier
                         .weight(1f)
@@ -1129,12 +1153,20 @@ private fun CreditCardDetailCard(
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    Icon(Icons.Default.Notifications, null, modifier = Modifier.size(22.dp))
+                    Icon(
+                        Icons.Default.Notifications,
+                        null,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
         }
     }
 }
+
+// ─── Sort Order ───────────────────────────────────────────────────────────────
+
+private enum class TransactionSortOrder { DATE, AMOUNT, CATEGORY }
 
 // ─── Card Transactions Screen ─────────────────────────────────────────────────
 
@@ -1144,23 +1176,67 @@ private fun CardTransactionsScreen(
     card: CreditCard,
     transactions: List<Transaction>,
     currencySymbol: String,
+    isCurrentCycle: Boolean,
     onNavigateBack: () -> Unit
 ) {
     val today = LocalDate.now()
     val billingDay = card.billingCycleDate
-    // Fix 4: Current billing cycle — from last billing date up to today
-    val cycleStart = run {
-        val candidate = today.withDayOfMonth(billingDay.coerceAtMost(today.lengthOfMonth()))
-        if (!candidate.isAfter(today)) candidate else candidate.minusMonths(1)
+
+    // Determine start of the *current* billing cycle
+    val currentCycleStart: LocalDate = run {
+        val candidate = try {
+            today.withDayOfMonth(billingDay)
+        } catch (e: Exception) {
+            today.withDayOfMonth(today.lengthOfMonth())
+        }
+        if (!candidate.isAfter(today)) candidate
+        else {
+            val prevMonth = today.minusMonths(1)
+            try {
+                prevMonth.withDayOfMonth(billingDay)
+            } catch (e: Exception) {
+                prevMonth.withDayOfMonth(prevMonth.lengthOfMonth())
+            }
+        }
     }
-    val cycleEnd = today   // current cycle ends today
+
+    // Pick the correct cycle window
+    val cycleStart: LocalDate
+    val cycleEnd: LocalDate
+    val cycleLabel: String
+
+    if (isCurrentCycle) {
+        // Current cycle: billing date this month → one month later minus 1 day
+        cycleStart = currentCycleStart
+        cycleEnd = currentCycleStart.plusMonths(1).minusDays(1)
+        cycleLabel = "Current Billing Cycle"
+    } else {
+        // Previous cycle: one month before current cycle start → current cycle start minus 1 day
+        cycleStart = currentCycleStart.minusMonths(1)
+        cycleEnd = currentCycleStart.minusDays(1)
+        cycleLabel = "Previous Billing Cycle"
+    }
+
     val dateFmt = DateTimeFormatter.ofPattern("d MMM")
     val dateFormatter = DateTimeFormatter.ofPattern("dd MMM")
 
-    val cycleTotal = transactions.filter {
+    // Filter to the selected billing cycle window
+    val cycleTransactions = transactions.filter {
         val d = it.dateTime.toLocalDate()
         !d.isBefore(cycleStart) && !d.isAfter(cycleEnd)
-    }.sumOf { it.amount }
+    }
+
+    val cycleTotal = cycleTransactions.sumOf { it.amount }
+
+    // Sort state
+    var sortOrder by remember { mutableStateOf(TransactionSortOrder.DATE) }
+    var showSortSheet by remember { mutableStateOf(false) }
+
+    val sortedTransactions = when (sortOrder) {
+        TransactionSortOrder.DATE -> cycleTransactions.sortedByDescending { it.dateTime }
+        TransactionSortOrder.AMOUNT -> cycleTransactions.sortedByDescending { it.amount }
+        TransactionSortOrder.CATEGORY -> cycleTransactions.sortedBy { it.categoryName ?: "" }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -1174,7 +1250,7 @@ private fun CardTransactionsScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { },
+                        onClick = { showSortSheet = true },
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -1191,11 +1267,10 @@ private fun CardTransactionsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp)
         ) {
-            // Previous billing cycle card
             item {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
@@ -1205,11 +1280,7 @@ private fun CardTransactionsScreen(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            "Current Billing Cycle • ${cycleStart.format(dateFmt)} – ${
-                                cycleEnd.format(
-                                    dateFmt
-                                )
-                            }",
+                            "$cycleLabel • ${cycleStart.format(dateFmt)} – ${cycleEnd.format(dateFmt)}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -1236,7 +1307,7 @@ private fun CardTransactionsScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
-            if (transactions.isEmpty()) {
+            if (sortedTransactions.isEmpty()) {
                 item {
                     Column(
                         Modifier
@@ -1264,12 +1335,70 @@ private fun CardTransactionsScreen(
                     }
                 }
             } else {
-                items(transactions, key = { it.id }) { txn ->
+                items(sortedTransactions, key = { it.id }) { txn ->
                     DetailTransactionRow(txn, dateFormatter, currencySymbol)
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
                         thickness = 0.5.dp
                     )
+                }
+            }
+        }
+    }
+
+    // ── Sort Bottom Sheet ─────────────────────────────────────────────────────
+    if (showSortSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSortSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Text(
+                    "Sort by",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
+                )
+                listOf(
+                    TransactionSortOrder.DATE to "Date Created",
+                    TransactionSortOrder.AMOUNT to "Amount",
+                    TransactionSortOrder.CATEGORY to "Category"
+                ).forEach { (order, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                sortOrder = order
+                                showSortSheet = false
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = sortOrder == order,
+                            onClick = {
+                                sortOrder = order
+                                showSortSheet = false
+                            },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (sortOrder == order) FontWeight.SemiBold
+                            else FontWeight.Normal
+                        )
+                    }
                 }
             }
         }
@@ -1707,7 +1836,7 @@ private fun AddAccountSheet(
     var cardDue by remember { mutableStateOf("15") }
     var cardColor by remember { mutableStateOf("#EA4335") }
 
-    val cardColors = listOf(
+    listOf(
         "#EA4335", "#E91E63", "#9C27B0", "#3F51B5",
         "#2196F3", "#009688", "#FF9800", "#795548"
     )
@@ -2465,17 +2594,18 @@ private fun EditCreditCardSheet(
     onDelete: () -> Unit
 ) {
     var name by remember(card) { mutableStateOf(card.name) }
-    var availableLimit by remember(card) { mutableStateOf(card.availableLimit.toString()) }
-    var totalLimit by remember(card) { mutableStateOf(card.totalLimit.toString()) }
+    var availableLimit by remember(card) { mutableStateOf(card.availableLimit.toLong().toString()) }
+    var totalLimit by remember(card) { mutableStateOf(card.totalLimit.toLong().toString()) }
     var billingDate by remember(card) { mutableStateOf(card.billingCycleDate.toString()) }
     var dueDate by remember(card) { mutableStateOf(card.paymentDueDate.toString()) }
-    var colorHex by remember(card) { mutableStateOf(card.colorHex) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    val cardColors = listOf(
-        "#EA4335", "#E91E63", "#9C27B0", "#3F51B5",
-        "#2196F3", "#009688", "#FF9800", "#795548"
-    )
+    val bInt = billingDate.toIntOrNull() ?: 0
+    val dInt = dueDate.toIntOrNull() ?: 0
+    val isValid = name.isNotBlank() &&
+            availableLimit.toDoubleOrNull() != null &&
+            totalLimit.toDoubleOrNull() != null &&
+            bInt in 1..31 && dInt in 1..31
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -2489,7 +2619,7 @@ private fun EditCreditCardSheet(
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
         ) {
-            // Header
+            // ── Header ────────────────────────────────────────────────────────
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -2497,8 +2627,10 @@ private fun EditCreditCardSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Edit Card", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)
+                    "Edit Card",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = { showDeleteDialog = true }) {
                     Box(
@@ -2528,87 +2660,235 @@ private fun EditCreditCardSheet(
                 }
             }
 
-            Column(
-                Modifier.padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it },
-                    label = { Text("Card Name") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.CreditCard, null) })
-                OutlinedTextField(
-                    value = availableLimit, onValueChange = { availableLimit = it },
-                    label = { Text("Available Limit") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.CurrencyRupee, null) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+            Column(Modifier.padding(horizontal = 20.dp)) {
+
+                // ── Card Name ─────────────────────────────────────────────────
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CreditCard, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    BasicTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 16.dp),
+                        textStyle = MaterialTheme.typography.headlineSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        decorationBox = { inner ->
+                            if (name.isEmpty()) {
+                                Text(
+                                    "Card Name",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                            inner()
+                        }
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // ── Current Available Limit ───────────────────────────────────
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Current Available Limit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                OutlinedTextField(
-                    value = totalLimit, onValueChange = { totalLimit = it },
-                    label = { Text("Total Credit Limit") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.CurrencyRupee, null) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "₹",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Light,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    BasicTextField(
+                        value = availableLimit,
+                        onValueChange = { availableLimit = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 12.dp),
+                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        decorationBox = { inner ->
+                            if (availableLimit.isEmpty()) {
+                                Text(
+                                    "0",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                            inner()
+                        }
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // ── Total Credit Limit ────────────────────────────────────────
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Total Credit Limit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "₹",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Light,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    BasicTextField(
+                        value = totalLimit,
+                        onValueChange = { totalLimit = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 12.dp),
+                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        decorationBox = { inner ->
+                            if (totalLimit.isEmpty()) {
+                                Text(
+                                    "0",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                            inner()
+                        }
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // ── Billing Cycle Start Date ──────────────────────────────────
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Billing Cycle Start Date",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CalendarMonth, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    BasicTextField(
                         value = billingDate,
                         onValueChange = { v ->
-                            val d = v.filter { it.isDigit() }; if (d.isEmpty() || (d.toIntOrNull()
-                                ?: 0) <= 31
-                        ) billingDate = d
+                            val d = v.filter { it.isDigit() }
+                            if (d.isEmpty() || (d.toIntOrNull() ?: 0) <= 31) billingDate = d
                         },
-                        label = { Text("Billing Date") }, placeholder = { Text("1–31") },
-                        singleLine = true, modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .width(64.dp)
+                            .padding(vertical = 12.dp),
+                        textStyle = MaterialTheme.typography.displaySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        supportingText = { Text("Day of month") })
-                    OutlinedTextField(
+                        decorationBox = { inner ->
+                            if (billingDate.isEmpty()) {
+                                Text(
+                                    "1",
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                            inner()
+                        }
+                    )
+                    Text(
+                        "of every month",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // ── Payment Due Date ──────────────────────────────────────────
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Payment Due Date",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CalendarMonth, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    BasicTextField(
                         value = dueDate,
                         onValueChange = { v ->
-                            val d = v.filter { it.isDigit() }; if (d.isEmpty() || (d.toIntOrNull()
-                                ?: 0) <= 31
-                        ) dueDate = d
+                            val d = v.filter { it.isDigit() }
+                            if (d.isEmpty() || (d.toIntOrNull() ?: 0) <= 31) dueDate = d
                         },
-                        label = { Text("Due Date") }, placeholder = { Text("1–31") },
-                        singleLine = true, modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .width(64.dp)
+                            .padding(vertical = 12.dp),
+                        textStyle = MaterialTheme.typography.displaySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        supportingText = { Text("Day of month") })
-                }
-                Text("Card Colour", style = MaterialTheme.typography.labelLarge)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(cardColors) { hex ->
-                        val c = Color(hex.toColorInt())
-                        Box(
-                            Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(c)
-                                .then(
-                                    if (hex == colorHex) Modifier.border(
-                                        3.dp,
-                                        Color.White,
-                                        CircleShape
-                                    ) else Modifier
+                        decorationBox = { inner ->
+                            if (dueDate.isEmpty()) {
+                                Text(
+                                    "1",
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                 )
-                                .clickable { colorHex = hex })
-                    }
+                            }
+                            inner()
+                        }
+                    )
+                    Text(
+                        "of every month",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Spacer(Modifier.height(8.dp))
-                val bInt = billingDate.toIntOrNull() ?: 0
-                val dInt = dueDate.toIntOrNull() ?: 0
+
+                // ── Save Button ───────────────────────────────────────────────
+                Spacer(Modifier.height(24.dp))
                 Button(
                     onClick = {
                         onSave(
-                            name, availableLimit.toDoubleOrNull() ?: card.availableLimit,
-                            totalLimit.toDoubleOrNull() ?: card.totalLimit, bInt, dInt, colorHex
+                            name,
+                            availableLimit.toDoubleOrNull() ?: card.availableLimit,
+                            totalLimit.toDoubleOrNull() ?: card.totalLimit,
+                            bInt, dInt,
+                            card.colorHex   // preserve existing color
                         )
                     },
-                    enabled = name.isNotBlank() && availableLimit.toDoubleOrNull() != null &&
-                            totalLimit.toDoubleOrNull() != null && bInt in 1..31 && dInt in 1..31,
+                    enabled = isValid,
                     shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black
+                    ),
                     modifier = Modifier
                         .height(52.dp)
                         .width(140.dp)

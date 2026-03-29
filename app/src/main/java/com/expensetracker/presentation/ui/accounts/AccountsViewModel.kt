@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
@@ -53,6 +55,7 @@ data class AccountsUiState(
     val detailLinkedModes: List<PaymentMode> = emptyList(),
     val showEditAccountSheet: Boolean = false,
     val showCardTransactions: Boolean = false,
+    val cardTransactionsIsCurrentCycle: Boolean = false,
     val showEditCardSheet: Boolean = false,   // full card edit dialog
     val showEditLimitSheet: Boolean = false,   // quick edit available limit
     val currencySymbol: String = "₹"
@@ -192,13 +195,22 @@ class AccountsViewModel @Inject constructor(
         )
     }
 
-    fun openCardTransactions() = _uiState.update { it.copy(showCardTransactions = true) }
+    fun openCardTransactions(isCurrentCycle: Boolean = false) =
+        _uiState.update {
+            it.copy(
+                showCardTransactions = true,
+                cardTransactionsIsCurrentCycle = isCurrentCycle
+            )
+        }
+
     fun closeCardTransactions() = _uiState.update { it.copy(showCardTransactions = false) }
 
     fun openEditCardSheet() = _uiState.update { it.copy(showEditCardSheet = true) }
+
     fun closeEditCardSheet() = _uiState.update { it.copy(showEditCardSheet = false) }
 
     fun openEditLimitSheet() = _uiState.update { it.copy(showEditLimitSheet = true) }
+
     fun closeEditLimitSheet() = _uiState.update { it.copy(showEditLimitSheet = false) }
 
     fun saveCardAvailableLimit(card: CreditCard, newLimit: Double) {
@@ -215,6 +227,7 @@ class AccountsViewModel @Inject constructor(
     }
 
     fun openEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = true) }
+
     fun closeEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = false) }
 
     fun saveEditedAccount(account: BankAccount, name: String, balance: Double) {
@@ -388,4 +401,72 @@ class AccountsViewModel @Inject constructor(
 
     fun deleteCreditCard(card: CreditCard) =
         viewModelScope.launch { creditCardRepository.deleteCard(card) }
+
+    /**
+     * Updates an existing credit card in the detail view (pencil button).
+     * Always calls updateCard — never inserts — because the card object comes
+     * directly from the detail state and always has a valid id.
+     */
+    fun saveEditedCard(
+        card: CreditCard,
+        name: String,
+        availableLimit: Double,
+        totalLimit: Double,
+        billingCycleDate: Int,
+        paymentDueDate: Int,
+        colorHex: String
+    ) {
+        viewModelScope.launch {
+            val updated = card.copy(
+                name = name,
+                availableLimit = availableLimit,
+                totalLimit = totalLimit,
+                billingCycleDate = billingCycleDate,
+                paymentDueDate = paymentDueDate,
+                colorHex = colorHex
+            )
+            creditCardRepository.updateCard(updated)
+            // Refresh the detail state so the header card reflects the new values immediately
+            _uiState.update {
+                it.copy(
+                    selectedDetailCard = updated,
+                    detailBalance = updated.availableLimit
+                )
+            }
+        }
+    }
+
+    /**
+     * Calculates the start and end epoch milliseconds for a billing cycle.
+     * Example: Today is 29 Mar, cycleDate is 14.
+     * If isCurrentCycle = true -> Returns 14 Mar to 13 Apr
+     * If isCurrentCycle = false -> Returns 14 Feb to 13 Mar
+     */
+    fun getBillingCycleDates(billingCycleDate: Int, isCurrentCycle: Boolean): Pair<Long, Long> {
+        val today = LocalDate.now()
+
+        // Determine the start of the *current* cycle
+        val currentCycleStart = if (today.dayOfMonth >= billingCycleDate) {
+            today.withDayOfMonth(billingCycleDate)
+        } else {
+            today.minusMonths(1).withDayOfMonth(billingCycleDate)
+        }
+
+        // Shift back a month if we want the previous cycle
+        val targetCycleStart = if (isCurrentCycle) {
+            currentCycleStart
+        } else {
+            currentCycleStart.minusMonths(1)
+        }
+
+        // End date is exactly one month from start, minus 1 day
+        val targetCycleEnd = targetCycleStart.plusMonths(1).minusDays(1)
+
+        val startMillis =
+            targetCycleStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val endMillis = targetCycleEnd.atTime(23, 59, 59).atZone(ZoneId.systemDefault()).toInstant()
+            .toEpochMilli()
+
+        return Pair(startMillis, endMillis)
+    }
 }

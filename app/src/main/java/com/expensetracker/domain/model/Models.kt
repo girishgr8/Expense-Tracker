@@ -1,6 +1,7 @@
 package com.expensetracker.domain.model
 
 import java.time.LocalDateTime
+import java.util.Locale
 
 // ─── Enums ─────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,14 @@ data class CreditCard(
     val displayLabel: String
         get() = buildString {
             append(name)
-            append(" (₹${String.format("%,.0f", availableLimit)} available)")
+            append(
+                " (₹${
+                    String.format(
+                        Locale.getDefault(),
+                        "%,.0f", availableLimit
+                    )
+                } available)"
+            )
         }
 }
 
