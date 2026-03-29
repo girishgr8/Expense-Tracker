@@ -50,12 +50,26 @@ interface TransactionRepository {
         end: LocalDateTime?
     ): Double
 
+    fun getTotalByTypeFlow(
+        userId: String,
+        type: TransactionType,
+        start: LocalDateTime?,
+        end: LocalDateTime?
+    ): Flow<Double>
+
     suspend fun getExpenseByCategories(
         userId: String,
         categoryIds: List<Long>,
         start: LocalDateTime?,
         end: LocalDateTime?
     ): Double
+
+    fun getExpenseByCategoriesFlow(
+        userId: String,
+        categoryIds: List<Long>,
+        start: LocalDateTime?,
+        end: LocalDateTime?
+    ): Flow<Double>
 
     suspend fun getAllExpense(userId: String, start: LocalDateTime?, end: LocalDateTime?): Double
 
@@ -153,7 +167,7 @@ class TransactionRepositoryImpl @Inject constructor(
         transactionDao.getAllTransactions(userId).map { it.map { e -> e.enriched() } }
 
     override fun getRecentTransactions(userId: String, limit: Int): Flow<List<Transaction>> =
-        transactionDao.getRecentTransactions(userId, limit).map { it.map { e -> e.enriched() } }
+        transactionDao.getRecentTransactionsFlow(userId, limit).map { it.map { e -> e.enriched() } }
 
     override fun searchTransactions(userId: String, query: String): Flow<List<Transaction>> =
         transactionDao.searchTransactions(userId, query).map { it.map { e -> e.enriched() } }
@@ -304,6 +318,23 @@ class TransactionRepositoryImpl @Inject constructor(
     ): Double = transactionDao.getTotalByType(
         userId, type.name, toEpochMilli(start), toEpochMilli(end)
     )
+
+    override fun getTotalByTypeFlow(
+        userId: String, type: TransactionType,
+        start: LocalDateTime?, end: LocalDateTime?
+    ): Flow<Double> = transactionDao.getTotalByTypeFlow(
+        userId, type.name, toEpochMilli(start), toEpochMilli(end)
+    )
+
+    override fun getExpenseByCategoriesFlow(
+        userId: String, categoryIds: List<Long>,
+        start: LocalDateTime?, end: LocalDateTime?
+    ): Flow<Double> = if (categoryIds.isEmpty())
+        transactionDao.getAllExpenseFlow(userId, toEpochMilli(start), toEpochMilli(end))
+    else
+        transactionDao.getExpenseByCategoriesFlow(
+            userId, categoryIds, toEpochMilli(start), toEpochMilli(end)
+        )
 
     override suspend fun getExpenseByCategories(
         userId: String, categoryIds: List<Long>,

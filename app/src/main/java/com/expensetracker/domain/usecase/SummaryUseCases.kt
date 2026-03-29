@@ -26,10 +26,10 @@ class GetMonthlySummaryUseCase @Inject constructor(
         val expense = transactionRepository.getTotalByType(userId, TransactionType.EXPENSE, start, end)
 
         return MonthlySummary(
-            totalIncome  = income,
+            totalIncome = income,
             totalExpense = expense,
-            netBalance   = income - expense,
-            label        = "${yearMonth.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${yearMonth.year}"
+            netBalance = income - expense,
+            label = "${yearMonth.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${yearMonth.year}"
         )
     }
 }
@@ -47,10 +47,10 @@ class GetYearlySummaryUseCase @Inject constructor(
         val expense = transactionRepository.getTotalByType(userId, TransactionType.EXPENSE, start, end)
 
         return MonthlySummary(
-            totalIncome  = income,
+            totalIncome = income,
             totalExpense = expense,
-            netBalance   = income - expense,
-            label        = "Year $year"
+            netBalance = income - expense,
+            label = "Year $year"
         )
     }
 }
@@ -65,10 +65,10 @@ class GetAllTimeSummaryUseCase @Inject constructor(
         val expense = transactionRepository.getTotalByType(userId, TransactionType.EXPENSE, null, null)
 
         return MonthlySummary(
-            totalIncome  = income,
+            totalIncome = income,
             totalExpense = expense,
-            netBalance   = income - expense,
-            label        = "All Time"
+            netBalance = income - expense,
+            label = "All Time"
         )
     }
 }

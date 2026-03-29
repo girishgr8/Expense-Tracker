@@ -51,7 +51,7 @@ interface TransactionDao {
         LIMIT :limit
     """
     )
-    fun getRecentTransactions(userId: String, limit: Int = 5): Flow<List<TransactionEntity>>
+    fun getRecentTransactionsFlow(userId: String, limit: Int = 5): Flow<List<TransactionEntity>>
 
     @Query(
         """
@@ -65,6 +65,19 @@ interface TransactionDao {
     suspend fun getTotalByType(
         userId: String, type: String, startMillis: Long? = null, endMillis: Long? = null
     ): Double
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM transactions 
+        WHERE userId = :userId 
+        AND type = :type
+        AND (:startMillis IS NULL OR dateTimeMillis >= :startMillis)
+        AND (:endMillis IS NULL OR dateTimeMillis <= :endMillis)
+    """
+    )
+    fun getTotalByTypeFlow(
+        userId: String, type: String, startMillis: Long? = null, endMillis: Long? = null
+    ): Flow<Double>
 
     @Query(
         """
@@ -85,6 +98,20 @@ interface TransactionDao {
         SELECT COALESCE(SUM(amount), 0) FROM transactions 
         WHERE userId = :userId 
         AND type = 'EXPENSE'
+        AND categoryId IN (:categoryIds)
+        AND (:startMillis IS NULL OR dateTimeMillis >= :startMillis)
+        AND (:endMillis IS NULL OR dateTimeMillis <= :endMillis)
+    """
+    )
+    fun getExpenseByCategoriesFlow(
+        userId: String, categoryIds: List<Long>, startMillis: Long? = null, endMillis: Long? = null
+    ): Flow<Double>
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM transactions 
+        WHERE userId = :userId 
+        AND type = 'EXPENSE'
         AND (:startMillis IS NULL OR dateTimeMillis >= :startMillis)
         AND (:endMillis IS NULL OR dateTimeMillis <= :endMillis)
     """
@@ -92,6 +119,19 @@ interface TransactionDao {
     suspend fun getAllExpense(
         userId: String, startMillis: Long? = null, endMillis: Long? = null
     ): Double
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM transactions 
+        WHERE userId = :userId 
+        AND type = 'EXPENSE'
+        AND (:startMillis IS NULL OR dateTimeMillis >= :startMillis)
+        AND (:endMillis IS NULL OR dateTimeMillis <= :endMillis)
+    """
+    )
+    fun getAllExpenseFlow(
+        userId: String, startMillis: Long? = null, endMillis: Long? = null
+    ): Flow<Double>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity): Long

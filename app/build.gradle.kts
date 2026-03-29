@@ -111,7 +111,5 @@ dependencies {
 
     implementation(libs.androidx.security.crypto)
 
-    implementation(libs.androidx.datastore.preferences.v100)
-
     implementation(libs.lottie.compose)
 }

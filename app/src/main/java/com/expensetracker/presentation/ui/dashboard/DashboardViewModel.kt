@@ -2,10 +2,24 @@ package com.expensetracker.presentation.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.expensetracker.data.repository.*
-import com.expensetracker.domain.model.*
+import com.expensetracker.data.repository.AuthManager
+import com.expensetracker.data.repository.BudgetRepository
+import com.expensetracker.data.repository.TransactionRepository
+import com.expensetracker.domain.model.BudgetProgress
+import com.expensetracker.domain.model.MonthlySummary
+import com.expensetracker.domain.model.Transaction
+import com.expensetracker.domain.model.TransactionType
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.YearMonth
@@ -35,14 +49,14 @@ class DashboardViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _selectedPeriod = MutableStateFlow(SummaryPeriod.THIS_MONTH)
-    private val _uiState = MutableStateFlow(DashboardUiState())
+    private val _uiState = MutableStateFlow(DashboardUiState(isLoading = true))
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
     private val userId get() = authManager.userId
 
     init {
-        loadDashboard()
         observeUserInfo()
+        loadDashboard()
     }
 
     private fun observeUserInfo() {
@@ -58,24 +72,37 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    private fun loadDashboard() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+    /**
+     * Creates a Flow for BudgetProgress that updates when the budget OR transactions change
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeBudgetProgress(): Flow<BudgetProgress?> {
+        val now = YearMonth.now()
+        val start = now.atDay(1).atStartOfDay()
+        val end = now.atEndOfMonth().atTime(23, 59, 59)
 
-            // Recent transactions
-            transactionRepository.getRecentTransactions(userId, 5).collect { txns ->
-                _uiState.update { it.copy(recentTransactions = txns) }
-            }
-        }
-        viewModelScope.launch {
-            _selectedPeriod.collect { period ->
-                refreshSummary(period)
+        // 1. Use your existing getBudgets(userId) which returns Flow<List<Budget>>
+        return budgetRepository.getAllBudgets(userId).flatMapLatest { budgets ->
+            // 2. Find the budget that matches the current month/year
+            val activeBudget = budgets.find { it.month == now.monthValue && it.year == now.year }
+            if (activeBudget == null) {
+                flowOf(null)
+            } else {
+                // 3. Chain the expenses flow for the found budget
+                transactionRepository.getExpenseByCategoriesFlow(
+                    userId = userId,
+                    categoryIds = activeBudget.applicableCategoryIds,
+                    start = start,
+                    end = end
+                ).map { spent ->
+                    BudgetProgress(activeBudget, spent)
+                }
             }
         }
     }
 
-    private suspend fun refreshSummary(period: SummaryPeriod) {
-        val (start, end, label) = when (period) {
+    private fun getRangeForPeriod(period: SummaryPeriod): Triple<LocalDateTime?, LocalDateTime?, String> {
+        return when (period) {
             SummaryPeriod.THIS_MONTH -> {
                 val ym = YearMonth.now()
                 Triple(
@@ -84,6 +111,7 @@ class DashboardViewModel @Inject constructor(
                     ym.month.name.lowercase().replaceFirstChar { it.uppercase() } + " ${ym.year}"
                 )
             }
+
             SummaryPeriod.THIS_YEAR -> {
                 val year = java.time.LocalDate.now().year
                 Triple(
@@ -92,32 +120,84 @@ class DashboardViewModel @Inject constructor(
                     "Year $year"
                 )
             }
+
+            SummaryPeriod.ALL_TIME -> Triple(null, null, "All Time")
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun loadDashboard() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            // Recent transactions
+            transactionRepository.getRecentTransactions(userId, 5).collect { txns ->
+                _uiState.update { it.copy(recentTransactions = txns) }
+            }
+        }
+        viewModelScope.launch {
+            // 1. Observe Period Changes & Transaction Data
+            _selectedPeriod.flatMapLatest { period ->
+                val (start, end, label) = getRangeForPeriod(period)
+
+                // 2. Combine all data streams into one UI State update
+                combine(
+                    transactionRepository.getRecentTransactions(userId, 5),
+                    transactionRepository.getTotalByTypeFlow(
+                        userId,
+                        TransactionType.INCOME,
+                        start,
+                        end
+                    ),
+                    transactionRepository.getTotalByTypeFlow(
+                        userId,
+                        TransactionType.EXPENSE,
+                        start,
+                        end
+                    ),
+                    observeBudgetProgress() // Reactive budget flow
+                ) { recent, income, expense, budget ->
+                    DashboardUiState(
+                        recentTransactions = recent,
+                        summary = MonthlySummary(income, expense, income - expense, label),
+                        selectedPeriod = period,
+                        budgetProgress = budget,
+                        userName = _uiState.value.userName,
+                        isLoading = false
+                    )
+                }
+            }.collect { newState ->
+                _uiState.value = newState
+            }
+        }
+    }
+
+    private suspend fun refreshSummary(period: SummaryPeriod) {
+        val (start, end, _) = when (period) {
+            SummaryPeriod.THIS_MONTH -> {
+                val ym = YearMonth.now()
+                Triple(
+                    ym.atDay(1).atStartOfDay(),
+                    ym.atEndOfMonth().atTime(23, 59, 59),
+                    ym.month.name.lowercase().replaceFirstChar { it.uppercase() } + " ${ym.year}"
+                )
+            }
+
+            SummaryPeriod.THIS_YEAR -> {
+                val year = java.time.LocalDate.now().year
+                Triple(
+                    LocalDateTime.of(year, 1, 1, 0, 0),
+                    LocalDateTime.of(year, 12, 31, 23, 59, 59),
+                    "Year $year"
+                )
+            }
+
             SummaryPeriod.ALL_TIME -> Triple(null, null, "All Time")
         }
 
-        val income = transactionRepository.getTotalByType(userId, TransactionType.INCOME, start, end)
-        val expense = transactionRepository.getTotalByType(userId, TransactionType.EXPENSE, start, end)
+        transactionRepository.getTotalByType(userId, TransactionType.INCOME, start, end)
+        transactionRepository.getTotalByType(userId, TransactionType.EXPENSE, start, end)
 
-        // Budget for current month
-        val now = YearMonth.now()
-        val budget = budgetRepository.getBudgetForPeriod(userId, now.year, now.monthValue)
-        val budgetProgress = budget?.let {
-            val spent = transactionRepository.getExpenseByCategories(
-                userId, it.applicableCategoryIds,
-                now.atDay(1).atStartOfDay(),
-                now.atEndOfMonth().atTime(23, 59, 59)
-            )
-            BudgetProgress(it, spent)
-        }
 
-        _uiState.update {
-            it.copy(
-                summary = MonthlySummary(income, expense, income - expense, label),
-                selectedPeriod = period,
-                budgetProgress = budgetProgress,
-                isLoading = false
-            )
-        }
     }
 
     fun selectPeriod(period: SummaryPeriod) {
