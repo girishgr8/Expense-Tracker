@@ -110,6 +110,7 @@ import com.expensetracker.domain.model.PaymentMode
 import com.expensetracker.domain.model.PaymentModeType
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
@@ -480,7 +481,7 @@ fun AccountsScreen(
 private fun SummaryTile(label: String, value: String, modifier: Modifier = Modifier) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = modifier
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -567,7 +568,7 @@ private fun AccountsSectionHeader(icon: ImageVector, title: String) {
 private fun GroupedListCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(0.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -694,7 +695,7 @@ private fun DetailScreen(
                             onClick = if (card != null) onEditCard else onEditAccount,
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .background(MaterialTheme.colorScheme.surfaceContainer)
                                 .size(40.dp)
                         ) {
                             Icon(
@@ -708,12 +709,12 @@ private fun DetailScreen(
                             onClick = onNavigateToAddTransaction,
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .background(MaterialTheme.colorScheme.surfaceContainer)
                                 .size(40.dp)
                         ) {
                             Icon(
                                 Icons.Default.Add, contentDescription = "Add Transaction",
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                         Spacer(Modifier.width(8.dp))
@@ -1057,7 +1058,7 @@ private fun CreditCardDetailCard(
                         Text(
                             "Current Spends",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Icon(
                             Icons.Default.ChevronRight, null,
@@ -1086,7 +1087,7 @@ private fun CreditCardDetailCard(
             }
 
             // Fix 3: Payment due text with urgency color
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                 thickness = 0.5.dp
@@ -1110,29 +1111,24 @@ private fun CreditCardDetailCard(
                     Text(
                         "See Transactions",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Icon(
-                        Icons.Default.ChevronRight,
-                        null,
-                        modifier = Modifier.size(16.dp),
+                        Icons.Default.ChevronRight, null,
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
             // Record Payment + Bell button row
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
+                        containerColor = Color.White, contentColor = Color.Black
                     ),
                     modifier = Modifier
                         .weight(1f)
@@ -1153,11 +1149,7 @@ private fun CreditCardDetailCard(
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    Icon(
-                        Icons.Default.Notifications,
-                        null,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    Icon(Icons.Default.Notifications, null, modifier = Modifier.size(22.dp))
                 }
             }
         }
@@ -1218,7 +1210,6 @@ private fun CardTransactionsScreen(
     }
 
     val dateFmt = DateTimeFormatter.ofPattern("d MMM")
-    val dateFormatter = DateTimeFormatter.ofPattern("dd MMM")
 
     // Filter to the selected billing cycle window
     val cycleTransactions = transactions.filter {
@@ -1235,7 +1226,7 @@ private fun CardTransactionsScreen(
     val sortedTransactions = when (sortOrder) {
         TransactionSortOrder.DATE -> cycleTransactions.sortedByDescending { it.dateTime }
         TransactionSortOrder.AMOUNT -> cycleTransactions.sortedByDescending { it.amount }
-        TransactionSortOrder.CATEGORY -> cycleTransactions.sortedBy { it.categoryName ?: "" }
+        TransactionSortOrder.CATEGORY -> cycleTransactions.sortedBy { it.categoryName }
     }
 
     Scaffold(
@@ -1253,7 +1244,7 @@ private fun CardTransactionsScreen(
                         onClick = { showSortSheet = true },
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
                             .size(40.dp)
                     ) {
                         Icon(Icons.Default.FilterList, null, Modifier.size(18.dp))
@@ -1274,7 +1265,7 @@ private fun CardTransactionsScreen(
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -1336,11 +1327,7 @@ private fun CardTransactionsScreen(
                 }
             } else {
                 items(sortedTransactions, key = { it.id }) { txn ->
-                    DetailTransactionRow(txn, dateFormatter, currencySymbol)
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                        thickness = 0.5.dp
-                    )
+                    CardTransactionRow(txn, currencySymbol)
                 }
             }
         }
@@ -1406,7 +1393,81 @@ private fun CardTransactionsScreen(
 }
 
 
-// ─── Edit Account Bottom Sheet ────────────────────────────────────────────────
+// ─── Card Transaction Row (used inside CardTransactionsScreen) ────────────────
+
+@Composable
+private fun CardTransactionRow(txn: Transaction, currencySymbol: String) {
+    val today = LocalDate.now()
+    val txnDate = txn.dateTime.toLocalDate()
+    val dateLabel = when (txnDate) {
+        today -> "Today"
+        today.minusDays(1) -> "Yesterday"
+        else -> txn.dateTime.format(DateTimeFormatter.ofPattern("d MMM"))
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Category icon bubble
+        CategoryIconBubble(
+            iconKey = txn.categoryIcon.ifEmpty { "category" },
+            colorHex = txn.categoryColorHex.ifEmpty { "#6750A4" },
+            size = 44
+        )
+
+        Spacer(Modifier.width(14.dp))
+
+        // Middle: title + payment mode
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = txn.note.ifEmpty { txn.categoryName.ifEmpty { "Transaction" } },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(3.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.CreditCard, null,
+                    modifier = Modifier.size(12.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(4.dp))
+                val cardName = txn.paymentModeName.ifEmpty { "Credit Card" }
+                    .replace(Regex("""\s*\(₹[^)]+\)"""), "").trim()
+                Text(
+                    text = cardName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // Right: amount + date
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = "$currencySymbol${fmtAmt(txn.amount)}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = dateLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2936,7 +2997,7 @@ private fun EditAvailableLimitSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
-        dragHandle = { BottomSheetDefaults.DragHandle() },
+        dragHandle = { BottomSheetDefaults.HiddenShape },
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -2990,10 +3051,10 @@ private fun EditAvailableLimitSheet(
             Button(
                 onClick = { limitInput.toDoubleOrNull()?.let { onSave(it) } },
                 enabled = limitInput.toDoubleOrNull() != null,
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(22.dp),
                 modifier = Modifier
-                    .height(52.dp)
-                    .width(140.dp)
+                    .height(44.dp)
+                    .width(88.dp)
                     .align(Alignment.End)
             ) {
                 Text(

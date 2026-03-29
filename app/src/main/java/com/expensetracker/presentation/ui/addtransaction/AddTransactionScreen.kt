@@ -86,6 +86,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -94,6 +95,7 @@ import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.PaymentOption
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.theme.AppTypography
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
@@ -149,7 +151,11 @@ fun AddTransactionScreen(
                         onClick = viewModel::saveTransaction,
                         enabled = !uiState.isLoading
                     ) {
-                        Text("Save", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Save",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             )

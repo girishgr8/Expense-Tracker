@@ -337,7 +337,7 @@ private fun DashboardHeader(
             onClick = onSearch,
             modifier = Modifier
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Icon(
                 Icons.Default.Search, contentDescription = "Search",
