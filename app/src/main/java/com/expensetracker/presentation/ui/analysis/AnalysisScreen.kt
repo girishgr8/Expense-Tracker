@@ -307,7 +307,7 @@ private fun PeriodTabRow(selected: AnalysisPeriod, onSelect: (AnalysisPeriod) ->
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(MaterialTheme.colorScheme.surfaceContainer),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         listOf(
@@ -349,7 +349,7 @@ private fun PeriodNavRow(label: String, count: Int, onPrev: () -> Unit, onNext: 
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -391,7 +391,7 @@ private fun PeriodNavRow(label: String, count: Int, onPrev: () -> Unit, onNext: 
 private fun SummaryCard(sym: String, expense: Double, income: Double, balance: Double) {
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
@@ -462,6 +462,9 @@ private fun TrendCard(points: List<DailyPoint>, viewType: TransactionType) {
     Card(
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
@@ -494,9 +497,6 @@ private fun TrendCard(points: List<DailyPoint>, viewType: TransactionType) {
 }
 
 // ─── Category Card ────────────────────────────────────────────────────────────
-// FIX: Toggle is now in the SectionTitle row ABOVE this card, not inside it.
-// This eliminates the collision between the toggle and the donut chart.
-
 @Composable
 private fun CategoryCard(
     breakdown: List<CategorySpend>,
@@ -507,6 +507,9 @@ private fun CategoryCard(
     Card(
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
@@ -567,6 +570,9 @@ private fun PaymentModesCard(
     Card(
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
@@ -710,6 +716,9 @@ private fun StatsCard(stats: AnalysisStats, sym: String) {
     Card(
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
