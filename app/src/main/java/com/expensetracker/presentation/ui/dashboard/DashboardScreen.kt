@@ -30,10 +30,13 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -65,6 +68,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -103,6 +107,7 @@ fun DashboardScreen(
     onNavigateToCategories: () -> Unit,
     onNavigateToAccounts: () -> Unit,
     onNavigateToBudget: () -> Unit,
+    onNavigateToSetBudget: () -> Unit = onNavigateToBudget,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToAnalysis: () -> Unit = {},
     onLogout: () -> Unit,
@@ -161,14 +166,6 @@ fun DashboardScreen(
                 )
             }
 
-            // ── Budget progress (if exists) ───────────────────────────────────
-            uiState.budgetProgress?.let { bp ->
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    BudgetCard(bp = bp, onTap = onNavigateToBudget)
-                }
-            }
-
             // ── Quick Actions ─────────────────────────────────────────────────
             item {
                 Spacer(Modifier.height(20.dp))
@@ -180,7 +177,7 @@ fun DashboardScreen(
                 )
             }
 
-            // ── Recent Transactions header ────────────────────────────────────
+            // ── Recent Transactions ───────────────────────────────────────────
             item {
                 Spacer(Modifier.height(24.dp))
                 Row(
@@ -252,6 +249,23 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            // ── Budgets section ───────────────────────────────────────────────
+            item {
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "Budgets",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                DashboardBudgetSection(
+                    budgetProgress = uiState.budgetProgress,
+                    onSetBudget = onNavigateToSetBudget,
+                    onTapBudget = onNavigateToBudget
+                )
+            }
         }
 
         if (uiState.isLoading) LoadingOverlay(true)
@@ -290,6 +304,223 @@ fun DashboardScreen(
                 Spacer(Modifier.height(8.dp))
             }
         }
+    }
+}
+
+// ─── Budget Section (empty state or progress card) ────────────────────────────
+
+@Composable
+private fun DashboardBudgetSection(
+    budgetProgress: BudgetProgress?,
+    onSetBudget: () -> Unit,
+    onTapBudget: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(2.dp),
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+    ) {
+        if (budgetProgress == null) {
+            // ── No budget yet — empty state matching image 1 ──────────────────
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                // Monthly / Annual toggle (decorative — just shows state)
+                BudgetPeriodPill(selectedMonthly = true, onMonthly = {}, onYearly = {})
+
+                Spacer(Modifier.height(28.dp))
+
+                // Money bag icon in a circle
+                Box(
+                    Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.MonetizationOn, null,
+                        modifier = Modifier.size(36.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Text(
+                    "No Budget Yet?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    "Set a monthly budget to achieve your\nsaving goals.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                Button(
+                    onClick = onSetBudget,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier.height(52.dp)
+                ) {
+                    Text(
+                        "Set Budget",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        } else {
+            // ── Budget exists — progress card ─────────────────────────────────
+            BudgetProgressInline(bp = budgetProgress, onTap = onTapBudget)
+        }
+    }
+}
+
+@Composable
+private fun BudgetPeriodPill(
+    selectedMonthly: Boolean,
+    onMonthly: () -> Unit,
+    onYearly: () -> Unit
+) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(Modifier.padding(4.dp)) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        if (selectedMonthly) MaterialTheme.colorScheme.onSurface
+                        else Color.Transparent
+                    )
+                    .clickable { onMonthly() }
+                    .padding(horizontal = 24.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Monthly",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selectedMonthly) MaterialTheme.colorScheme.surface
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        if (!selectedMonthly) MaterialTheme.colorScheme.onSurface
+                        else Color.Transparent
+                    )
+                    .clickable { onYearly() }
+                    .padding(horizontal = 24.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Annual",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (!selectedMonthly) MaterialTheme.colorScheme.surface
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetProgressInline(bp: BudgetProgress, onTap: () -> Unit) {
+    val pct = (bp.percentage / 100f).coerceIn(0f, 1f)
+    val barColor = when {
+        bp.percentage >= 90f -> ExpenseRed
+        bp.percentage >= 70f -> Color(0xFFFF9800)
+        else -> IncomeGreen
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onTap() }
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PieChart, null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        if (bp.budget.period.name == "MONTHLY") "Monthly Budget"
+                        else "Yearly Budget",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "${bp.percentage.toInt()}% used",
+                        style = MaterialTheme.typography.bodySmall, color = barColor
+                    )
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "₹${fmtAmt(bp.spent)}",
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "of ₹${fmtAmt(bp.budget.totalLimit)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        LinearProgressIndicator(
+            progress = { pct },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp)),
+            color = barColor,
+            trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        )
     }
 }
 
@@ -521,85 +752,6 @@ private fun CashFlowCard(
     }
 }
 
-// ─── Budget Card ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun BudgetCard(bp: BudgetProgress, onTap: () -> Unit) {
-    val pct = (bp.percentage / 100f).coerceIn(0f, 1f)
-    val barColor = when {
-        bp.percentage >= 90f -> ExpenseRed
-        bp.percentage >= 70f -> Color(0xFFFF9800)
-        else -> IncomeGreen
-    }
-    Card(
-        onClick = onTap,
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(2.dp),
-        modifier = Modifier.padding(horizontal = 16.dp)
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.PieChart, null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            "Monthly Budget",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            "${bp.percentage.toInt()}% used",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = barColor
-                        )
-                    }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "₹${fmtAmt(bp.spent)}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "of ₹${fmtAmt(bp.budget.totalLimit)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            LinearProgressIndicator(
-                progress = { pct },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = barColor,
-                trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-            )
-        }
-    }
-}
-
 // ─── Quick Actions ────────────────────────────────────────────────────────────
 
 @Composable
@@ -611,22 +763,23 @@ private fun QuickActionsGrid(
 ) {
     val actions = listOf(
         QuickAction(
-            Icons.AutoMirrored.Filled.ReceiptLong,
-            "Transactions",
+            Icons.AutoMirrored.Filled.ReceiptLong, "Transactions",
             MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            onTransactions
+            MaterialTheme.colorScheme.onPrimaryContainer, onTransactions
         ),
         QuickAction(
-            Icons.Default.Category, "Categories", MaterialTheme.colorScheme.secondaryContainer,
+            Icons.Default.Category, "Categories",
+            MaterialTheme.colorScheme.secondaryContainer,
             MaterialTheme.colorScheme.onSecondaryContainer, onCategories
         ),
         QuickAction(
-            Icons.Default.AccountBalance, "Accounts", MaterialTheme.colorScheme.tertiaryContainer,
+            Icons.Default.AccountBalance, "Accounts",
+            MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.onTertiaryContainer, onAccounts
         ),
         QuickAction(
-            Icons.Default.PieChart, "Budget", MaterialTheme.colorScheme.errorContainer,
+            Icons.Default.PieChart, "Budget",
+            MaterialTheme.colorScheme.errorContainer,
             MaterialTheme.colorScheme.onErrorContainer, onBudget
         )
     )
@@ -751,8 +904,15 @@ private fun DashboardTransactionRow(txn: Transaction) {
                 fontWeight = FontWeight.Bold,
                 color = amountColor
             )
+            val today = LocalDate.now()
+            val txnDate = txn.dateTime.toLocalDate()
+            val dateLabel = when (txnDate) {
+                today -> "Today"
+                today.minusDays(1) -> "Yesterday"
+                else -> txn.dateTime.format(dateFormatter)
+            }
             Text(
-                txn.dateTime.format(dateFormatter),
+                dateLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -770,7 +930,7 @@ private fun DashboardBottomBar(
     onMore: () -> Unit
 ) {
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 4.dp
     ) {
         NavigationBarItem(
@@ -807,5 +967,3 @@ private fun DashboardBottomBar(
         )
     }
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import com.expensetracker.presentation.ui.accounts.AccountsScreen
 import com.expensetracker.presentation.ui.addtransaction.AddTransactionScreen
 import com.expensetracker.presentation.ui.analysis.AnalysisScreen
 import com.expensetracker.presentation.ui.auth.AuthScreen
+import com.expensetracker.presentation.ui.budget.AddBudgetScreen
 import com.expensetracker.presentation.ui.budget.BudgetScreen
 import com.expensetracker.presentation.ui.categories.CategoriesScreen
 import com.expensetracker.presentation.ui.dashboard.DashboardScreen
@@ -37,6 +38,7 @@ sealed class Screen(val route: String) {
     object Categories : Screen("categories")
     object Accounts : Screen("accounts")
     object Budget : Screen("budget")
+    object AddBudget : Screen("add_budget")
     object Settings : Screen("settings")
     object Analysis : Screen("analysis")
     object CurrencySelection : Screen("currency_selection")
@@ -84,6 +86,7 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
                 onNavigateToAccounts = { navController.navigate(Screen.Accounts.route) },
                 onNavigateToBudget = { navController.navigate(Screen.Budget.route) },
+                onNavigateToSetBudget = { navController.navigate(Screen.AddBudget.route) },
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToAnalysis = { navController.navigate(Screen.Analysis.route) },
                 onLogout = {
@@ -128,7 +131,14 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         }
 
         composable(Screen.Budget.route) {
-            BudgetScreen(onNavigateBack = { navController.popBackStack() })
+            BudgetScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAddBudget = { navController.navigate(Screen.AddBudget.route) }
+            )
+        }
+
+        composable(Screen.AddBudget.route) {
+            AddBudgetScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         composable(Screen.Settings.route) {

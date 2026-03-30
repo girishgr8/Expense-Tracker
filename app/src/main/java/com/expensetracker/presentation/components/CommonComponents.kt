@@ -47,6 +47,7 @@ import com.expensetracker.presentation.theme.CardGradientStart
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
+import java.util.Locale
 
 // ─── Amount Display ───────────────────────────────────────────────────────────
 
@@ -76,10 +77,7 @@ fun AmountText(
         TransactionType.TRANSFER -> "↔"
     }
     Text(
-        text = "$prefix₹${fmtAmt(amount)}",
-        color = color,
-        style = style,
-        modifier = modifier
+        text = "$prefix₹${fmtAmt(amount)}", color = color, style = style, modifier = modifier
     )
 }
 
@@ -87,9 +85,7 @@ fun AmountText(
 
 @Composable
 fun TransactionListItem(
-    transaction: Transaction,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    transaction: Transaction, onClick: () -> Unit, modifier: Modifier = Modifier
 ) {
     // Title: note if written, otherwise fall back to category name
     val title = transaction.note.ifEmpty { transaction.categoryName.ifEmpty { "Uncategorized" } }
@@ -119,8 +115,7 @@ fun TransactionListItem(
             // Category icon bubble using the category's own color
             CategoryIconBubble(
                 iconKey = transaction.categoryIcon.ifEmpty { "category" },
-                colorHex = transaction.categoryColorHex.ifEmpty { "#6750A4" }
-            )
+                colorHex = transaction.categoryColorHex.ifEmpty { "#6750A4" })
 
             Spacer(Modifier.width(12.dp))
 
@@ -164,12 +159,10 @@ fun TransactionListItem(
 
 @Composable
 fun CategoryIconBubble(
-    iconKey: String,
-    colorHex: String,
-    size: Int = 44
+    iconKey: String, colorHex: String, size: Int = 44
 ) {
-    val color = runCatching { Color(colorHex.toColorInt()) }
-        .getOrDefault(MaterialTheme.colorScheme.primary)
+    val color =
+        runCatching { Color(colorHex.toColorInt()) }.getOrDefault(MaterialTheme.colorScheme.primary)
 
     val imageVector = com.expensetracker.presentation.ui.categories.CategoryIcons.get(iconKey)
 
@@ -193,13 +186,10 @@ fun CategoryIconBubble(
 /** Convenience overload that accepts a [Category] domain object directly. */
 @Composable
 fun CategoryIconBubble(
-    category: com.expensetracker.domain.model.Category,
-    size: Int = 44
+    category: com.expensetracker.domain.model.Category, size: Int = 44
 ) {
     CategoryIconBubble(
-        iconKey = category.icon,
-        colorHex = category.colorHex,
-        size = size
+        iconKey = category.icon, colorHex = category.colorHex, size = size
     )
 }
 
@@ -219,9 +209,7 @@ fun SectionHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
         )
         if (action != null && onAction != null) {
             TextButton(onClick = onAction) {
@@ -235,11 +223,7 @@ fun SectionHeader(
 
 @Composable
 fun GradientSummaryCard(
-    income: Double,
-    expense: Double,
-    balance: Double,
-    label: String,
-    modifier: Modifier = Modifier
+    income: Double, expense: Double, balance: Double, label: String, modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
@@ -271,17 +255,11 @@ fun GradientSummaryCard(
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth()) {
                 SummaryPill(
-                    label = "Income",
-                    amount = income,
-                    color = IncomeGreen,
-                    Modifier.weight(1f)
+                    label = "Income", amount = income, color = IncomeGreen, Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(12.dp))
                 SummaryPill(
-                    label = "Expense",
-                    amount = expense,
-                    color = ExpenseRed,
-                    Modifier.weight(1f)
+                    label = "Expense", amount = expense, color = ExpenseRed, Modifier.weight(1f)
                 )
             }
         }
@@ -290,10 +268,7 @@ fun GradientSummaryCard(
 
 @Composable
 private fun SummaryPill(
-    label: String,
-    amount: Double,
-    color: Color,
-    modifier: Modifier = Modifier
+    label: String, amount: Double, color: Color, modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
@@ -303,10 +278,12 @@ private fun SummaryPill(
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(color))
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = label,
@@ -316,7 +293,7 @@ private fun SummaryPill(
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "₹${String.format("%,.0f", amount)}",
+                text = "₹${String.format(Locale.getDefault(), "%,.0f", amount)}",
                 style = MaterialTheme.typography.titleSmall,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold
@@ -329,9 +306,7 @@ private fun SummaryPill(
 
 @Composable
 fun TagChip(
-    tag: String,
-    onRemove: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    tag: String, onRemove: (() -> Unit)? = null, modifier: Modifier
 ) {
     InputChip(
         selected = false,
@@ -347,8 +322,7 @@ fun TagChip(
                         .clickable { onRemove() })
             }
         } else null,
-        modifier = modifier
-    )
+        modifier = modifier)
 }
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
@@ -424,8 +398,7 @@ fun PeriodSelectorChips(
             FilterChip(
                 selected = option == selected,
                 onClick = { onSelect(option) },
-                label = { Text(option, style = MaterialTheme.typography.labelMedium) }
-            )
+                label = { Text(option, style = MaterialTheme.typography.labelMedium) })
         }
     }
 }
