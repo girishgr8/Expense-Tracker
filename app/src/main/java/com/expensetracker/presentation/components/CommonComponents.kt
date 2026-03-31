@@ -39,6 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -414,6 +417,7 @@ fun PeriodSelectorChips(
 /**
  * Persistent bottom bar shown on all main screens.
  * [currentRoute] is matched against the four tab routes to highlight the active item.
+ * A centered FAB sits on top of the bar — tap it to add a transaction.
  */
 @Composable
 fun AppBottomBar(
@@ -421,47 +425,65 @@ fun AppBottomBar(
     onHome: () -> Unit,
     onAnalysis: () -> Unit,
     onAccounts: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onAddTransaction: () -> Unit = {}
 ) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 4.dp
-    ) {
-        // Home
-        NavigationBarItem(
-            selected = currentRoute == "dashboard",
-            onClick = onHome,
-            icon = { Icon(Icons.Default.Home, null) },
-            label = { Text("Home") }
-        )
-        // Analysis
-        NavigationBarItem(
-            selected = currentRoute == "analysis",
-            onClick = onAnalysis,
-            icon = { Icon(Icons.Default.BarChart, null) },
-            label = { Text("Analysis") }
-        )
-        // Centre placeholder for FAB (disabled, invisible)
-        NavigationBarItem(
-            selected = false,
-            onClick = {},
-            icon = { Spacer(Modifier.size(24.dp)) },
-            label = { Text("") },
-            enabled = false
-        )
-        // Accounts
-        NavigationBarItem(
-            selected = currentRoute == "accounts",
-            onClick = onAccounts,
-            icon = { Icon(Icons.Default.AccountBalance, null) },
-            label = { Text("Accounts") }
-        )
-        // Settings (replaces "More")
-        NavigationBarItem(
-            selected = currentRoute == "settings",
-            onClick = onSettings,
-            icon = { Icon(Icons.Default.MoreHoriz, null) },
-            label = { Text("More") }
-        )
+    Box {
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+            tonalElevation = 4.dp
+        ) {
+            // Home
+            NavigationBarItem(
+                selected = currentRoute == "dashboard",
+                onClick  = onHome,
+                icon     = { Icon(Icons.Default.Home, null) },
+                label    = { Text("Home") }
+            )
+            // Analysis
+            NavigationBarItem(
+                selected = currentRoute == "analysis",
+                onClick  = onAnalysis,
+                icon     = { Icon(Icons.Default.BarChart, null) },
+                label    = { Text("Analysis") }
+            )
+            // Center slot — invisible placeholder to keep equal spacing
+            NavigationBarItem(
+                selected = false,
+                onClick  = {},
+                icon     = { Spacer(Modifier.size(56.dp)) },
+                label    = { Text("") },
+                enabled  = false
+            )
+            // Accounts
+            NavigationBarItem(
+                selected = currentRoute == "accounts",
+                onClick  = onAccounts,
+                icon     = { Icon(Icons.Default.AccountBalance, null) },
+                label    = { Text("Accounts") }
+            )
+            // Settings
+            NavigationBarItem(
+                selected = currentRoute == "settings",
+                onClick  = onSettings,
+                icon     = { Icon(Icons.Default.MoreHoriz, null) },
+                label    = { Text("More") }
+            )
+        }
+
+        // FAB centered on top of the bar
+        FloatingActionButton(
+            onClick          = onAddTransaction,
+            modifier         = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-28).dp),
+            containerColor   = Color.White,
+            contentColor     = Color.Black,
+            shape            = CircleShape
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add Transaction",
+                modifier = Modifier.size(28.dp))
+        }
     }
 }

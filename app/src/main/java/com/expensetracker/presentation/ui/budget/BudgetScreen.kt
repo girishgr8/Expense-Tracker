@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -35,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -67,6 +67,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +81,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -96,6 +98,7 @@ import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.theme.ExpenseRed
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -432,13 +435,12 @@ fun AddBudgetScreen(
         ) {
 
             // ── Monthly / Yearly pill toggle ──────────────────────────────────
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                BudgetPeriodToggle(
-                    isMonthly = isMonthly,
-                    onMonthly = { isMonthly = true },
-                    onYearly = { isMonthly = false }
-                )
-            }
+            BudgetPeriodToggle(
+                isMonthly = isMonthly,
+                onMonthly = { isMonthly = true },
+                onYearly = { isMonthly = false },
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // ── "Budget for" card ─────────────────────────────────────────────
             Card(
@@ -455,7 +457,9 @@ fun AddBudgetScreen(
                         fontWeight = FontWeight.Bold
                     )
 
-                    // Date display row
+                    // Date display row — tap to open the month/year picker popup
+                    var showMonthPicker by remember { mutableStateOf(false) }
+
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -466,6 +470,7 @@ fun AddBudgetScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surface)
+                                .clickable { showMonthPicker = true }
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -496,66 +501,17 @@ fun AddBudgetScreen(
                         }
                     }
 
-                    // Month strip (Monthly only)
-                    if (isMonthly) {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(vertical = 2.dp)
-                        ) {
-                            items(monthShort.size) { idx ->
-                                val m = idx + 1
-                                val sel = m == selectedMonth
-                                Box(
-                                    Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(
-                                            if (sel) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.surface
-                                        )
-                                        .clickable { selectedMonth = m }
-                                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        monthShort[idx],
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (sel) Color.White
-                                        else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Year strip
-                    val years = (now.year - 2..now.year + 2).toList()
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(vertical = 2.dp)
-                    ) {
-                        items(years) { y ->
-                            val sel = y == selectedYear
-                            Box(
-                                Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (sel) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surface
-                                    )
-                                    .clickable { selectedYear = y }
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "$y",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (sel) Color.White
-                                    else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
+                    // Month/Year picker popup dialog
+                    if (showMonthPicker) {
+                        MonthYearPickerDialog(
+                            isMonthly = isMonthly,
+                            selectedMonth = selectedMonth,
+                            selectedYear = selectedYear,
+                            monthShort = monthShort,
+                            onMonthSelect = { m -> selectedMonth = m },
+                            onYearChange = { y -> selectedYear = y },
+                            onDismiss = { showMonthPicker = false }
+                        )
                     }
                 }
             }
@@ -620,8 +576,14 @@ fun AddBudgetScreen(
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
+                            val includedCount = categories.size - excludedIds.size
+                            val subtitleText = when {
+                                excludedIds.isEmpty() -> "All categories included in your budget"
+                                includedCount == 0 -> "No categories included"
+                                else -> "$includedCount of ${categories.size} categories included"
+                            }
                             Text(
-                                "All categories included in your budget",
+                                subtitleText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -712,13 +674,190 @@ fun AddBudgetScreen(
     }
 }
 
+// ─── Month / Year Picker Dialog ────────────────────────────────────
+
+@Composable
+private fun MonthYearPickerDialog(
+    isMonthly: Boolean,
+    selectedMonth: Int,
+    selectedYear: Int,
+    monthShort: List<String>,
+    onMonthSelect: (Int) -> Unit,
+    onYearChange: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val minYear = 2001
+    val maxYear = 2108
+
+    // Local state for the temporary selection before the dialog closes
+    var tempSelectedMonth by remember { mutableIntStateOf(selectedMonth) }
+    var tempSelectedYear by remember { mutableIntStateOf(selectedYear) }
+
+    // Local year for monthly mode browsing
+    var browseYear by remember { mutableIntStateOf(selectedYear) }
+
+    // State for yearly mode pagination
+    var startYear by remember {
+        mutableIntStateOf((selectedYear - (selectedYear % 3)).coerceIn(minYear, maxYear - 11))
+    }
+
+    // Helper to close with a tiny delay so the user sees the selection
+    val scope = rememberCoroutineScope()
+    val handleSelection = {
+        scope.launch {
+            delay(50) // Brief pause to show the "active" state
+            onDismiss()
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            )
+        ) {
+            Column(Modifier.padding(24.dp)) {
+
+                // ── Header + Navigation ──────────────────────────────────
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = if (isMonthly) "$browseYear" else "$startYear - ${
+                            minOf(
+                                startYear + 11,
+                                maxYear
+                            )
+                        }",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(
+                            onClick = {
+                                if (isMonthly) {
+                                    if (browseYear > minYear) browseYear--
+                                } else {
+                                    if (startYear > minYear) startYear -= 12
+                                }
+                            },
+                            enabled = if (isMonthly) browseYear > minYear else startYear > minYear,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.ChevronLeft, "Previous", Modifier.size(24.dp))
+                        }
+                        IconButton(
+                            onClick = {
+                                if (isMonthly) {
+                                    if (browseYear < maxYear) browseYear++
+                                } else {
+                                    if (startYear + 12 <= maxYear) startYear += 12
+                                }
+                            },
+                            enabled = if (isMonthly) browseYear < maxYear else startYear + 11 < maxYear,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.ChevronRight, "Next", Modifier.size(24.dp))
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                if (isMonthly) {
+                    // ── Month Grid ───────────────────────────────────
+                    monthShort.chunked(3).forEachIndexed { rowIdx, rowMonths ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowMonths.forEachIndexed { colIdx, name ->
+                                val m = rowIdx * 3 + colIdx + 1
+                                // Check if this specific box is the one currently "active"
+                                val isSelected =
+                                    m == tempSelectedMonth && browseYear == tempSelectedYear
+
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) Color.White else Color.Transparent)
+                                        .clickable {
+                                            tempSelectedMonth = m
+                                            tempSelectedYear = browseYear
+                                            onMonthSelect(m)
+                                            onYearChange(browseYear)
+                                            handleSelection()
+                                        }
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                } else {
+                    // ── Year Grid ─────────────────────────────────────────
+                    (startYear..minOf(startYear + 11, maxYear)).toList().chunked(3)
+                        .forEach { rowYears ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowYears.forEach { year ->
+                                    val isSelected = year == tempSelectedYear
+                                    Box(
+                                        Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) Color.White else Color.Transparent)
+                                            .clickable {
+                                                tempSelectedYear = year
+                                                onYearChange(year)
+                                                handleSelection()
+                                            }
+                                            .padding(vertical = 16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$year",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                // Fill empty spaces if the last row isn't full (e.g., reaching 2070)
+                                if (rowYears.size < 3) {
+                                    repeat(3 - rowYears.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                        }
+                }
+            }
+        }
+    }
+}
+
 // ─── Period toggle pill ───────────────────────────────────────────────────────
 
 @Composable
 private fun BudgetPeriodToggle(
     isMonthly: Boolean,
     onMonthly: () -> Unit,
-    onYearly: () -> Unit
+    onYearly: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Box(
         Modifier
@@ -726,22 +865,37 @@ private fun BudgetPeriodToggle(
             .background(MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Row(Modifier.padding(4.dp)) {
-            PeriodPill(label = "Monthly", selected = isMonthly, onClick = onMonthly)
-            PeriodPill(label = "Yearly", selected = !isMonthly, onClick = onYearly)
+            PeriodPill(
+                label = "Monthly",
+                selected = isMonthly,
+                onClick = onMonthly,
+                modifier = Modifier.weight(1f)
+            )
+            PeriodPill(
+                label = "Yearly",
+                selected = !isMonthly,
+                onClick = onYearly,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
 
 @Composable
-private fun PeriodPill(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun PeriodPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Box(
-        Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(24.dp))
             .background(
                 if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
             )
             .clickable { onClick() }
-            .padding(horizontal = 32.dp, vertical = 12.dp),
+            .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(

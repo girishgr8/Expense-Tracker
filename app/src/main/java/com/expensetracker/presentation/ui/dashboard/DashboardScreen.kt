@@ -107,27 +107,14 @@ fun DashboardScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddTransaction,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(60.dp)
-            ) {
-                Icon(
-                    Icons.Default.Add, contentDescription = "Add Transaction",
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        },
         bottomBar = {
             AppBottomBar(
                 currentRoute = "dashboard",
                 onHome = {},
                 onAnalysis = onNavigateToAnalysis,
                 onAccounts = onNavigateToAccounts,
-                onSettings = onNavigateToSettings
+                onSettings = onNavigateToSettings,
+                onAddTransaction = onNavigateToAddTransaction
             )
         }
     ) { padding ->

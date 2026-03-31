@@ -94,6 +94,7 @@ fun AnalysisScreen(
     onNavigateToHome: () -> Unit = {},
     onNavigateToAccounts: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToAddTransaction: () -> Unit = {},
     viewModel: AnalysisViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -106,7 +107,8 @@ fun AnalysisScreen(
                 onHome     = onNavigateToHome,
                 onAnalysis = {},
                 onAccounts = onNavigateToAccounts,
-                onSettings = onNavigateToSettings
+                onSettings = onNavigateToSettings,
+                onAddTransaction = onNavigateToAddTransaction
             )
         },
         topBar = {

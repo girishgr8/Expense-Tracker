@@ -159,7 +159,8 @@ fun AccountsScreen(
                 onHome     = onNavigateToHome,
                 onAnalysis = onNavigateToAnalysis,
                 onAccounts = {},
-                onSettings = onNavigateToSettings
+                onSettings = onNavigateToSettings,
+                onAddTransaction = onNavigateToAddTransaction
             )
         },
         topBar = {

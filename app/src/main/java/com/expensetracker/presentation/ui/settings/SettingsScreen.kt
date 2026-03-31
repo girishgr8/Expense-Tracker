@@ -87,6 +87,7 @@ fun SettingsScreen(
     onNavigateToHome: () -> Unit = {},
     onNavigateToAnalysis: () -> Unit = {},
     onNavigateToAccounts: () -> Unit = {},
+    onNavigateToAddTransaction: () -> Unit = {},
     onNavigateToCurrency: () -> Unit = {},
     onLogout: () -> Unit,
     settingsViewModel: SettingsViewModel = hiltViewModel(),
@@ -176,7 +177,8 @@ fun SettingsScreen(
                     onHome     = onNavigateToHome,
                     onAnalysis = onNavigateToAnalysis,
                     onAccounts = onNavigateToAccounts,
-                    onSettings = {}
+                    onSettings = {},
+                    onAddTransaction = onNavigateToAddTransaction,
                 )
             },
             topBar = {

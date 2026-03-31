@@ -135,7 +135,7 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                     navController.navigate(Screen.Settings.route) {
                         popUpTo(Screen.Dashboard.route) { inclusive = false }
                     }
-                }
+                },
             )
         }
 
@@ -152,7 +152,8 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
 
         composable(Screen.Settings.route) {
             SettingsScreen(
-                onNavigateBack       = { navController.popBackStack() },
+                onNavigateBack               = { navController.popBackStack() },
+                onNavigateToAddTransaction   = { navController.navigate(Screen.AddTransaction.createRoute()) },
                 onNavigateToHome     = {
                     navController.navigate(Screen.Dashboard.route) {
                         popUpTo(Screen.Dashboard.route) { inclusive = false }
@@ -179,7 +180,8 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
 
         composable(Screen.Analysis.route) {
             AnalysisScreen(
-                onNavigateBack        = { navController.popBackStack() },
+                onNavigateBack               = { navController.popBackStack() },
+                onNavigateToAddTransaction   = { navController.navigate(Screen.AddTransaction.createRoute()) },
                 onNavigateToHome      = {
                     navController.navigate(Screen.Dashboard.route) {
                         popUpTo(Screen.Dashboard.route) { inclusive = false }
