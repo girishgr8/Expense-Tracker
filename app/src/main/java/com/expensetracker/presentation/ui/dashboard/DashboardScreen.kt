@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,22 +18,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MonetizationOn
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,11 +41,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -77,6 +67,7 @@ import com.expensetracker.domain.model.BudgetProgress
 import com.expensetracker.domain.model.MonthlySummary
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.components.LoadingOverlay
@@ -110,11 +101,9 @@ fun DashboardScreen(
     onNavigateToSetBudget: () -> Unit = onNavigateToBudget,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToAnalysis: () -> Unit = {},
-    onLogout: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -133,11 +122,12 @@ fun DashboardScreen(
             }
         },
         bottomBar = {
-            DashboardBottomBar(
-                onTransactions = onNavigateToTransactions,
+            AppBottomBar(
+                currentRoute = "dashboard",
+                onHome = {},
+                onAnalysis = onNavigateToAnalysis,
                 onAccounts = onNavigateToAccounts,
-                onMore = { showMenu = true },
-                onAnalysis = onNavigateToAnalysis
+                onSettings = onNavigateToSettings
             )
         }
     ) { padding ->
@@ -152,7 +142,7 @@ fun DashboardScreen(
                 DashboardHeader(
                     userName = uiState.userName,
                     onSearch = onNavigateToTransactions,
-                    onAvatar = { showMenu = true }
+                    onAvatar = { onNavigateToSettings() }
                 )
             }
 
@@ -269,41 +259,6 @@ fun DashboardScreen(
         }
 
         if (uiState.isLoading) LoadingOverlay(true)
-    }
-
-    // Overflow menu
-    if (showMenu) {
-        ModalBottomSheet(onDismissRequest = { showMenu = false }) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .navigationBarsPadding()
-            ) {
-                Text(
-                    "More",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                listOf(
-                    Triple(Icons.Default.Settings, "Settings", onNavigateToSettings),
-                    Triple(
-                        Icons.AutoMirrored.Filled.Logout,
-                        "Logout"
-                    ) { viewModel.logout(); onLogout() }
-                ).forEach { (icon, label, action) ->
-                    ListItem(
-                        headlineContent = { Text(label) },
-                        leadingContent = { Icon(icon, null) },
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { showMenu = false; action() }
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-        }
     }
 }
 
@@ -917,53 +872,5 @@ private fun DashboardTransactionRow(txn: Transaction) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-}
-
-// ─── Bottom Navigation Bar ────────────────────────────────────────────────────
-
-@Composable
-private fun DashboardBottomBar(
-    onTransactions: () -> Unit,
-    onAnalysis: () -> Unit,
-    onAccounts: () -> Unit,
-    onMore: () -> Unit
-) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 4.dp
-    ) {
-        NavigationBarItem(
-            selected = true,
-            onClick = {},
-            icon = { Icon(Icons.Default.Home, null) },
-            label = { Text("Home") }
-        )
-        NavigationBarItem(
-            selected = false,
-            onClick = onAnalysis,
-            icon = { Icon(Icons.Default.BarChart, null) },
-            label = { Text("Analysis") }
-        )
-        // Centre placeholder for FAB
-        NavigationBarItem(
-            selected = false,
-            onClick = {},
-            icon = { Spacer(Modifier.size(24.dp)) },
-            label = { Text("") },
-            enabled = false
-        )
-        NavigationBarItem(
-            selected = false,
-            onClick = onAccounts,
-            icon = { Icon(Icons.Default.AccountBalance, null) },
-            label = { Text("Accounts") }
-        )
-        NavigationBarItem(
-            selected = false,
-            onClick = onMore,
-            icon = { Icon(Icons.Default.MoreHoriz, null) },
-            label = { Text("More") }
-        )
     }
 }

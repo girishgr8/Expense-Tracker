@@ -211,7 +211,7 @@ fun TransactionDetailSheet(
                     contentPadding = PaddingValues(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(transaction.tags) { tag -> TagChip(tag = tag) }
+                    items(transaction.tags) { tag -> TagChip(modifier = Modifier, tag = tag) }
                 }
             }
 

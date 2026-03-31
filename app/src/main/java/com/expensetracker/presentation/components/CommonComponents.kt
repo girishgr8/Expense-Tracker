@@ -17,7 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,6 +29,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -400,5 +406,62 @@ fun PeriodSelectorChips(
                 onClick = { onSelect(option) },
                 label = { Text(option, style = MaterialTheme.typography.labelMedium) })
         }
+    }
+}
+
+// ─── Shared App Bottom Navigation Bar ────────────────────────────────────────
+
+/**
+ * Persistent bottom bar shown on all main screens.
+ * [currentRoute] is matched against the four tab routes to highlight the active item.
+ */
+@Composable
+fun AppBottomBar(
+    currentRoute: String,
+    onHome: () -> Unit,
+    onAnalysis: () -> Unit,
+    onAccounts: () -> Unit,
+    onSettings: () -> Unit
+) {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 4.dp
+    ) {
+        // Home
+        NavigationBarItem(
+            selected = currentRoute == "dashboard",
+            onClick = onHome,
+            icon = { Icon(Icons.Default.Home, null) },
+            label = { Text("Home") }
+        )
+        // Analysis
+        NavigationBarItem(
+            selected = currentRoute == "analysis",
+            onClick = onAnalysis,
+            icon = { Icon(Icons.Default.BarChart, null) },
+            label = { Text("Analysis") }
+        )
+        // Centre placeholder for FAB (disabled, invisible)
+        NavigationBarItem(
+            selected = false,
+            onClick = {},
+            icon = { Spacer(Modifier.size(24.dp)) },
+            label = { Text("") },
+            enabled = false
+        )
+        // Accounts
+        NavigationBarItem(
+            selected = currentRoute == "accounts",
+            onClick = onAccounts,
+            icon = { Icon(Icons.Default.AccountBalance, null) },
+            label = { Text("Accounts") }
+        )
+        // Settings (replaces "More")
+        NavigationBarItem(
+            selected = currentRoute == "settings",
+            onClick = onSettings,
+            icon = { Icon(Icons.Default.MoreHoriz, null) },
+            label = { Text("More") }
+        )
     }
 }

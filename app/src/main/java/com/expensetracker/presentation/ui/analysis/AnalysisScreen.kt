@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
@@ -90,12 +91,24 @@ private fun fmtAmt(amount: Double): String {
 @Composable
 fun AnalysisScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToAccounts: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     viewModel: AnalysisViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showDatePicker by remember { mutableStateOf(false) }
 
     Scaffold(
+        bottomBar = {
+            AppBottomBar(
+                currentRoute = "analysis",
+                onHome     = onNavigateToHome,
+                onAnalysis = {},
+                onAccounts = onNavigateToAccounts,
+                onSettings = onNavigateToSettings
+            )
+        },
         topBar = {
             TopAppBar(
                 title = {

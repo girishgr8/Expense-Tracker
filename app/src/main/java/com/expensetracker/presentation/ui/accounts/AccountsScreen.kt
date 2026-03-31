@@ -110,6 +110,7 @@ import com.expensetracker.domain.model.PaymentMode
 import com.expensetracker.domain.model.PaymentModeType
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.theme.ExpenseRed
@@ -134,6 +135,9 @@ private fun fmtAmt(amount: Double): String {
 @Composable
 fun AccountsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToAnalysis: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     onNavigateToAddTransaction: () -> Unit,
     viewModel: AccountsViewModel = hiltViewModel()
 ) {
@@ -149,6 +153,15 @@ fun AccountsScreen(
             uiState.selectedDetailCard != null
 
     Scaffold(
+        bottomBar = {
+            AppBottomBar(
+                currentRoute = "accounts",
+                onHome     = onNavigateToHome,
+                onAnalysis = onNavigateToAnalysis,
+                onAccounts = {},
+                onSettings = onNavigateToSettings
+            )
+        },
         topBar = {
             TopAppBar(
                 title = {

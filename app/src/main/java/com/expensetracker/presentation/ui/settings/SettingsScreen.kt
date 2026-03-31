@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.expensetracker.domain.model.ExportFormat
+import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.ui.export.ExportFormatBottomSheet
 import com.expensetracker.presentation.ui.export.ExportOptionsBottomSheet
 import com.expensetracker.presentation.ui.export.ExportSuccessBottomSheet
@@ -83,8 +84,11 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
-    onLogout: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToAnalysis: () -> Unit = {},
+    onNavigateToAccounts: () -> Unit = {},
     onNavigateToCurrency: () -> Unit = {},
+    onLogout: () -> Unit,
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     exportViewModel: ExportViewModel = hiltViewModel()
 ) {
@@ -166,6 +170,15 @@ fun SettingsScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
+            bottomBar = {
+                AppBottomBar(
+                    currentRoute = "settings",
+                    onHome     = onNavigateToHome,
+                    onAnalysis = onNavigateToAnalysis,
+                    onAccounts = onNavigateToAccounts,
+                    onSettings = {}
+                )
+            },
             topBar = {
                 TopAppBar(
                     title = { Text("Settings", fontWeight = FontWeight.Bold) },
