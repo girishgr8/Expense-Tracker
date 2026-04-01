@@ -112,6 +112,7 @@ data class BudgetEntity(
     val year: Int,
     val month: Int?,
     val applicableCategoryIds: String,  // JSON array
+    val categoryLimits: String = "{}",  // JSON object {categoryId: limit}
     val userId: String
 )
 

@@ -25,7 +25,9 @@ fun TransactionEntity.toDomain(
     toPaymentModeName: String = "",
     attachments: List<Attachment> = emptyList()
 ): Transaction = Transaction(
-    id = id, type = type, amount = amount,
+    id = id,
+    type = type,
+    amount = amount,
     categoryId = categoryId,
     categoryName = categoryName,
     categoryIcon = categoryIcon,
@@ -46,7 +48,9 @@ fun TransactionEntity.toDomain(
 )
 
 fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
-    id = id, type = type, amount = amount,
+    id = id,
+    type = type,
+    amount = amount,
     categoryId = categoryId,
     paymentModeId = paymentModeId,
     creditCardId = creditCardId,
@@ -61,13 +65,23 @@ fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
 // ─── Category ─────────────────────────────────────────────────────────────────
 
 fun CategoryEntity.toDomain(): Category = Category(
-    id = id, name = name, icon = icon, colorHex = colorHex,
-    transactionType = transactionType, isDefault = isDefault, userId = userId
+    id = id,
+    name = name,
+    icon = icon,
+    colorHex = colorHex,
+    transactionType = transactionType,
+    isDefault = isDefault,
+    userId = userId
 )
 
 fun Category.toEntity(): CategoryEntity = CategoryEntity(
-    id = id, name = name, icon = icon, colorHex = colorHex,
-    transactionType = transactionType, isDefault = isDefault, userId = userId
+    id = id,
+    name = name,
+    icon = icon,
+    colorHex = colorHex,
+    transactionType = transactionType,
+    isDefault = isDefault,
+    userId = userId
 )
 
 // ─── BankAccount ─────────────────────────────────────────────────────────────
@@ -81,20 +95,23 @@ fun BankAccount.toEntity(): BankAccountEntity =
 // ─── PaymentMode ──────────────────────────────────────────────────────────────
 
 fun PaymentModeEntity.toDomain(bankAccountName: String = ""): PaymentMode = PaymentMode(
-    id = id, bankAccountId = bankAccountId,
+    id = id,
+    bankAccountId = bankAccountId,
     bankAccountName = bankAccountName,
-    type = type, identifier = identifier, userId = userId
+    type = type,
+    identifier = identifier,
+    userId = userId
 )
 
 fun PaymentMode.toEntity(): PaymentModeEntity = PaymentModeEntity(
-    id = id, bankAccountId = bankAccountId,
-    type = type, identifier = identifier, userId = userId
+    id = id, bankAccountId = bankAccountId, type = type, identifier = identifier, userId = userId
 )
 
 // ─── CreditCard ───────────────────────────────────────────────────────────────
 
 fun CreditCardEntity.toDomain(): CreditCard = CreditCard(
-    id = id, name = name,
+    id = id,
+    name = name,
     availableLimit = availableLimit,
     totalLimit = totalLimit,
     billingCycleDate = billingCycleDate,
@@ -104,7 +121,8 @@ fun CreditCardEntity.toDomain(): CreditCard = CreditCard(
 )
 
 fun CreditCard.toEntity(): CreditCardEntity = CreditCardEntity(
-    id = id, name = name,
+    id = id,
+    name = name,
     availableLimit = availableLimit,
     totalLimit = totalLimit,
     billingCycleDate = billingCycleDate,
@@ -116,30 +134,54 @@ fun CreditCard.toEntity(): CreditCardEntity = CreditCardEntity(
 // ─── Attachment ───────────────────────────────────────────────────────────────
 
 fun AttachmentEntity.toDomain(): Attachment = Attachment(
-    id = id, transactionId = transactionId, fileName = fileName,
-    filePath = filePath, mimeType = mimeType, fileSizeBytes = fileSizeBytes
+    id = id,
+    transactionId = transactionId,
+    fileName = fileName,
+    filePath = filePath,
+    mimeType = mimeType,
+    fileSizeBytes = fileSizeBytes
 )
 
 fun Attachment.toEntity(): AttachmentEntity = AttachmentEntity(
-    id = id, transactionId = transactionId, fileName = fileName,
-    filePath = filePath, mimeType = mimeType, fileSizeBytes = fileSizeBytes
+    id = id,
+    transactionId = transactionId,
+    fileName = fileName,
+    filePath = filePath,
+    mimeType = mimeType,
+    fileSizeBytes = fileSizeBytes
 )
 
 // ─── Budget ───────────────────────────────────────────────────────────────────
 
 fun BudgetEntity.toDomain(): Budget = Budget(
-    id = id, name = name, totalLimit = totalLimit, period = period,
-    year = year, month = month,
+    id = id,
+    name = name,
+    totalLimit = totalLimit,
+    period = period,
+    year = year,
+    month = month,
     applicableCategoryIds = gson.fromJson(
         applicableCategoryIds, Array<Long>::class.java
     )?.toList() ?: emptyList(),
+    categoryLimits = runCatching {
+        @Suppress("UNCHECKED_CAST")
+        (gson.fromJson(
+            categoryLimits,
+            Map::class.java
+        ) as? Map<String, Double>)?.mapKeys { it.key.toLong() } ?: emptyMap()
+    }.getOrDefault(emptyMap()),
     userId = userId
 )
 
 fun Budget.toEntity(): BudgetEntity = BudgetEntity(
-    id = id, name = name, totalLimit = totalLimit, period = period,
-    year = year, month = month,
+    id = id,
+    name = name,
+    totalLimit = totalLimit,
+    period = period,
+    year = year,
+    month = month,
     applicableCategoryIds = gson.toJson(applicableCategoryIds),
+    categoryLimits = gson.toJson(categoryLimits),
     userId = userId
 )
 

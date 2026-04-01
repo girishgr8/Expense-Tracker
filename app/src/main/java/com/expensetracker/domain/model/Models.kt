@@ -1,6 +1,5 @@
 package com.expensetracker.domain.model
 
-import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
 import java.util.Locale
 
@@ -187,6 +186,7 @@ data class Budget(
     val year: Int,
     val month: Int? = null,
     val applicableCategoryIds: List<Long> = emptyList(),
+    val categoryLimits: Map<Long, Double> = emptyMap(),
     val userId: String = ""
 )
 

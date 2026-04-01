@@ -2,6 +2,8 @@ package com.expensetracker.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.expensetracker.data.local.AppDatabase
 import com.expensetracker.data.local.dao.AttachmentDao
 import com.expensetracker.data.local.dao.BankAccountDao
@@ -41,10 +43,16 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
-    @Provides
-    @Singleton
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE budgets ADD COLUMN categoryLimits TEXT NOT NULL DEFAULT '{}'")
+        }
+    }
+
+    @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
+            .addMigrations(MIGRATION_3_4)
             .fallbackToDestructiveMigration()
             .build()
 

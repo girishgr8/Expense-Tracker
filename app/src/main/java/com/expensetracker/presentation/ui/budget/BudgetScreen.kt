@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -41,8 +42,11 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,8 +67,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -179,14 +185,16 @@ class BudgetViewModel @Inject constructor(
 
     fun saveBudget(
         name: String, limit: Double, period: BudgetPeriod,
-        year: Int, month: Int?, categoryIds: List<Long>
+        year: Int, month: Int?, categoryIds: List<Long>,
+        categoryLimits: Map<Long, Double> = emptyMap()
     ) {
         viewModelScope.launch {
             val editing = _uiState.value.editingBudget
             val budget = Budget(
                 id = editing?.id ?: 0, name = name, totalLimit = limit,
                 period = period, year = year, month = month,
-                applicableCategoryIds = categoryIds, userId = userId
+                applicableCategoryIds = categoryIds,
+                categoryLimits = categoryLimits, userId = userId
             )
             if (editing != null) budgetRepository.updateBudget(budget)
             else budgetRepository.insertBudget(budget)
@@ -314,7 +322,7 @@ fun AddBudgetScreen(
     // Bottom sheet to pick included categories
     var showCategorySheet by remember { mutableStateOf(false) }
 
-    val includedCategories = categories.filter { it.id !in excludedIds }
+    categories.filter { it.id !in excludedIds }
 
     // Pages of 4 for the horizontal pager preview
     val categoryPages = categories.chunked(4)
@@ -387,25 +395,9 @@ fun AddBudgetScreen(
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
+                var showCategoryLimits by remember { mutableStateOf(false) }
                 Button(
-                    onClick = {
-                        val limit = limitInput.toDoubleOrNull() ?: return@Button
-                        val includedIds = categories
-                            .filter { it.id !in excludedIds }
-                            .map { it.id }
-                        val budgetName = if (isMonthly)
-                            "${monthNames[selectedMonth - 1]} $selectedYear Budget"
-                        else "$selectedYear Budget"
-                        viewModel.saveBudget(
-                            name = budgetName,
-                            limit = limit,
-                            period = if (isMonthly) BudgetPeriod.MONTHLY else BudgetPeriod.YEARLY,
-                            year = selectedYear,
-                            month = if (isMonthly) selectedMonth else null,
-                            categoryIds = includedIds
-                        )
-                        onNavigateBack()
-                    },
+                    onClick = { showCategoryLimits = true },
                     enabled = limitInput.toDoubleOrNull() != null && limitInput.isNotBlank(),
                     shape = RoundedCornerShape(28.dp),
                     modifier = Modifier
@@ -422,6 +414,36 @@ fun AddBudgetScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+                if (showCategoryLimits) {
+                    val limit = limitInput.toDoubleOrNull() ?: 0.0
+                    val includedIds = categories.filter { it.id !in excludedIds }.map { it.id }
+                    val includedCategories = categories.filter { it.id !in excludedIds }
+                    val budgetName = if (isMonthly)
+                        "${monthNames[selectedMonth - 1]} $selectedYear Budget"
+                    else "$selectedYear Budget"
+                    SetCategoryLimitsScreen(
+                        totalLimit = limit,
+                        includedCategories = includedCategories,
+                        existingLimits = editingBudget?.categoryLimits ?: emptyMap(),
+                        budgetPeriod = if (isMonthly) BudgetPeriod.MONTHLY else BudgetPeriod.YEARLY,
+                        selectedYear = selectedYear,
+                        selectedMonth = if (isMonthly) selectedMonth else null,
+                        onBack = { showCategoryLimits = false },
+                        onSave = { catLimits ->
+                            viewModel.saveBudget(
+                                name = budgetName,
+                                limit = limit,
+                                period = if (isMonthly) BudgetPeriod.MONTHLY else BudgetPeriod.YEARLY,
+                                year = selectedYear,
+                                month = if (isMonthly) selectedMonth else null,
+                                categoryIds = includedIds,
+                                categoryLimits = catLimits
+                            )
+                            onNavigateBack()
+                        }
+                    )
+                }
+
             }
         }
     ) { padding ->
@@ -671,6 +693,385 @@ fun AddBudgetScreen(
                 showCategorySheet = false
             }
         )
+    }
+}
+
+// ─── Set Category Limits Screen (Step 2) ─────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SetCategoryLimitsScreen(
+    totalLimit: Double,
+    includedCategories: List<Category>,
+    existingLimits: Map<Long, Double>,
+    budgetPeriod: BudgetPeriod,
+    selectedYear: Int,
+    selectedMonth: Int?,
+    onBack: () -> Unit,
+    onSave: (Map<Long, Double>) -> Unit
+) {
+    // Map of categoryId → limit string ("" means no limit)
+    val limitInputs = remember(includedCategories) {
+        mutableStateMapOf<Long, String>().also { map ->
+            includedCategories.forEach { cat ->
+                val existing = existingLimits[cat.id]
+                map[cat.id] = if (existing != null && existing > 0)
+                    existing.toLong().toString() else ""
+            }
+        }
+    }
+
+    // Compute allocated and remaining in real-time
+    val allocatedTotal by remember {
+        derivedStateOf {
+            limitInputs.values.sumOf { it.toDoubleOrNull() ?: 0.0 }
+        }
+    }
+    val remaining by remember { derivedStateOf { totalLimit - allocatedTotal } }
+
+    fun fmtAmt(d: Double): String {
+        val l = d.toLong()
+        return if (d == l.toDouble()) "%,d".format(l) else "%,.1f".format(d)
+    }
+
+    // Full-screen overlay using Dialog so it slides over AddBudgetScreen
+    Dialog(
+        onDismissRequest = onBack,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text("Add budget", fontWeight = FontWeight.Bold)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Box(
+                                Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.ArrowBack, "Back", Modifier.size(18.dp))
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {}) {
+                            Box(
+                                Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Help, "Help", Modifier.size(18.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                )
+            },
+            bottomBar = {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            // Convert inputs → map, 0 means no limit
+                            val result = limitInputs.mapValues { it.value.toDoubleOrNull() ?: 0.0 }
+                            onSave(result)
+                        },
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text(
+                            "Save",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // ── Header ────────────────────────────────────────────────────
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "Set category-wise limits",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "(optional)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            "Set limits on categories within your budget, if you want",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // ── Total Budget / Remaining summary ──────────────────────────
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
+                        )
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    "Total Budget",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "₹${fmtAmt(totalLimit)}",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    "Remaining",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "₹${fmtAmt(remaining.coerceAtLeast(0.0))}",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (remaining < 0) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Count + sort row ──────────────────────────────────────────
+                item {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "${includedCategories.size} categories included",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.FilterList, null, Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Sort by",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // ── Category limit rows ───────────────────────────────────────
+                items(includedCategories, key = { it.id }) { cat ->
+                    CategoryLimitRow(
+                        category = cat,
+                        limitInput = limitInputs[cat.id] ?: "",
+                        onLimitChange = { v -> limitInputs[cat.id] = v },
+                        budgetPeriod = budgetPeriod,
+                        selectedYear = selectedYear,
+                        selectedMonth = selectedMonth
+                    )
+                }
+
+                item { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+    }
+}
+
+// ─── Individual category limit row ────────────────────────────────────────────
+
+@Composable
+private fun CategoryLimitRow(
+    category: Category,
+    limitInput: String,
+    onLimitChange: (String) -> Unit,
+    budgetPeriod: BudgetPeriod,
+    selectedYear: Int,
+    selectedMonth: Int?
+) {
+    // We could show actual spend here — but we'd need ViewModel access.
+    // For now show the row UI matching the image; the spend hint is shown below.
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column {
+            // Top row: icon + name + limit input
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CategoryIconBubble(category = category, size = 44)
+
+                Text(
+                    category.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Limit input chip — shows "No Limit" when empty
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .width(110.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (limitInput.isEmpty()) {
+                        // Tap to start entering
+                        BasicTextField(
+                            value = "",
+                            onValueChange = { if (it.isNotEmpty()) onLimitChange(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            ),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            decorationBox = { inner ->
+                                Text(
+                                    "No Limit",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        textAlign = TextAlign.Center
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                inner()
+                            }
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                "₹", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            BasicTextField(
+                                value = limitInput,
+                                onValueChange = { v ->
+                                    if (v.all { it.isDigit() || it == '.' }) onLimitChange(v)
+                                    if (v.isEmpty()) onLimitChange("")
+                                },
+                                modifier = Modifier.weight(1f),
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Divider + spend hint row
+            HorizontalDivider(
+                Modifier.padding(horizontal = 14.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                thickness = 0.5.dp
+            )
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.TrendingUp, null, Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+                Text(
+                    buildSpendHint(budgetPeriod, selectedYear, selectedMonth),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+private fun buildSpendHint(period: BudgetPeriod, year: Int, month: Int?): String {
+    return if (period == BudgetPeriod.MONTHLY && month != null) {
+        val monthNames = listOf(
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        )
+        val periodLabel = "${monthNames.getOrElse(month - 1) { "" }} $year"
+        "Track your spending for $periodLabel here."
+    } else {
+        "Track your annual spending for $year here."
     }
 }
 

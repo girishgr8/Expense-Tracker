@@ -576,7 +576,13 @@ class ExportRepositoryImpl @Inject constructor(
         }
 
         val uri = if (isPdf) {
-            PdfExporter.generate(context, sortedTransactions, userName, userEmail, filter.displayName)
+            PdfExporter.generate(
+                context,
+                sortedTransactions,
+                userName,
+                userEmail,
+                filter.displayName
+            )
         } else {
             CsvExporter.generate(context, sortedTransactions)
         }

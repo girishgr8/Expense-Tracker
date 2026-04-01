@@ -32,7 +32,7 @@ import com.expensetracker.data.local.entity.TransactionEntity
         BudgetEntity::class,
         TagEntity::class
     ],
-    version = 3,            // bumped 2 → 3 (added credit_cards, updated transactions)
+    version = 4,            // bumped 3 → 4 (added per category limits for budgets)
     exportSchema = true
 )
 @TypeConverters(Converters::class)
