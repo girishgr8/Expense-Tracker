@@ -5,11 +5,27 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.expensetracker.data.repository.*
-import com.expensetracker.domain.model.*
+import com.expensetracker.data.repository.AuthManager
+import com.expensetracker.data.repository.CategoryRepository
+import com.expensetracker.data.repository.CreditCardRepository
+import com.expensetracker.data.repository.PaymentModeRepository
+import com.expensetracker.data.repository.TagRepository
+import com.expensetracker.data.repository.TransactionRepository
+import com.expensetracker.data.repository.UserPreferencesRepository
+import com.expensetracker.domain.model.Attachment
+import com.expensetracker.domain.model.Category
+import com.expensetracker.domain.model.PaymentOption
+import com.expensetracker.domain.model.Tag
+import com.expensetracker.domain.model.Transaction
+import com.expensetracker.domain.model.TransactionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDateTime
@@ -42,6 +58,7 @@ class AddTransactionViewModel @Inject constructor(
     private val creditCardRepository: CreditCardRepository,
     private val tagRepository: TagRepository,
     private val authManager: AuthManager,
+    private val userPreferencesRepository: UserPreferencesRepository,
     @param:ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -55,6 +72,42 @@ class AddTransactionViewModel @Inject constructor(
     init {
         loadInitialData()
         if (transactionId > 0) loadTransaction(transactionId)
+        else applyDefaults()
+    }
+
+    private fun applyDefaults() {
+        viewModelScope.launch {
+            val defaultCatId = userPreferencesRepository.defaultCategoryId.first()
+            val defaultModeId = userPreferencesRepository.defaultPaymentModeId.first()
+            // Wait for categories/modes to be loaded, then apply
+            if (defaultCatId > 0 || defaultModeId > 0) {
+                // Collect once to get the first emission
+                val cats = _uiState.value.categories
+                val modes = _uiState.value.paymentOptions
+                val cat = cats.find { it.id == defaultCatId }
+                val mode = modes.find { it.id == defaultModeId }
+                _uiState.update {
+                    it.copy(
+                        selectedCategory = cat ?: it.selectedCategory,
+                        selectedPaymentOption = mode ?: it.selectedPaymentOption
+                    )
+                }
+                // If not loaded yet, wait for the next emission
+                if ((defaultCatId > 0 && cat == null) || (defaultModeId > 0 && mode == null)) {
+                    kotlinx.coroutines.delay(300)
+                    val cats2 = _uiState.value.categories
+                    val modes2 = _uiState.value.paymentOptions
+                    _uiState.update {
+                        it.copy(
+                            selectedCategory = if (defaultCatId > 0) cats2.find { c -> c.id == defaultCatId }
+                                ?: it.selectedCategory else it.selectedCategory,
+                            selectedPaymentOption = if (defaultModeId > 0) modes2.find { m -> m.id == defaultModeId }
+                                ?: it.selectedPaymentOption else it.selectedPaymentOption
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun loadInitialData() {
@@ -87,9 +140,11 @@ class AddTransactionViewModel @Inject constructor(
                         txn.paymentModeId != null ->
                             state.paymentOptions.filterIsInstance<PaymentOption.Mode>()
                                 .find { it.mode.id == txn.paymentModeId }
+
                         txn.creditCardId != null ->
                             state.paymentOptions.filterIsInstance<PaymentOption.Card>()
                                 .find { it.card.id == txn.creditCardId }
+
                         else -> null
                     }
                     // Resolve the "to" PaymentOption for transfers
@@ -97,9 +152,11 @@ class AddTransactionViewModel @Inject constructor(
                         txn.toPaymentModeId != null ->
                             state.paymentOptions.filterIsInstance<PaymentOption.Mode>()
                                 .find { it.mode.id == txn.toPaymentModeId }
+
                         txn.toCreditCardId != null ->
                             state.paymentOptions.filterIsInstance<PaymentOption.Card>()
                                 .find { it.card.id == txn.toCreditCardId }
+
                         else -> null
                     }
                     state.copy(
@@ -127,8 +184,10 @@ class AddTransactionViewModel @Inject constructor(
     fun setCategory(category: Category) = _uiState.update { it.copy(selectedCategory = category) }
     fun setPaymentOption(option: PaymentOption) =
         _uiState.update { it.copy(selectedPaymentOption = option) }
+
     fun setToPaymentOption(option: PaymentOption) =
         _uiState.update { it.copy(selectedToPaymentOption = option) }
+
     fun setNote(note: String) = _uiState.update { it.copy(note = note) }
     fun setDateTime(dt: LocalDateTime) = _uiState.update { it.copy(dateTime = dt) }
 
@@ -164,7 +223,7 @@ class AddTransactionViewModel @Inject constructor(
     }
 
     private fun saveAttachmentFromUri(uri: Uri): Attachment {
-        val cr       = context.contentResolver
+        val cr = context.contentResolver
         val mimeType = cr.getType(uri) ?: "application/octet-stream"
 
         // Only PDF and common image formats allowed
@@ -180,15 +239,15 @@ class AddTransactionViewModel @Inject constructor(
         val fileName = rawName.substringAfterLast('/').substringAfterLast(':')
             .ifBlank { "attachment_${System.currentTimeMillis()}" }
 
-        val dir  = File(context.filesDir, "attachments").also { it.mkdirs() }
+        val dir = File(context.filesDir, "attachments").also { it.mkdirs() }
         val dest = File(dir, "${System.currentTimeMillis()}_$fileName")
         cr.openInputStream(uri)?.use { it.copyTo(dest.outputStream()) }
 
         return Attachment(
             transactionId = 0,
-            fileName      = fileName,
-            filePath      = dest.absolutePath,
-            mimeType      = mimeType,
+            fileName = fileName,
+            filePath = dest.absolutePath,
+            mimeType = mimeType,
             fileSizeBytes = dest.length()
         )
     }
@@ -213,34 +272,34 @@ class AddTransactionViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 // Resolve from-payment fields from the selected PaymentOption
-                val fromModeId   = (state.selectedPaymentOption as? PaymentOption.Mode)?.mode?.id
-                val fromCardId   = (state.selectedPaymentOption as? PaymentOption.Card)?.card?.id
-                val fromLabel    = state.selectedPaymentOption?.displayLabel ?: ""
+                val fromModeId = (state.selectedPaymentOption as? PaymentOption.Mode)?.mode?.id
+                val fromCardId = (state.selectedPaymentOption as? PaymentOption.Card)?.card?.id
+                val fromLabel = state.selectedPaymentOption?.displayLabel ?: ""
 
                 // Resolve to-payment fields for transfers
-                val toModeId     = (state.selectedToPaymentOption as? PaymentOption.Mode)?.mode?.id
-                val toCardId     = (state.selectedToPaymentOption as? PaymentOption.Card)?.card?.id
-                val toLabel      = state.selectedToPaymentOption?.displayLabel ?: ""
+                val toModeId = (state.selectedToPaymentOption as? PaymentOption.Mode)?.mode?.id
+                val toCardId = (state.selectedToPaymentOption as? PaymentOption.Card)?.card?.id
+                val toLabel = state.selectedToPaymentOption?.displayLabel ?: ""
 
                 val transaction = Transaction(
-                    id               = if (state.isEditMode) transactionId else 0,
-                    type             = state.transactionType,
-                    amount           = amount,
-                    categoryId       = state.selectedCategory.id,
-                    categoryName     = state.selectedCategory.name,
-                    categoryIcon     = state.selectedCategory.icon,
+                    id = if (state.isEditMode) transactionId else 0,
+                    type = state.transactionType,
+                    amount = amount,
+                    categoryId = state.selectedCategory.id,
+                    categoryName = state.selectedCategory.name,
+                    categoryIcon = state.selectedCategory.icon,
                     categoryColorHex = state.selectedCategory.colorHex,
-                    paymentModeId    = fromModeId,
-                    creditCardId     = fromCardId,
-                    paymentModeName  = fromLabel,
-                    toPaymentModeId  = toModeId,
-                    toCreditCardId   = toCardId,
+                    paymentModeId = fromModeId,
+                    creditCardId = fromCardId,
+                    paymentModeName = fromLabel,
+                    toPaymentModeId = toModeId,
+                    toCreditCardId = toCardId,
                     toPaymentModeName = toLabel,
-                    note        = state.note,
-                    dateTime    = state.dateTime,
-                    tags        = state.tags,
+                    note = state.note,
+                    dateTime = state.dateTime,
+                    tags = state.tags,
                     attachments = state.attachments,
-                    userId      = userId
+                    userId = userId
                 )
                 if (state.isEditMode) transactionRepository.updateTransaction(transaction)
                 else transactionRepository.insertTransaction(transaction)

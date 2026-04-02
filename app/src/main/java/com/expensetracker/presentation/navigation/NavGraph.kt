@@ -37,7 +37,9 @@ sealed class Screen(val route: String) {
     object Categories       : Screen("categories")
     object Accounts         : Screen("accounts")
     object Budget           : Screen("budget")
-    object AddBudget        : Screen("add_budget")
+    object AddBudget        : Screen("add_budget?budgetId={budgetId}") {
+        fun createRoute(budgetId: Long = -1L) = "add_budget?budgetId=$budgetId"
+    }
     object Settings         : Screen("settings")
     object Analysis         : Screen("analysis")
     object CurrencySelection: Screen("currency_selection")
@@ -85,7 +87,7 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 onNavigateToCategories     = { navController.navigate(Screen.Categories.route) },
                 onNavigateToAccounts       = { navController.navigate(Screen.Accounts.route) },
                 onNavigateToBudget         = { navController.navigate(Screen.Budget.route) },
-                onNavigateToSetBudget      = { navController.navigate(Screen.AddBudget.route) },
+                onNavigateToSetBudget      = { navController.navigate(Screen.AddBudget.createRoute()) },
                 onNavigateToSettings       = { navController.navigate(Screen.Settings.route) },
                 onNavigateToAnalysis       = { navController.navigate(Screen.Analysis.route) }
             )
@@ -142,12 +144,23 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         composable(Screen.Budget.route) {
             BudgetScreen(
                 onNavigateBack        = { navController.popBackStack() },
-                onNavigateToAddBudget = { navController.navigate(Screen.AddBudget.route) }
+                onNavigateToAddBudget = { budgetId ->
+                    navController.navigate(Screen.AddBudget.createRoute(budgetId))
+                }
             )
         }
 
-        composable(Screen.AddBudget.route) {
-            AddBudgetScreen(onNavigateBack = { navController.popBackStack() })
+        composable(
+            route     = Screen.AddBudget.route,
+            arguments = listOf(navArgument("budgetId") {
+                type = NavType.LongType; defaultValue = -1L
+            })
+        ) { backStackEntry ->
+            val budgetId = backStackEntry.arguments?.getLong("budgetId") ?: -1L
+            AddBudgetScreen(
+                onNavigateBack = { navController.popBackStack() },
+                budgetId       = budgetId
+            )
         }
 
         composable(Screen.Settings.route) {

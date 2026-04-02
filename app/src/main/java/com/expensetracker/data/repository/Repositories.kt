@@ -124,6 +124,7 @@ interface AttachmentRepository {
 
 interface BudgetRepository {
     fun getAllBudgets(userId: String): Flow<List<Budget>>
+    suspend fun getBudgetById(id: Long): Budget?
     suspend fun getBudgetForPeriod(userId: String, year: Int, month: Int?): Budget?
     suspend fun insertBudget(budget: Budget): Long
     suspend fun updateBudget(budget: Budget)
@@ -527,6 +528,9 @@ class BudgetRepositoryImpl @Inject constructor(
 ) : BudgetRepository {
     override fun getAllBudgets(userId: String): Flow<List<Budget>> =
         dao.getAllBudgets(userId).map { it.map { e -> e.toDomain() } }
+
+    override suspend fun getBudgetById(id: Long): Budget? =
+        dao.getBudgetById(id)?.toDomain()
 
     override suspend fun getBudgetForPeriod(userId: String, year: Int, month: Int?): Budget? =
         dao.getBudgetForPeriod(userId, year, month)?.toDomain()

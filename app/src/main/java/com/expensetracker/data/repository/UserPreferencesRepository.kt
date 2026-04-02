@@ -38,8 +38,11 @@ class UserPreferencesRepository @Inject constructor(
         val DAILY_REMINDER_HOUR = intPreferencesKey("daily_reminder_hour")
         val DAILY_REMINDER_MINUTE = intPreferencesKey("daily_reminder_minute")
         val IS_DAILY_REMINDER_ENABLED = booleanPreferencesKey("is_daily_reminder_enabled")
-
         val IS_BUDGET_ALERT_ENABLED = booleanPreferencesKey("is_budget_alert_enabled")
+        val DEFAULT_CATEGORY_ID     = longPreferencesKey("default_category_id")
+        val DEFAULT_PAYMENT_MODE_ID = longPreferencesKey("default_payment_mode_id")
+        val FIRST_DAY_OF_MONTH      = intPreferencesKey("first_day_of_month")
+        val DECIMAL_FORMAT          = stringPreferencesKey("decimal_format")  // "default"|"none"|"one"|"two"
     }
 
     val currencySymbol: Flow<String> = context.dataStore.data
@@ -90,6 +93,22 @@ class UserPreferencesRepository @Inject constructor(
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { it[Keys.IS_BUDGET_ALERT_ENABLED] ?: true }
 
+    val defaultCategoryId: Flow<Long> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.DEFAULT_CATEGORY_ID] ?: -1L }
+
+    val defaultPaymentModeId: Flow<Long> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.DEFAULT_PAYMENT_MODE_ID] ?: -1L }
+
+    val decimalFormat: Flow<String> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.DECIMAL_FORMAT] ?: "default" }
+
+    val firstDayOfMonth: Flow<Int> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.FIRST_DAY_OF_MONTH] ?: 1 }
+
     suspend fun setCurrencySymbol(symbol: String) {
         context.dataStore.edit { it[Keys.CURRENCY_SYMBOL] = symbol }
     }
@@ -139,5 +158,21 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit {
             it[Keys.IS_BUDGET_ALERT_ENABLED] = enabled
         }
+    }
+
+    suspend fun setDefaultCategoryId(id: Long) {
+        context.dataStore.edit { it[Keys.DEFAULT_CATEGORY_ID] = id }
+    }
+
+    suspend fun setDefaultPaymentModeId(id: Long) {
+        context.dataStore.edit { it[Keys.DEFAULT_PAYMENT_MODE_ID] = id }
+    }
+
+    suspend fun setDecimalFormat(format: String) {
+        context.dataStore.edit { it[Keys.DECIMAL_FORMAT] = format }
+    }
+
+    suspend fun setFirstDayOfMonth(day: Int) {
+        context.dataStore.edit { it[Keys.FIRST_DAY_OF_MONTH] = day }
     }
 }

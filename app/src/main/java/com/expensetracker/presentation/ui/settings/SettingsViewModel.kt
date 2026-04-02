@@ -3,7 +3,12 @@ package com.expensetracker.presentation.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
+import com.expensetracker.data.repository.CategoryRepository
+import com.expensetracker.data.repository.PaymentModeRepository
 import com.expensetracker.data.repository.UserPreferencesRepository
+import com.expensetracker.domain.model.Category
+import com.expensetracker.domain.model.PaymentMode
+import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.util.DriveBackupScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,14 +39,30 @@ data class SettingsUiState(
     val isDailyReminderEnabled: Boolean = true,
     val dailyReminderHour: Int = 19,
     val dailyReminderMinute: Int = 0,
-    val isBudgetAlertEnabled: Boolean = true
+    val isBudgetAlertEnabled: Boolean = true,
+
+    // Preferences
+    val defaultCategoryId: Long = -1L,
+    val defaultPaymentModeId: Long = -1L,
+    val firstDayOfMonth: Int = 1,
+    val decimalFormat: String = "default",
+    val categories: List<Category> = emptyList(),
+    val paymentModes: List<PaymentMode> = emptyList(),
+    // Restore state
+    val isCheckingBackup: Boolean = false,
+//    val restoreBackupInfo: DriveFileInfo? = null,
+    val isRestoring: Boolean = false,
+    val restoreError: String? = null,
+    val restoreSuccess: Boolean = false
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val authManager: AuthManager,
-    private val driveBackupScheduler: DriveBackupScheduler
+    private val driveBackupScheduler: DriveBackupScheduler,
+    private val categoryRepository: CategoryRepository,
+    private val paymentModeRepository: PaymentModeRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -50,6 +71,7 @@ class SettingsViewModel @Inject constructor(
     init {
         loadSettings()
         loadUserInfo()
+        loadPreferences()
     }
 
     private fun loadSettings() {
@@ -113,6 +135,43 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(isBackupEnabled = backupOn, lastBackupDisplay = lastBackupStr)
                 }
+            }
+        }
+    }
+
+    private fun loadPreferences() {
+        viewModelScope.launch {
+            userPreferencesRepository.decimalFormat.collect { fmt ->
+                _uiState.update { it.copy(decimalFormat = fmt) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.defaultCategoryId.collect { id ->
+                _uiState.update { it.copy(defaultCategoryId = id) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.defaultPaymentModeId.collect { id ->
+                _uiState.update { it.copy(defaultPaymentModeId = id) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.firstDayOfMonth.collect { day ->
+                _uiState.update { it.copy(firstDayOfMonth = day) }
+            }
+        }
+        viewModelScope.launch {
+            categoryRepository.getAllCategories(authManager.userId).collect { cats ->
+                _uiState.update {
+                    it.copy(categories = cats.filter { c ->
+                        c.transactionType == TransactionType.EXPENSE || c.transactionType == null
+                    })
+                }
+            }
+        }
+        viewModelScope.launch {
+            paymentModeRepository.getAllModes(authManager.userId).collect { modes ->
+                _uiState.update { it.copy(paymentModes = modes) }
             }
         }
     }
@@ -183,6 +242,22 @@ class SettingsViewModel @Inject constructor(
 
     fun triggerBackupNow() {
         driveBackupScheduler.triggerImmediateBackup()
+    }
+
+    fun setDefaultCategoryId(id: Long) = viewModelScope.launch {
+        userPreferencesRepository.setDefaultCategoryId(id)
+    }
+
+    fun setDefaultPaymentModeId(id: Long) = viewModelScope.launch {
+        userPreferencesRepository.setDefaultPaymentModeId(id)
+    }
+
+    fun setDecimalFormat(format: String) = viewModelScope.launch {
+        userPreferencesRepository.setDecimalFormat(format)
+    }
+
+    fun setFirstDayOfMonth(day: Int) = viewModelScope.launch {
+        userPreferencesRepository.setFirstDayOfMonth(day)
     }
 
     fun logout() = viewModelScope.launch {
