@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -156,7 +157,7 @@ fun DashboardScreen(
 
             // ── Recent Transactions ───────────────────────────────────────────
             item {
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(6.dp))
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -169,7 +170,9 @@ fun DashboardScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    TextButton(onClick = onNavigateToTransactions) {
+                    TextButton(onClick = onNavigateToTransactions,
+                        contentPadding = PaddingValues(end = 0.dp)
+                    ) {
                         Text(
                             "See all",
                             style = MaterialTheme.typography.labelLarge,
@@ -229,7 +232,7 @@ fun DashboardScreen(
 
             // ── Budgets section ───────────────────────────────────────────────
             item {
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(18.dp))
                 Text(
                     "Budgets",
                     style = MaterialTheme.typography.titleMedium,
@@ -577,8 +580,8 @@ private fun CashFlowCard(
                 }
                 Text(
                     cardLabel,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
                     fontWeight = FontWeight.SemiBold
                 )
 

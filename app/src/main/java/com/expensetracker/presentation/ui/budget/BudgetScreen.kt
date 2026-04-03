@@ -367,8 +367,9 @@ fun BudgetScreen(
 
             if (pastBudgets.isNotEmpty()) {
                 item {
+                    Spacer(Modifier.height(4.dp))
                     SectionLabel("Past Budgets")
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(2.dp))
                 }
                 items(pastBudgets, key = { it.budget.id }) { progress ->
                     PastBudgetCard(
@@ -730,12 +731,14 @@ private fun PastBudgetCard(
     val progressColor = Color(0xFF00C896) // exact green tone from UI
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onEdit() },
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(
             Modifier
@@ -869,6 +872,9 @@ fun AddBudgetScreen(
             } ?: ""
         )
     }
+    var categoryLimits by remember(budget?.id) {
+        mutableStateOf(budget?.categoryLimits ?: emptyMap())
+    }
     // Excluded IDs: keyed on budget?.id — when budget loads (async), this re-initializes
     // with the correct excluded set. categories.size ensures we wait until loaded.
     var excludedIds by remember(budget?.id, categories.size) {
@@ -881,9 +887,37 @@ fun AddBudgetScreen(
     }
 
     var showCategorySheet by remember { mutableStateOf(false) }
+    var showCopyBudgetSheet by remember { mutableStateOf(false) }
     val includedCategories = categories.filter { it.id !in excludedIds }
     val categoryPages = categories.chunked(4)
     val pagerState = rememberPagerState(pageCount = { categoryPages.size.coerceAtLeast(1) })
+    val copyableBudgets = remember(
+        uiState.budgets,
+        isMonthly,
+        selectedYear,
+        selectedMonth,
+        budget?.id
+    ) {
+        uiState.budgets
+            .map { it.budget }
+            .filter { candidate ->
+                val samePeriodType = if (isMonthly) {
+                    candidate.period == BudgetPeriod.MONTHLY
+                } else {
+                    candidate.period == BudgetPeriod.YEARLY
+                }
+                val sameTargetPeriod = if (isMonthly) {
+                    candidate.year == selectedYear && candidate.month == selectedMonth
+                } else {
+                    candidate.year == selectedYear
+                }
+                samePeriodType && !sameTargetPeriod && candidate.id != budget?.id
+            }
+            .sortedWith(
+                compareByDescending<Budget> { it.year }
+                    .thenByDescending { it.month ?: 0 }
+            )
+    }
 
     // Clean up VM state when this screen exits
     DisposableEffect(Unit) {
@@ -962,10 +996,10 @@ fun AddBudgetScreen(
                 Button(
                     onClick = { showCategoryLimits = true },
                     enabled = limitInput.toDoubleOrNull() != null && limitInput.isNotBlank(),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
+                        .height(48.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
@@ -986,12 +1020,14 @@ fun AddBudgetScreen(
                     SetCategoryLimitsScreen(
                         totalLimit = limit,
                         includedCategories = includedCategories,
-                        existingLimits = budget?.categoryLimits ?: emptyMap(),
+                        existingLimits = categoryLimits.filterKeys { it in includedIds },
                         budgetPeriod = if (isMonthly) BudgetPeriod.MONTHLY else BudgetPeriod.YEARLY,
                         selectedYear = selectedYear,
                         selectedMonth = if (isMonthly) selectedMonth else null,
                         onBack = { showCategoryLimits = false },
                         onSave = { catLimits ->
+                            val filteredCategoryLimits = catLimits.filterKeys { it in includedIds }
+                            categoryLimits = filteredCategoryLimits
                             viewModel.saveBudget(
                                 name = budgetName,
                                 limit = limit,
@@ -999,7 +1035,7 @@ fun AddBudgetScreen(
                                 year = selectedYear,
                                 month = if (isMonthly) selectedMonth else null,
                                 categoryIds = includedIds,
-                                categoryLimits = catLimits
+                                categoryLimits = filteredCategoryLimits
                             )
                             onNavigateBack()
                         }
@@ -1072,12 +1108,19 @@ fun AddBudgetScreen(
                             Modifier
                                 .size(48.dp)
                                 .clip(RoundedCornerShape(12.dp))
+                                .clickable(enabled = copyableBudgets.isNotEmpty()) {
+                                    showCopyBudgetSheet = true
+                                }
                                 .background(MaterialTheme.colorScheme.surface),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.ContentCopy, null, Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (copyableBudgets.isNotEmpty()) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                }
                             )
                         }
                     }
@@ -1235,6 +1278,22 @@ fun AddBudgetScreen(
             onConfirm = { newExcluded ->
                 excludedIds = newExcluded
                 showCategorySheet = false
+            }
+        )
+    }
+
+    if (showCopyBudgetSheet) {
+        CopyBudgetSheet(
+            budgets = copyableBudgets,
+            isMonthly = isMonthly,
+            onDismiss = { showCopyBudgetSheet = false },
+            onSelect = { selectedBudget ->
+                limitInput = selectedBudget.totalLimit.let {
+                    if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString()
+                }
+                excludedIds = categories.map { it.id }.toSet() - selectedBudget.applicableCategoryIds.toSet()
+                categoryLimits = selectedBudget.categoryLimits
+                showCopyBudgetSheet = false
             }
         )
     }
@@ -1621,6 +1680,137 @@ private fun buildSpendHint(period: BudgetPeriod, year: Int, month: Int?): String
         "Track your spending for $periodLabel here."
     } else {
         "Track your annual spending for $year here."
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CopyBudgetSheet(
+    budgets: List<Budget>,
+    isMonthly: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (Budget) -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 12.dp, top = 20.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (isMonthly) "Copy monthly budget" else "Copy yearly budget",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Choose an existing budget to prefill this form",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Close, "Close", Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            if (budgets.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (isMonthly) "No previous monthly budgets found"
+                        else "No previous yearly budgets found",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(budgets, key = { it.id }) { budget ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(budget) },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            )
+                        ) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        budgetPeriodLabel(budget),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "${budget.applicableCategoryIds.size} categories included",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    "₹${formatBudgetAmount(budget.totalLimit)}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(12.dp)) }
+                }
+            }
+        }
+    }
+}
+
+private fun budgetPeriodLabel(budget: Budget): String {
+    return if (budget.period == BudgetPeriod.MONTHLY && budget.month != null) {
+        "${budget.monthName()} ${budget.year}"
+    } else {
+        budget.year.toString()
+    }
+}
+
+private fun Budget.monthName(): String =
+    java.time.Month.of(month ?: 1).getDisplayName(java.time.format.TextStyle.FULL, Locale.getDefault())
+
+private fun formatBudgetAmount(amount: Double): String {
+    val asLong = amount.toLong()
+    return if (amount == asLong.toDouble()) {
+        "%,d".format(asLong)
+    } else {
+        "%,.2f".format(amount)
     }
 }
 
