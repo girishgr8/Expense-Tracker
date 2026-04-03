@@ -132,7 +132,10 @@ private fun CategoryItem(
     Card(
         shape     = RoundedCornerShape(12.dp),
         modifier  = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(12.dp),

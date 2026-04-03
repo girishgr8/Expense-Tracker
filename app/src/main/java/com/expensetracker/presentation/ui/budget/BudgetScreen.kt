@@ -44,8 +44,14 @@ import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Sports
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -463,7 +469,7 @@ private fun ActiveBudgetCard(progress: BudgetProgress, onEdit: () -> Unit) {
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(
             Modifier
@@ -471,7 +477,7 @@ private fun ActiveBudgetCard(progress: BudgetProgress, onEdit: () -> Unit) {
                 .padding(20.dp)
         ) {
             Text(
-                title, style = MaterialTheme.typography.headlineSmall,
+                title, style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(12.dp))
@@ -479,14 +485,14 @@ private fun ActiveBudgetCard(progress: BudgetProgress, onEdit: () -> Unit) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(180.dp),
+                    .height(150.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val sweepDeg = 180f * (pct / 100f)
                 Canvas(
                     Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .height(150.dp)
                 ) {
                     val strokeWidth = 18.dp.toPx()
                     val diameter = min(size.width, size.height * 2f) - strokeWidth
@@ -523,7 +529,7 @@ private fun ActiveBudgetCard(progress: BudgetProgress, onEdit: () -> Unit) {
                     )
                     Text(
                         "₹${String.format(Locale.getDefault(), "%,.0f", remaining)}",
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -703,117 +709,109 @@ private fun PlanAheadCard(onAddBudget: () -> Unit) {
 
 @Composable
 private fun PastBudgetCard(
-    progress: BudgetProgress, onEdit: () -> Unit, onDelete: () -> Unit
+    progress: BudgetProgress,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    var showDelete by remember { mutableStateOf(false) }
     val monthNames = listOf(
         "", "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
     )
+
     val pct = progress.percentage.coerceIn(0f, 100f)
-    val color = when {
-        pct >= 90 -> ExpenseRed
-        pct >= 70 -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
-    }
+    val spent = progress.spent
+    val limit = progress.budget.totalLimit
+    val saved = (limit - spent).coerceAtLeast(0.0)
+
     val title = if (progress.budget.period == BudgetPeriod.MONTHLY && progress.budget.month != null)
         "${monthNames.getOrElse(progress.budget.month) { "" }} ${progress.budget.year}"
     else "${progress.budget.year}"
 
+    val progressColor = Color(0xFF00C896) // exact green tone from UI
+
     Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(18.dp)
         ) {
+
+            // ─── TOP ROW ─────────────────────────────────────
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f)) {
+
+                // LEFT SIDE
+                Column {
                     Text(
-                        title, style = MaterialTheme.typography.titleMedium,
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+
+                    Spacer(Modifier.height(4.dp))
+
                     Text(
                         "Budget: ₹${
                             String.format(
                                 Locale.getDefault(),
                                 "%,.0f",
-                                progress.budget.totalLimit
+                                limit
                             )
                         }",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                // RIGHT SIDE
+                Column(
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        "₹${String.format(Locale.getDefault(), "%,.0f", saved)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        "Saved",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
                     Text(
                         "${pct.toInt()}%",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = color, fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        "used", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = progressColor
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(2.dp))
+
+            // ─── PROGRESS BAR ───────────────────────────────
             LinearProgressIndicator(
                 progress = { pct / 100f },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = color,
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(50)),
+                color = progressColor,
                 trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             )
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    "Spent: ₹${String.format(Locale.getDefault(), "%,.0f", progress.spent)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            Icons.Default.Edit, null, Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = { showDelete = true }, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            Icons.Default.Delete, null, Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            }
         }
-    }
-
-    if (showDelete) {
-        AlertDialog(
-            onDismissRequest = { showDelete = false },
-            title = { Text("Delete Budget") },
-            text = { Text("Remove \"${progress.budget.name}\"?") },
-            confirmButton = {
-                TextButton(onClick = { onDelete(); showDelete = false }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDelete = false }) { Text("Cancel") }
-            }
-        )
     }
 }
 
