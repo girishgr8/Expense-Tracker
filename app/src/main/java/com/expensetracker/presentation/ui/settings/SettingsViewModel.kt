@@ -1,5 +1,6 @@
 package com.expensetracker.presentation.ui.settings
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
@@ -25,32 +26,37 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 data class SettingsUiState(
-    val themeMode: String = "system",
-    val useDynamicColor: Boolean = true,
-    val currencySymbol: String = "₹",
-    val currencyCode: String = "INR",
-    val numberFormat: String = "millions",
-    val isHapticsEnabled: Boolean = true,
-    val isBackupEnabled: Boolean = true,
-    val lastBackupDisplay: String = "Never",
+    // User Details
     val userName: String = "",
     val userEmail: String = "",
     val userPhotoUrl: String = "",
+
+    // Appearance
+    val themeMode: String = "system",
+    val useDynamicColor: Boolean = true,
+    val decimalFormat: String = "default",
+
+    // Notifications
     val isDailyReminderEnabled: Boolean = true,
     val dailyReminderHour: Int = 19,
     val dailyReminderMinute: Int = 0,
     val isBudgetAlertEnabled: Boolean = true,
 
     // Preferences
+    val currencySymbol: String = "₹",
+    val currencyCode: String = "INR",
+    val currencyFormat: String = "millions",
     val defaultCategoryId: Long = -1L,
     val defaultPaymentModeId: Long = -1L,
     val firstDayOfMonth: Int = 1,
-    val decimalFormat: String = "default",
     val categories: List<Category> = emptyList(),
     val paymentModes: List<PaymentMode> = emptyList(),
-    // Restore state
+    val isHapticsEnabled: Boolean = true,
+
+    // Backup, Restore & Export
+    val isBackupEnabled: Boolean = true,
+    val lastBackupDisplay: String = "Never",
     val isCheckingBackup: Boolean = false,
-//    val restoreBackupInfo: DriveFileInfo? = null,
     val isRestoring: Boolean = false,
     val restoreError: String? = null,
     val restoreSuccess: Boolean = false
@@ -70,19 +76,45 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadSettings()
-        loadUserInfo()
-        loadPreferences()
     }
 
     private fun loadSettings() {
+        // Settings: User Info
+        loadUserInfo()
+
+        // Settings: Appearance
+        loadAppearanceSettings()
+
+        // Settings: Preferences
+        loadPreferencesSettings()
+
+        // Settings: Notifications
+        loadNotificationsSettings()
+
+        // Backup, Restore & Export
+        loadBackupRestoreExportSettings()
+    }
+
+    private fun loadUserInfo() {
+        viewModelScope.launch {
+            authManager.currentUser.collect { user ->
+                _uiState.update {
+                    it.copy(
+                        userName = user?.displayName ?: "",
+                        userEmail = user?.email ?: "",
+                        userPhotoUrl = user?.photoUrl?.toString() ?: ""
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadAppearanceSettings(){
         viewModelScope.launch {
             combine(
                 userPreferencesRepository.themeMode, // args[0]: String
                 userPreferencesRepository.useDynamicColor,    // args[1]: Boolean
-                userPreferencesRepository.currencySymbol,     // args[2]: String
-                userPreferencesRepository.currencyCode,       // args[3]: String
-                userPreferencesRepository.numberFormat,       // args[4]: String
-                userPreferencesRepository.isHapticsEnabled,   // args[5]: Boolean
+                userPreferencesRepository.decimalFormat       // args[2]: String
             ) { args: Array<Any?> ->
                 args
             }.collect { args ->
@@ -90,15 +122,60 @@ class SettingsViewModel @Inject constructor(
                     it.copy(
                         themeMode = args[0] as String,
                         useDynamicColor = args[1] as Boolean,
-                        currencySymbol = args[2] as String,
-                        currencyCode = args[3] as String,
-                        numberFormat = args[4] as String,
-                        isHapticsEnabled = args[5] as Boolean
+                        decimalFormat = args[2] as String
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadPreferencesSettings() {
+        viewModelScope.launch {
+            combine(
+                userPreferencesRepository.currencySymbol,       // args[0]: String
+                userPreferencesRepository.currencyCode,                  // args[1]: String
+                userPreferencesRepository.currencyFormat,                // args[2]: String
+                userPreferencesRepository.defaultPaymentModeId,          // args[3]: Long
+                userPreferencesRepository.defaultCategoryId,             // args[4]: Long
+                userPreferencesRepository.firstDayOfMonth,               // args[5]: Int
+                userPreferencesRepository.isHapticsEnabled,              // args[6]: Boolean
+            ) { args: Array<Any?> ->
+                args
+            }.collect { args ->
+                _uiState.update {
+                    it.copy(
+                        currencySymbol = args[0] as String,
+                        currencyCode = args[1] as String,
+                        currencyFormat = args[2] as String,
+                        defaultPaymentModeId = args[3] as Long,
+                        defaultCategoryId = args[4] as Long,
+                        firstDayOfMonth = args[5] as Int,
+                        isHapticsEnabled = args[6] as Boolean
                     )
                 }
             }
         }
 
+        // Load: Expense Categories
+        viewModelScope.launch {
+            categoryRepository.getAllCategories(authManager.userId).collect { cats ->
+                _uiState.update {
+                    it.copy(categories = cats.filter { c ->
+                        c.transactionType == TransactionType.EXPENSE || c.transactionType == null
+                    })
+                }
+            }
+        }
+
+        // Load: Payment Modes
+        viewModelScope.launch {
+            paymentModeRepository.getAllModes(authManager.userId).collect { modes ->
+                _uiState.update { it.copy(paymentModes = modes) }
+            }
+        }
+    }
+
+    private fun loadNotificationsSettings() {
         viewModelScope.launch {
             combine(
                 userPreferencesRepository.isReminderEnabled,   // args[0]: Boolean
@@ -118,7 +195,9 @@ class SettingsViewModel @Inject constructor(
                 }
             }
         }
+    }
 
+    private fun loadBackupRestoreExportSettings() {
         viewModelScope.launch {
             combine(
                 userPreferencesRepository.isBackupEnabled,
@@ -139,61 +218,10 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private fun loadPreferences() {
-        viewModelScope.launch {
-            userPreferencesRepository.decimalFormat.collect { fmt ->
-                _uiState.update { it.copy(decimalFormat = fmt) }
-            }
-        }
-        viewModelScope.launch {
-            userPreferencesRepository.defaultCategoryId.collect { id ->
-                _uiState.update { it.copy(defaultCategoryId = id) }
-            }
-        }
-        viewModelScope.launch {
-            userPreferencesRepository.defaultPaymentModeId.collect { id ->
-                _uiState.update { it.copy(defaultPaymentModeId = id) }
-            }
-        }
-        viewModelScope.launch {
-            userPreferencesRepository.firstDayOfMonth.collect { day ->
-                _uiState.update { it.copy(firstDayOfMonth = day) }
-            }
-        }
-        viewModelScope.launch {
-            categoryRepository.getAllCategories(authManager.userId).collect { cats ->
-                _uiState.update {
-                    it.copy(categories = cats.filter { c ->
-                        c.transactionType == TransactionType.EXPENSE || c.transactionType == null
-                    })
-                }
-            }
-        }
-        viewModelScope.launch {
-            paymentModeRepository.getAllModes(authManager.userId).collect { modes ->
-                _uiState.update { it.copy(paymentModes = modes) }
-            }
-        }
-    }
-
-    private fun loadUserInfo() {
-        viewModelScope.launch {
-            authManager.currentUser.collect { user ->
-                _uiState.update {
-                    it.copy(
-                        userName = user?.displayName ?: "",
-                        userEmail = user?.email ?: "",
-                        userPhotoUrl = user?.photoUrl?.toString() ?: ""
-                    )
-                }
-            }
-        }
-    }
-
     fun setCurrency(code: String, symbol: String, format: String) = viewModelScope.launch {
         userPreferencesRepository.setCurrencyCode(code)
         userPreferencesRepository.setCurrencySymbol(symbol)
-        userPreferencesRepository.setNumberFormat(format)
+        userPreferencesRepository.setCurrencyFormat(format)
     }
 
     fun setThemeMode(mode: String) = viewModelScope.launch {
@@ -240,7 +268,7 @@ class SettingsViewModel @Inject constructor(
         userPreferencesRepository.setIsBudgetAlertEnabled(enabled)
     }
 
-    fun triggerBackupNow() {
+    fun triggerBackupNow() = viewModelScope.launch {
         driveBackupScheduler.triggerImmediateBackup()
     }
 

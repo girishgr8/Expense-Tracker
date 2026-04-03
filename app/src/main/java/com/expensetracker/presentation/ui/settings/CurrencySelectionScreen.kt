@@ -1,5 +1,6 @@
 package com.expensetracker.presentation.ui.settings
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,38 +56,37 @@ data class CurrencyInfo(
     val symbol: String,
     val flag: String           // emoji flag
 )
-
 val ALL_CURRENCIES = listOf(
-    CurrencyInfo("USD", "United States Dollar", "$", "🇺🇸"),
-    CurrencyInfo("INR", "Indian Rupee", "₹", "🇮🇳"),
-    CurrencyInfo("EUR", "Euro", "€", "🇪🇺"),
-    CurrencyInfo("JPY", "Japanese Yen", "¥", "🇯🇵"),
-    CurrencyInfo("GBP", "British Pound", "£", "🇬🇧"),
-    CurrencyInfo("AUD", "Australian Dollar", "A$", "🇦🇺"),
-    CurrencyInfo("CAD", "Canadian Dollar", "C$", "🇨🇦"),
-    CurrencyInfo("CHF", "Swiss Franc", "Fr", "🇨🇭"),
-    CurrencyInfo("CNY", "Chinese Yuan", "¥", "🇨🇳"),
-    CurrencyInfo("SEK", "Swedish Krona", "kr", "🇸🇪"),
-    CurrencyInfo("NZD", "New Zealand Dollar", "NZ$", "🇳🇿"),
-    CurrencyInfo("MXN", "Mexican Peso", "$", "🇲🇽"),
-    CurrencyInfo("SGD", "Singapore Dollar", "S$", "🇸🇬"),
-    CurrencyInfo("HKD", "Hong Kong Dollar", "HK$", "🇭🇰"),
-    CurrencyInfo("NOK", "Norwegian Krone", "kr", "🇳🇴"),
-    CurrencyInfo("KRW", "South Korean Won", "₩", "🇰🇷"),
-    CurrencyInfo("TRY", "Turkish Lira", "₺", "🇹🇷"),
-    CurrencyInfo("RUB", "Russian Ruble", "₽", "🇷🇺"),
-    CurrencyInfo("BRL", "Brazilian Real", "R$", "🇧🇷"),
-    CurrencyInfo("ZAR", "South African Rand", "R", "🇿🇦"),
-    CurrencyInfo("AED", "UAE Dirham", "د.إ", "🇦🇪"),
-    CurrencyInfo("SAR", "Saudi Riyal", "﷼", "🇸🇦"),
-    CurrencyInfo("THB", "Thai Baht", "฿", "🇹🇭"),
-    CurrencyInfo("MYR", "Malaysian Ringgit", "RM", "🇲🇾"),
-    CurrencyInfo("IDR", "Indonesian Rupiah", "Rp", "🇮🇩"),
-    CurrencyInfo("PHP", "Philippine Peso", "₱", "🇵🇭"),
-    CurrencyInfo("PKR", "Pakistani Rupee", "₨", "🇵🇰"),
-    CurrencyInfo("BDT", "Bangladeshi Taka", "৳", "🇧🇩"),
-    CurrencyInfo("NPR", "Nepalese Rupee", "₨", "🇳🇵"),
-    CurrencyInfo("LKR", "Sri Lankan Rupee", "₨", "🇱🇰"),
+    CurrencyInfo("USD", "United States Dollar", "$",  "🇺🇸"),
+    CurrencyInfo("INR", "Indian Rupee",          "₹",  "🇮🇳"),
+    CurrencyInfo("EUR", "Euro",                  "€",  "🇪🇺"),
+    CurrencyInfo("JPY", "Japanese Yen",          "¥",  "🇯🇵"),
+    CurrencyInfo("GBP", "British Pound",         "£",  "🇬🇧"),
+    CurrencyInfo("AUD", "Australian Dollar",     "A$", "🇦🇺"),
+    CurrencyInfo("CAD", "Canadian Dollar",       "C$", "🇨🇦"),
+    CurrencyInfo("CHF", "Swiss Franc",           "Fr", "🇨🇭"),
+    CurrencyInfo("CNY", "Chinese Yuan",          "¥",  "🇨🇳"),
+    CurrencyInfo("SEK", "Swedish Krona",         "kr", "🇸🇪"),
+    CurrencyInfo("NZD", "New Zealand Dollar",    "NZ$","🇳🇿"),
+    CurrencyInfo("MXN", "Mexican Peso",          "$",  "🇲🇽"),
+    CurrencyInfo("SGD", "Singapore Dollar",      "S$", "🇸🇬"),
+    CurrencyInfo("HKD", "Hong Kong Dollar",      "HK$","🇭🇰"),
+    CurrencyInfo("NOK", "Norwegian Krone",       "kr", "🇳🇴"),
+    CurrencyInfo("KRW", "South Korean Won",      "₩",  "🇰🇷"),
+    CurrencyInfo("TRY", "Turkish Lira",          "₺",  "🇹🇷"),
+    CurrencyInfo("RUB", "Russian Ruble",         "₽",  "🇷🇺"),
+    CurrencyInfo("BRL", "Brazilian Real",        "R$", "🇧🇷"),
+    CurrencyInfo("ZAR", "South African Rand",    "R",  "🇿🇦"),
+    CurrencyInfo("AED", "UAE Dirham",            "د.إ","🇦🇪"),
+    CurrencyInfo("SAR", "Saudi Riyal",           "﷼",  "🇸🇦"),
+    CurrencyInfo("THB", "Thai Baht",             "฿",  "🇹🇭"),
+    CurrencyInfo("MYR", "Malaysian Ringgit",     "RM", "🇲🇾"),
+    CurrencyInfo("IDR", "Indonesian Rupiah",     "Rp", "🇮🇩"),
+    CurrencyInfo("PHP", "Philippine Peso",       "₱",  "🇵🇭"),
+    CurrencyInfo("PKR", "Pakistani Rupee",       "₨",  "🇵🇰"),
+    CurrencyInfo("BDT", "Bangladeshi Taka",      "৳",  "🇧🇩"),
+    CurrencyInfo("NPR", "Nepalese Rupee",        "₨",  "🇳🇵"),
+    CurrencyInfo("LKR", "Sri Lankan Rupee",      "₨",  "🇱🇰"),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,9 +97,9 @@ fun CurrencySelectionScreen(
     onSave: (code: String, symbol: String, format: String) -> Unit,
     onNavigateBack: () -> Unit
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedCode by remember { mutableStateOf(currentCode) }
-    var selectedFormat by remember { mutableStateOf(currentFormat) }
+    var searchQuery      by remember { mutableStateOf("") }
+    var selectedCode     by remember(currentCode) { mutableStateOf(currentCode) }
+    var selectedFormat   by remember(currentFormat) { mutableStateOf(currentFormat) }
 
     val filtered = remember(searchQuery) {
         if (searchQuery.isBlank()) ALL_CURRENCIES
@@ -227,8 +227,8 @@ fun CurrencySelectionScreen(
                                 )
                             }
 
-                            // Number format subsection (only for selected INR)
-                            if (isSelected && currency.code == "INR") {
+                            // Number format subsection (shown for ALL selected currencies)
+                            if (isSelected) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant

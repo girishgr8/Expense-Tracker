@@ -177,7 +177,7 @@ fun SettingsScreen(
                 onAnalysis = onNavigateToAnalysis,
                 onAccounts = onNavigateToAccounts,
                 onSettings = {},
-                onAddTransaction = onNavigateToAddTransaction,
+                onAddTransaction = onNavigateToAddTransaction
             )
         }, topBar = {
             TopAppBar(title = { Text("Settings", fontWeight = FontWeight.Bold) }, navigationIcon = {

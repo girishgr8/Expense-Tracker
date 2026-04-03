@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -61,13 +63,21 @@ import java.util.Locale
 // ─── Amount Display ───────────────────────────────────────────────────────────
 
 
+// ─── Decimal Format CompositionLocal ─────────────────────────────────────────
+/** Provides the user's chosen decimal format preference throughout the UI tree. */
+val LocalDecimalFormat = compositionLocalOf { "default" }
+
 // ─── Amount formatting helper ─────────────────────────────────────────────────
 /** Formats an amount without trailing .00 — e.g. 10.0 → "10", 10.5 → "10.50" */
-private fun fmtAmt(amount: Double): String {
+internal fun fmtAmt(amount: Double, decimalFmt: String = "default"): String {
     val long = amount.toLong()
-    return if (amount == long.toDouble()) "%,d".format(long) else "%,.2f".format(amount)
+    return when (decimalFmt) {
+        "none" -> "%,.0f".format(amount)
+        "one"  -> "%,.1f".format(amount)
+        "two"  -> "%,.2f".format(amount)
+        else   -> if (amount == long.toDouble()) "%,d".format(long) else "%,.2f".format(amount)
+    }
 }
-
 @Composable
 fun AmountText(
     amount: Double,
@@ -434,19 +444,38 @@ fun AppBottomBar(
             modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
             tonalElevation = 4.dp
         ) {
+            // Shared active/inactive colors for all items
+            val navItemColors = NavigationBarItemDefaults.colors(
+                selectedIconColor   = MaterialTheme.colorScheme.onSecondaryContainer,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                selectedTextColor   = MaterialTheme.colorScheme.onSurface,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                indicatorColor      = MaterialTheme.colorScheme.secondaryContainer
+            )
+
             // Home
             NavigationBarItem(
                 selected = currentRoute == "dashboard",
                 onClick  = onHome,
                 icon     = { Icon(Icons.Default.Home, null) },
-                label    = { Text("Home") }
+                label    = {
+                    Text("Home",
+                        fontWeight = if (currentRoute == "dashboard") FontWeight.Bold
+                        else FontWeight.Normal)
+                },
+                colors = navItemColors
             )
             // Analysis
             NavigationBarItem(
                 selected = currentRoute == "analysis",
                 onClick  = onAnalysis,
                 icon     = { Icon(Icons.Default.BarChart, null) },
-                label    = { Text("Analysis") }
+                label    = {
+                    Text("Analysis",
+                        fontWeight = if (currentRoute == "analysis") FontWeight.Bold
+                        else FontWeight.Normal)
+                },
+                colors = navItemColors
             )
             // Center slot — invisible placeholder to keep equal spacing
             NavigationBarItem(
@@ -454,21 +483,32 @@ fun AppBottomBar(
                 onClick  = {},
                 icon     = { Spacer(Modifier.size(56.dp)) },
                 label    = { Text("") },
-                enabled  = false
+                enabled  = false,
+                colors = navItemColors
             )
             // Accounts
             NavigationBarItem(
                 selected = currentRoute == "accounts",
                 onClick  = onAccounts,
                 icon     = { Icon(Icons.Default.AccountBalance, null) },
-                label    = { Text("Accounts") }
+                label    = {
+                    Text("Accounts",
+                        fontWeight = if (currentRoute == "accounts") FontWeight.Bold
+                        else FontWeight.Normal)
+                },
+                colors = navItemColors
             )
             // Settings
             NavigationBarItem(
                 selected = currentRoute == "settings",
                 onClick  = onSettings,
                 icon     = { Icon(Icons.Default.MoreHoriz, null) },
-                label    = { Text("More") }
+                label    = {
+                    Text("More",
+                        fontWeight = if (currentRoute == "settings") FontWeight.Bold
+                        else FontWeight.Normal)
+                },
+                colors = navItemColors
             )
         }
 

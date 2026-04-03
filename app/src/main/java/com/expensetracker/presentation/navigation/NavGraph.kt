@@ -1,5 +1,6 @@
 package com.expensetracker.presentation.navigation
 
+import android.util.Log
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -26,6 +27,7 @@ import com.expensetracker.presentation.ui.settings.CurrencySelectionScreen
 import com.expensetracker.presentation.ui.settings.SettingsScreen
 import com.expensetracker.presentation.ui.transactions.TransactionsScreen
 import com.expensetracker.presentation.ui.MainViewModel
+import com.expensetracker.presentation.ui.settings.SettingsViewModel
 
 sealed class Screen(val route: String) {
     object Auth             : Screen("auth")
@@ -214,18 +216,16 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         }
 
         composable(Screen.CurrencySelection.route) {
-            // Read current values from mainViewModel
-            val currencyCode by mainViewModel.currencySymbol.collectAsState()
-            val numberFormat by mainViewModel.numberFormat.collectAsState()
 
-            // We need SettingsViewModel here to save
-            val settingsVm: com.expensetracker.presentation.ui.settings.SettingsViewModel =
-                hiltViewModel()
-            val settingsState by settingsVm.uiState.collectAsState()
+            // Use mainViewModel flows — already eagerly loaded, never stale
+            val currencyCode   by mainViewModel.currencyCode.collectAsState()
+            val currencyFormat by mainViewModel.currencyFormat.collectAsState()
+
+            val settingsVm: SettingsViewModel = hiltViewModel()
 
             CurrencySelectionScreen(
-                currentCode   = settingsState.currencyCode,
-                currentFormat = settingsState.numberFormat,
+                currentCode   = currencyCode,
+                currentFormat = currencyFormat,
                 onSave        = { code, symbol, format ->
                     settingsVm.setCurrency(code, symbol, format)
                     navController.popBackStack()

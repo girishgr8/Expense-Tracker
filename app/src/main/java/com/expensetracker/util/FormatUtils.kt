@@ -2,6 +2,7 @@ package com.expensetracker.util
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 object FormatUtils {
 
@@ -20,15 +21,21 @@ object FormatUtils {
     fun LocalDateTime.toCsvDateTime() = format(csvDateTime)
 
     /**
-     * Formats a monetary amount, omitting decimal places when they are zero.
-     * e.g. 10.0 → "10", 10.5 → "10.50", 1000.0 → "1,000"
+     * Decimal format preference values:
+     *   "default" — smart: whole numbers show no decimals, others show 2dp
+     *   "none"    — always 0 decimal places
+     *   "one"     — always 1 decimal place
+     *   "two"     — always 2 decimal places
      */
-    fun Double.smartFormat(): String {
-        val long = toLong()
-        return if (this == long.toDouble())
-            String.format("%,d", long)          // whole number — no decimals
-        else
-            String.format("%,.2f", this)         // has decimals — show 2dp
+    fun Double.smartFormat(decimalPref: String = "default"): String = when (decimalPref) {
+        "none" -> String.format(Locale.getDefault(), "%,.0f", this)
+        "one"  -> String.format(Locale.getDefault(), "%,.1f", this)
+        "two"  -> String.format(Locale.getDefault(), "%,.2f", this)
+        else   -> {                               // "default" — optimized for readability
+            val long = toLong()
+            if (this == long.toDouble()) String.format(Locale.getDefault(), "%,d", long)
+            else String.format(Locale.getDefault(), "%,.2f", this)
+        }
     }
 
     fun Double.toCurrency(symbol: String = "₹"): String =

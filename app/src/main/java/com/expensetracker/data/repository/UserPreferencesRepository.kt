@@ -27,14 +27,13 @@ class UserPreferencesRepository @Inject constructor(
     private object Keys {
         val CURRENCY_SYMBOL = stringPreferencesKey("currency_symbol")
         val CURRENCY_CODE = stringPreferencesKey("currency_code")
-        val NUMBER_FORMAT = stringPreferencesKey("number_format")   // "millions" | "lakhs" | "none"
+        val CURRENCY_FORMAT = stringPreferencesKey("currency_format")   // "millions" | "lakhs" | "none"
         val USE_DYNAMIC_COLOR = booleanPreferencesKey("use_dynamic_color")
         val THEME_MODE = stringPreferencesKey("theme_mode")   // "light" | "dark" | "system"
         val LAST_BACKUP_TIMESTAMP = longPreferencesKey("last_backup_timestamp")
         val DEFAULT_ACCOUNT_ID = longPreferencesKey("default_account_id")
         val IS_BACKUP_ENABLED = booleanPreferencesKey("is_backup_enabled")
         val IS_HAPTICS_ENABLED = booleanPreferencesKey("is_haptics_enabled")
-        // ✅ ADD THESE
         val DAILY_REMINDER_HOUR = intPreferencesKey("daily_reminder_hour")
         val DAILY_REMINDER_MINUTE = intPreferencesKey("daily_reminder_minute")
         val IS_DAILY_REMINDER_ENABLED = booleanPreferencesKey("is_daily_reminder_enabled")
@@ -53,9 +52,9 @@ class UserPreferencesRepository @Inject constructor(
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { it[Keys.CURRENCY_CODE] ?: "INR" }
 
-    val numberFormat: Flow<String> = context.dataStore.data
+    val currencyFormat: Flow<String> = context.dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { it[Keys.NUMBER_FORMAT] ?: "millions" }
+        .map { it[Keys.CURRENCY_FORMAT] ?: "millions" }
 
     val useDynamicColor: Flow<Boolean> = context.dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
@@ -117,8 +116,8 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { it[Keys.CURRENCY_CODE] = code }
     }
 
-    suspend fun setNumberFormat(format: String) {
-        context.dataStore.edit { it[Keys.NUMBER_FORMAT] = format }
+    suspend fun setCurrencyFormat(format: String) {
+        context.dataStore.edit { it[Keys.CURRENCY_FORMAT] = format }
     }
 
     suspend fun setUseDynamicColor(use: Boolean) {

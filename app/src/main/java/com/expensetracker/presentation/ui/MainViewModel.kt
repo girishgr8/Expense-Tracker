@@ -36,8 +36,14 @@ class MainViewModel @Inject constructor(
     val currencySymbol: StateFlow<String> = userPreferencesRepository.currencySymbol
         .stateIn(viewModelScope, SharingStarted.Eagerly, "₹")
 
-    val numberFormat: StateFlow<String> = userPreferencesRepository.numberFormat
+    val currencyCode: StateFlow<String> = userPreferencesRepository.currencyCode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "INR")
+
+    val currencyFormat: StateFlow<String> = userPreferencesRepository.currencyFormat
         .stateIn(viewModelScope, SharingStarted.Eagerly, "millions")
+
+    val decimalFormat: StateFlow<String> = userPreferencesRepository.decimalFormat
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "default")
 
     val isBackupEnabled: StateFlow<Boolean> = userPreferencesRepository.isBackupEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
