@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -50,12 +49,4 @@ class MainViewModel @Inject constructor(
 
     val isHapticsEnabled: StateFlow<Boolean> = userPreferencesRepository.isHapticsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
-    init {
-        viewModelScope.launch {
-            val userId = authManager.userId
-            categoryRepository.seedDefaultCategories(userId)
-            paymentModeRepository.seedDefaultModes(userId)
-        }
-    }
 }

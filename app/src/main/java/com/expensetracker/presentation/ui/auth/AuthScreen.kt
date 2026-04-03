@@ -42,6 +42,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
 import com.expensetracker.data.repository.CategoryRepository
+import com.expensetracker.data.repository.PaymentModeRepository
 import com.expensetracker.presentation.theme.BackgroundDark
 import com.expensetracker.presentation.theme.CardGradientEnd
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -57,7 +58,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authManager: AuthManager,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val paymentModeRepository: PaymentModeRepository
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
@@ -73,6 +75,7 @@ class AuthViewModel @Inject constructor(
                 authManager.firebaseAuthWithGoogle(account)
                     .onSuccess { user ->
                         categoryRepository.seedDefaultCategories(user.uid)
+                        paymentModeRepository.seedDefaultModes(user.uid)
                         _authState.value = AuthState.Success
                     }
                     .onFailure { _authState.value = AuthState.Error(it.message ?: "Sign-in failed") }
