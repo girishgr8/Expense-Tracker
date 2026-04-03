@@ -446,18 +446,22 @@ fun AccountsScreen(
             adjustments = uiState.detailAdjustments,
             currencySymbol = sym,
             isCard = uiState.selectedDetailCard != null,
+            mode = uiState.selectedDetailMode,
             account = uiState.selectedDetailAccount,
             card = uiState.selectedDetailCard,
             linkedModes = uiState.detailLinkedModes,
             showEditSheet = uiState.showEditAccountSheet,
+            showEditModeBalanceSheet = uiState.showEditModeBalanceSheet,
             showEditCardSheet = uiState.showEditCardSheet,
             showEditLimitSheet = uiState.showEditLimitSheet,
             showCardTransactions = uiState.showCardTransactions,
             cardTransactionsIsCurrentCycle = uiState.cardTransactionsIsCurrentCycle,
             onNavigateBack = viewModel::closeDetail,
             onEditAccount = viewModel::openEditAccountSheet,
+            onEditModeBalance = viewModel::openEditModeBalanceSheet,
             onEditCard = viewModel::openEditCardSheet,
             onCloseEditSheet = viewModel::closeEditAccountSheet,
+            onCloseEditModeBalanceSheet = viewModel::closeEditModeBalanceSheet,
             onCloseEditCardSheet = viewModel::closeEditCardSheet,
             onOpenEditLimitSheet = viewModel::openEditLimitSheet,
             onCloseEditLimitSheet = viewModel::closeEditLimitSheet,
@@ -472,6 +476,9 @@ fun AccountsScreen(
             },
             onSaveEditAccount = { acc, name, bal ->
                 viewModel.saveEditedAccount(acc, name, bal)
+            },
+            onSaveEditModeBalance = { mode, balance ->
+                viewModel.saveEditedModeBalance(mode, balance)
             },
             onDeleteAccount = { acc ->
                 viewModel.deleteAccount(acc)
@@ -653,24 +660,29 @@ private fun DetailScreen(
     adjustments: List<BalanceAdjustment>,
     currencySymbol: String,
     isCard: Boolean,
+    mode: PaymentMode?,
     account: BankAccount?,
     card: CreditCard?,
     linkedModes: List<PaymentMode>,
     showEditSheet: Boolean,
+    showEditModeBalanceSheet: Boolean,
     showEditCardSheet: Boolean,
     showEditLimitSheet: Boolean,
     showCardTransactions: Boolean,
     cardTransactionsIsCurrentCycle: Boolean,
     onNavigateBack: () -> Unit,
     onEditAccount: () -> Unit,
+    onEditModeBalance: () -> Unit,
     onEditCard: () -> Unit,
     onCloseEditSheet: () -> Unit,
+    onCloseEditModeBalanceSheet: () -> Unit,
     onCloseEditCardSheet: () -> Unit,
     onOpenEditLimitSheet: () -> Unit,
     onCloseEditLimitSheet: () -> Unit,
     onSaveCardAvailableLimit: (CreditCard, Double) -> Unit,
     onSaveEditCard: (String, Double, Double, Int, Int, String) -> Unit,
     onSaveEditAccount: (BankAccount, String, Double) -> Unit,
+    onSaveEditModeBalance: (PaymentMode, Double) -> Unit,
     onDeleteAccount: (BankAccount) -> Unit,
     onDeleteCard: (CreditCard) -> Unit,
     onLinkMode: (Long, PaymentModeType, String) -> Unit,
@@ -683,8 +695,9 @@ private fun DetailScreen(
     // Intercept back when card transactions screen is open
     BackHandler(enabled = showCardTransactions) { onCloseCardTransactions() }
 
-    var selectedTab by remember(account?.id, card?.id, title) { mutableIntStateOf(0) }
-    val tabs = if (account != null) {
+    var selectedTab by remember(account?.id, card?.id, mode?.id, title) { mutableIntStateOf(0) }
+    val supportsAdjustments = account != null || card != null || mode != null
+    val tabs = if (supportsAdjustments) {
         listOf("All", "Credit", "Debit", "Adjustments")
     } else {
         listOf("All", "Credit", "Debit")
@@ -715,10 +728,14 @@ private fun DetailScreen(
                     }
                 },
                 actions = {
-                    if (account != null || card != null) {
+                    if (account != null || card != null || mode != null) {
                         // Edit — opens card edit sheet for cards, account edit sheet for bank accounts
                         IconButton(
-                            onClick = if (card != null) onEditCard else onEditAccount,
+                            onClick = when {
+                                card != null -> onEditCard
+                                account != null -> onEditAccount
+                                else -> onEditModeBalance
+                            },
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceContainer)
@@ -829,6 +846,21 @@ private fun DetailScreen(
                                     Text("Link", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
+                        } else if (mode != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Row {
+                                Text(
+                                    "Incorrect balance? ",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "Edit",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.clickable { onEditModeBalance() })
+                            }
                         } else if (balance < 0) {
                             Spacer(Modifier.height(4.dp))
                             Text(
@@ -840,7 +872,6 @@ private fun DetailScreen(
                     }
                 }
             }
-
             Column(
                 modifier = Modifier.pointerInput(tabs.size, selectedTab) {
                     var totalHorizontalDrag = 0f
@@ -896,7 +927,7 @@ private fun DetailScreen(
                     }
                 }
 
-                if (account != null && selectedTab == 3) {
+                if (supportsAdjustments && selectedTab == 3) {
                     if (adjustments.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
@@ -962,6 +993,16 @@ private fun DetailScreen(
             onDelete = { onDeleteAccount(account) },
             onAddMode = { type, id -> onLinkMode(account.id, type, id) },
             onDeleteMode = onDeleteMode
+        )
+    }
+
+    if (showEditModeBalanceSheet && mode != null) {
+        EditStandaloneBalanceSheet(
+            title = "Edit available balance",
+            subtitle = "Current balance for ${mode.displayLabel}",
+            currentBalance = balance,
+            onDismiss = onCloseEditModeBalanceSheet,
+            onSave = { onSaveEditModeBalance(mode, it) }
         )
     }
 
@@ -3196,6 +3237,85 @@ private fun EditAvailableLimitSheet(
                 )
             }
             Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditStandaloneBalanceSheet(
+    title: String,
+    subtitle: String,
+    currentBalance: Double,
+    onDismiss: () -> Unit,
+    onSave: (Double) -> Unit
+) {
+    var balanceInput by remember(currentBalance) { mutableStateOf(currentBalance.toString()) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+        dragHandle = { BottomSheetDefaults.HiddenShape },
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Close, "Close", Modifier.size(16.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = balanceInput,
+                onValueChange = { balanceInput = it },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                textStyle = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "This creates a balance adjustment entry instead of changing transaction history.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = { balanceInput.toDoubleOrNull()?.let(onSave) },
+                enabled = balanceInput.toDoubleOrNull() != null,
+                shape = RoundedCornerShape(22.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp)
+            ) {
+                Text("Save", fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

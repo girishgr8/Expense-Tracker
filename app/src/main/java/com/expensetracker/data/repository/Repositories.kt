@@ -101,6 +101,9 @@ interface BankAccountRepository {
 
 interface BalanceAdjustmentRepository {
     fun getAdjustmentsForAccount(bankAccountId: Long, userId: String): Flow<List<BalanceAdjustment>>
+    fun getAdjustmentsForCreditCard(creditCardId: Long, userId: String): Flow<List<BalanceAdjustment>>
+    fun getAdjustmentsForPaymentMode(paymentModeId: Long, userId: String): Flow<List<BalanceAdjustment>>
+    fun getAllAdjustments(userId: String): Flow<List<BalanceAdjustment>>
     suspend fun insertAdjustment(adjustment: BalanceAdjustment): Long
 }
 
@@ -452,6 +455,27 @@ class BalanceAdjustmentRepositoryImpl @Inject constructor(
         userId: String
     ): Flow<List<BalanceAdjustment>> =
         dao.getAdjustmentsForAccount(bankAccountId, userId).map { list ->
+            list.map { it.toDomain() }
+        }
+
+    override fun getAdjustmentsForCreditCard(
+        creditCardId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustment>> =
+        dao.getAdjustmentsForCreditCard(creditCardId, userId).map { list ->
+            list.map { it.toDomain() }
+        }
+
+    override fun getAdjustmentsForPaymentMode(
+        paymentModeId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustment>> =
+        dao.getAdjustmentsForPaymentMode(paymentModeId, userId).map { list ->
+            list.map { it.toDomain() }
+        }
+
+    override fun getAllAdjustments(userId: String): Flow<List<BalanceAdjustment>> =
+        dao.getAllAdjustments(userId).map { list ->
             list.map { it.toDomain() }
         }
 

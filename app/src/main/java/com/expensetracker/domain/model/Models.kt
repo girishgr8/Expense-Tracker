@@ -93,7 +93,9 @@ data class BankAccount(
 
 data class BalanceAdjustment(
     val id: Long = 0,
-    val bankAccountId: Long,
+    val bankAccountId: Long? = null,
+    val creditCardId: Long? = null,
+    val paymentModeId: Long? = null,
     val previousBalance: Double,
     val newBalance: Double,
     val amountDelta: Double,

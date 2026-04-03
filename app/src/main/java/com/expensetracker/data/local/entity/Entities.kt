@@ -53,11 +53,13 @@ data class BankAccountEntity(
         childColumns = ["bankAccountId"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index("bankAccountId"), Index("userId")]
+    indices = [Index("bankAccountId"), Index("creditCardId"), Index("paymentModeId"), Index("userId")]
 )
 data class BalanceAdjustmentEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val bankAccountId: Long,
+    val bankAccountId: Long?,
+    val creditCardId: Long?,
+    val paymentModeId: Long?,
     val previousBalance: Double,
     val newBalance: Double,
     val amountDelta: Double,

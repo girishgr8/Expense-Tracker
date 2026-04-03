@@ -205,7 +205,7 @@ fun DashboardScreen(
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
                         ),
                         elevation = CardDefaults.cardElevation(2.dp),
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -260,7 +260,7 @@ private fun DashboardBudgetSection(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
         elevation = CardDefaults.cardElevation(2.dp),
         modifier = Modifier
@@ -272,7 +272,7 @@ private fun DashboardBudgetSection(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
@@ -323,7 +323,7 @@ private fun DashboardBudgetSection(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.height(52.dp)
+                    modifier = Modifier.height(44.dp)
                 ) {
                     Text(
                         "Set Budget",

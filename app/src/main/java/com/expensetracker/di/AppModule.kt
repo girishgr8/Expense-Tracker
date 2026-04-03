@@ -79,10 +79,61 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `balance_adjustments_new` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `bankAccountId` INTEGER,
+                    `creditCardId` INTEGER,
+                    `paymentModeId` INTEGER,
+                    `previousBalance` REAL NOT NULL,
+                    `newBalance` REAL NOT NULL,
+                    `amountDelta` REAL NOT NULL,
+                    `adjustedAtMillis` INTEGER NOT NULL,
+                    `userId` TEXT NOT NULL,
+                    FOREIGN KEY(`bankAccountId`) REFERENCES `bank_accounts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO `balance_adjustments_new` (
+                    `id`, `bankAccountId`, `creditCardId`, `paymentModeId`,
+                    `previousBalance`, `newBalance`, `amountDelta`, `adjustedAtMillis`, `userId`
+                )
+                SELECT
+                    `id`, `bankAccountId`, NULL, NULL,
+                    `previousBalance`, `newBalance`, `amountDelta`, `adjustedAtMillis`, `userId`
+                FROM `balance_adjustments`
+                """.trimIndent()
+            )
+            db.execSQL("DROP TABLE `balance_adjustments`")
+            db.execSQL("ALTER TABLE `balance_adjustments_new` RENAME TO `balance_adjustments`")
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_bankAccountId` " +
+                    "ON `balance_adjustments` (`bankAccountId`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_userId` " +
+                    "ON `balance_adjustments` (`userId`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_creditCardId` " +
+                    "ON `balance_adjustments` (`creditCardId`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_paymentModeId` " +
+                    "ON `balance_adjustments` (`paymentModeId`)"
+            )
+        }
+    }
+
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
-            .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .fallbackToDestructiveMigration()
             .build()
 

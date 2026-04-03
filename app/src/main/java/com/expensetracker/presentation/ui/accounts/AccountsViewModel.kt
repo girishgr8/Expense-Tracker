@@ -19,14 +19,16 @@ import com.expensetracker.domain.model.TransactionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.LocalDateTime
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 
@@ -59,6 +61,7 @@ data class AccountsUiState(
     val detailBalance: Double = 0.0,
     val detailLinkedModes: List<PaymentMode> = emptyList(),
     val showEditAccountSheet: Boolean = false,
+    val showEditModeBalanceSheet: Boolean = false,
     val showCardTransactions: Boolean = false,
     val cardTransactionsIsCurrentCycle: Boolean = false,
     val showEditCardSheet: Boolean = false,   // full card edit dialog
@@ -112,17 +115,24 @@ class AccountsViewModel @Inject constructor(
         }
         // Eagerly compute balance per standalone mode
         viewModelScope.launch {
-            transactionRepository.getAllTransactions(userId).collect { txns ->
+            combine(
+                transactionRepository.getAllTransactions(userId),
+                balanceAdjustmentRepository.getAllAdjustments(userId)
+            ) { txns, adjustments ->
                 val standalone = _uiState.value.allModes.filter { it.bankAccountId == null }
-                val balances = standalone.associate { mode ->
+                standalone.associate { mode ->
                     val income =
                         txns.filter { it.paymentModeId == mode.id && it.type == TransactionType.INCOME }
                             .sumOf { it.amount }
                     val expense =
                         txns.filter { it.paymentModeId == mode.id && it.type == TransactionType.EXPENSE }
                             .sumOf { it.amount }
-                    mode.id to (income - expense)
+                    val manualAdjustments = adjustments
+                        .filter { it.paymentModeId == mode.id }
+                        .sumOf { it.amountDelta }
+                    mode.id to (income - expense + manualAdjustments)
                 }
+            }.collect { balances ->
                 _uiState.update { it.copy(modeBalances = balances) }
             }
         }
@@ -130,31 +140,74 @@ class AccountsViewModel @Inject constructor(
 
     // ── Detail screens ────────────────────────────────────────────────────────
 
+    private fun observeAccountAdjustments(accountId: Long) {
+        detailAdjustmentsJob?.cancel()
+        detailAdjustmentsJob = viewModelScope.launch {
+            balanceAdjustmentRepository.getAdjustmentsForAccount(accountId, userId).collect { adjustments ->
+                _uiState.update { it.copy(detailAdjustments = adjustments) }
+            }
+        }
+    }
+
+    private fun observeCardAdjustments(cardId: Long) {
+        detailAdjustmentsJob?.cancel()
+        detailAdjustmentsJob = viewModelScope.launch {
+            balanceAdjustmentRepository.getAdjustmentsForCreditCard(cardId, userId).collect { adjustments ->
+                _uiState.update { it.copy(detailAdjustments = adjustments) }
+            }
+        }
+    }
+
+    private fun observeModeAdjustments(modeId: Long) {
+        detailAdjustmentsJob?.cancel()
+        detailAdjustmentsJob = viewModelScope.launch {
+            balanceAdjustmentRepository.getAdjustmentsForPaymentMode(modeId, userId).collect { adjustments ->
+                _uiState.update { state ->
+                    val transactionNet = state.detailTransactions.sumOf { txn ->
+                        when (txn.type) {
+                            TransactionType.INCOME -> txn.amount
+                            TransactionType.EXPENSE -> -txn.amount
+                            TransactionType.TRANSFER -> 0.0
+                        }
+                    }
+                    state.copy(
+                        detailAdjustments = adjustments,
+                        detailBalance = if (state.selectedDetailMode?.id == modeId) {
+                            transactionNet + adjustments.sumOf { it.amountDelta }
+                        } else {
+                            state.detailBalance
+                        }
+                    )
+                }
+            }
+        }
+    }
+
     fun openModeDetail(mode: PaymentMode) {
+        observeModeAdjustments(mode.id)
         viewModelScope.launch {
             val txns = withContext(Dispatchers.IO) {
                 transactionRepository.getAllTransactionsOneShot(userId)
                     .filter { it.paymentModeId == mode.id }.sortedByDescending { it.dateTime }
             }
+            val adjustments = balanceAdjustmentRepository
+                .getAdjustmentsForPaymentMode(mode.id, userId)
+                .first()
             val income = txns.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
             val expense = txns.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
             _uiState.update {
                 it.copy(
                     selectedDetailMode = mode,
                     detailTransactions = txns,
-                    detailBalance = income - expense
+                    detailAdjustments = adjustments,
+                    detailBalance = income - expense + adjustments.sumOf { it.amountDelta }
                 )
             }
         }
     }
 
     fun openAccountDetail(account: BankAccount) {
-        detailAdjustmentsJob?.cancel()
-        detailAdjustmentsJob = viewModelScope.launch {
-            balanceAdjustmentRepository.getAdjustmentsForAccount(account.id, userId).collect { adjustments ->
-                _uiState.update { it.copy(detailAdjustments = adjustments) }
-            }
-        }
+        observeAccountAdjustments(account.id)
         viewModelScope.launch {
             // Collect all payment mode ids linked to this account
             val modeIds =
@@ -165,11 +218,15 @@ class AccountsViewModel @Inject constructor(
                     .filter { it.paymentModeId != null && it.paymentModeId in modeIds }
                     .sortedByDescending { it.dateTime }
             }
+            val adjustments = balanceAdjustmentRepository
+                .getAdjustmentsForAccount(account.id, userId)
+                .first()
             val linkedModes = _uiState.value.allModes.filter { it.bankAccountId == account.id }
             _uiState.update {
                 it.copy(
                     selectedDetailAccount = account,
                     detailTransactions = txns,
+                    detailAdjustments = adjustments,
                     detailBalance = account.balance,
                     detailLinkedModes = linkedModes
                 )
@@ -178,15 +235,20 @@ class AccountsViewModel @Inject constructor(
     }
 
     fun openCardDetail(card: CreditCard) {
+        observeCardAdjustments(card.id)
         viewModelScope.launch {
             val txns = withContext(Dispatchers.IO) {
                 transactionRepository.getAllTransactionsOneShot(userId)
                     .filter { it.creditCardId == card.id }.sortedByDescending { it.dateTime }
             }
+            val adjustments = balanceAdjustmentRepository
+                .getAdjustmentsForCreditCard(card.id, userId)
+                .first()
             _uiState.update {
                 it.copy(
                     selectedDetailCard = card,
                     detailTransactions = txns,
+                    detailAdjustments = adjustments,
                     detailBalance = card.availableLimit
                 )
             }
@@ -205,6 +267,7 @@ class AccountsViewModel @Inject constructor(
             detailBalance = 0.0,
             detailLinkedModes = emptyList(),
             showEditAccountSheet = false,
+            showEditModeBalanceSheet = false,
             showCardTransactions = false,
             showEditCardSheet = false,
             showEditLimitSheet = false
@@ -231,7 +294,20 @@ class AccountsViewModel @Inject constructor(
 
     fun saveCardAvailableLimit(card: CreditCard, newLimit: Double) {
         viewModelScope.launch {
+            val delta = newLimit - card.availableLimit
             creditCardRepository.updateCard(card.copy(availableLimit = newLimit))
+            if (delta != 0.0) {
+                balanceAdjustmentRepository.insertAdjustment(
+                    BalanceAdjustment(
+                        creditCardId = card.id,
+                        previousBalance = card.availableLimit,
+                        newBalance = newLimit,
+                        amountDelta = delta,
+                        adjustedAt = LocalDateTime.now(),
+                        userId = userId
+                    )
+                )
+            }
             _uiState.update {
                 it.copy(
                     showEditLimitSheet = false,
@@ -245,6 +321,10 @@ class AccountsViewModel @Inject constructor(
     fun openEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = true) }
 
     fun closeEditAccountSheet() = _uiState.update { it.copy(showEditAccountSheet = false) }
+
+    fun openEditModeBalanceSheet() = _uiState.update { it.copy(showEditModeBalanceSheet = true) }
+
+    fun closeEditModeBalanceSheet() = _uiState.update { it.copy(showEditModeBalanceSheet = false) }
 
     fun saveEditedAccount(account: BankAccount, name: String, balance: Double) {
         viewModelScope.launch {
@@ -272,6 +352,31 @@ class AccountsViewModel @Inject constructor(
                     detailBalance = balance,
                     selectedDetailAccount = updatedAccount,
                     detailLinkedModes = linkedModes
+                )
+            }
+        }
+    }
+
+    fun saveEditedModeBalance(mode: PaymentMode, newBalance: Double) {
+        viewModelScope.launch {
+            val currentBalance = _uiState.value.detailBalance
+            val delta = newBalance - currentBalance
+            if (delta != 0.0) {
+                balanceAdjustmentRepository.insertAdjustment(
+                    BalanceAdjustment(
+                        paymentModeId = mode.id,
+                        previousBalance = currentBalance,
+                        newBalance = newBalance,
+                        amountDelta = delta,
+                        adjustedAt = LocalDateTime.now(),
+                        userId = userId
+                    )
+                )
+            }
+            _uiState.update {
+                it.copy(
+                    showEditModeBalanceSheet = false,
+                    detailBalance = newBalance
                 )
             }
         }
@@ -446,6 +551,7 @@ class AccountsViewModel @Inject constructor(
         colorHex: String
     ) {
         viewModelScope.launch {
+            val delta = availableLimit - card.availableLimit
             val updated = card.copy(
                 name = name,
                 availableLimit = availableLimit,
@@ -455,6 +561,18 @@ class AccountsViewModel @Inject constructor(
                 colorHex = colorHex
             )
             creditCardRepository.updateCard(updated)
+            if (delta != 0.0) {
+                balanceAdjustmentRepository.insertAdjustment(
+                    BalanceAdjustment(
+                        creditCardId = card.id,
+                        previousBalance = card.availableLimit,
+                        newBalance = availableLimit,
+                        amountDelta = delta,
+                        adjustedAt = LocalDateTime.now(),
+                        userId = userId
+                    )
+                )
+            }
             // Refresh the detail state so the header card reflects the new values immediately
             _uiState.update {
                 it.copy(

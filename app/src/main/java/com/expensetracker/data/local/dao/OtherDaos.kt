@@ -73,6 +73,32 @@ interface BalanceAdjustmentDao {
         userId: String
     ): Flow<List<BalanceAdjustmentEntity>>
 
+    @Query(
+        "SELECT * FROM balance_adjustments " +
+                "WHERE creditCardId = :creditCardId AND userId = :userId " +
+                "ORDER BY adjustedAtMillis DESC, id DESC"
+    )
+    fun getAdjustmentsForCreditCard(
+        creditCardId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustmentEntity>>
+
+    @Query(
+        "SELECT * FROM balance_adjustments " +
+                "WHERE paymentModeId = :paymentModeId AND userId = :userId " +
+                "ORDER BY adjustedAtMillis DESC, id DESC"
+    )
+    fun getAdjustmentsForPaymentMode(
+        paymentModeId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustmentEntity>>
+
+    @Query(
+        "SELECT * FROM balance_adjustments " +
+                "WHERE userId = :userId ORDER BY adjustedAtMillis DESC, id DESC"
+    )
+    fun getAllAdjustments(userId: String): Flow<List<BalanceAdjustmentEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAdjustment(adjustment: BalanceAdjustmentEntity): Long
 }
