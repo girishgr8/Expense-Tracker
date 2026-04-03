@@ -1,6 +1,7 @@
 package com.expensetracker.data.local.entity
 
 import com.expensetracker.domain.model.Attachment
+import com.expensetracker.domain.model.BalanceAdjustment
 import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.Budget
 import com.expensetracker.domain.model.Category
@@ -91,6 +92,28 @@ fun BankAccountEntity.toDomain(): BankAccount =
 
 fun BankAccount.toEntity(): BankAccountEntity =
     BankAccountEntity(id = id, name = name, balance = balance, colorHex = colorHex, userId = userId)
+
+fun BalanceAdjustmentEntity.toDomain(): BalanceAdjustment = BalanceAdjustment(
+    id = id,
+    bankAccountId = bankAccountId,
+    previousBalance = previousBalance,
+    newBalance = newBalance,
+    amountDelta = amountDelta,
+    adjustedAt = LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(adjustedAtMillis), ZoneId.systemDefault()
+    ),
+    userId = userId
+)
+
+fun BalanceAdjustment.toEntity(): BalanceAdjustmentEntity = BalanceAdjustmentEntity(
+    id = id,
+    bankAccountId = bankAccountId,
+    previousBalance = previousBalance,
+    newBalance = newBalance,
+    amountDelta = amountDelta,
+    adjustedAtMillis = adjustedAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    userId = userId
+)
 
 // ─── PaymentMode ──────────────────────────────────────────────────────────────
 

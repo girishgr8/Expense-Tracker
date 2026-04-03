@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.expensetracker.data.local.entity.AttachmentEntity
+import com.expensetracker.data.local.entity.BalanceAdjustmentEntity
 import com.expensetracker.data.local.entity.BankAccountEntity
 import com.expensetracker.data.local.entity.BudgetEntity
 import com.expensetracker.data.local.entity.CategoryEntity
@@ -58,6 +59,22 @@ interface BankAccountDao {
 
     @Delete
     suspend fun deleteAccount(account: BankAccountEntity)
+}
+
+@Dao
+interface BalanceAdjustmentDao {
+    @Query(
+        "SELECT * FROM balance_adjustments " +
+                "WHERE bankAccountId = :bankAccountId AND userId = :userId " +
+                "ORDER BY adjustedAtMillis DESC, id DESC"
+    )
+    fun getAdjustmentsForAccount(
+        bankAccountId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustmentEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAdjustment(adjustment: BalanceAdjustmentEntity): Long
 }
 
 @Dao

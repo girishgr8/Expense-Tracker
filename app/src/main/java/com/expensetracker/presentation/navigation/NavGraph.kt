@@ -124,7 +124,9 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         composable(Screen.Accounts.route) {
             AccountsScreen(
                 onNavigateBack             = { navController.popBackStack() },
-                onNavigateToAddTransaction = { navController.navigate(Screen.AddTransaction.createRoute()) },
+                onNavigateToTransaction    = { transactionId ->
+                    navController.navigate(Screen.AddTransaction.createRoute(transactionId))
+                },
                 onNavigateToHome           = {
                     navController.navigate(Screen.Dashboard.route) {
                         popUpTo(Screen.Dashboard.route) { inclusive = false }

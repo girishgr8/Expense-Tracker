@@ -91,6 +91,16 @@ data class BankAccount(
     val userId: String = ""
 )
 
+data class BalanceAdjustment(
+    val id: Long = 0,
+    val bankAccountId: Long,
+    val previousBalance: Double,
+    val newBalance: Double,
+    val amountDelta: Double,
+    val adjustedAt: LocalDateTime,
+    val userId: String = ""
+)
+
 /**
  * A payment mode linked to a [BankAccount] (or standalone for CASH/WALLET/OTHER).
  * Credit cards are NOT represented here — use [CreditCard] instead.

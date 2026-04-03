@@ -11,6 +11,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,8 +77,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -95,15 +96,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.R
+import com.expensetracker.domain.model.BalanceAdjustment
 import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.CreditCard
 import com.expensetracker.domain.model.PaymentMode
@@ -138,7 +142,7 @@ fun AccountsScreen(
     onNavigateToHome: () -> Unit = {},
     onNavigateToAnalysis: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToAddTransaction: () -> Unit,
+    onNavigateToTransaction: (Long) -> Unit,
     viewModel: AccountsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -156,11 +160,11 @@ fun AccountsScreen(
         bottomBar = {
             AppBottomBar(
                 currentRoute = "accounts",
-                onHome     = onNavigateToHome,
+                onHome = onNavigateToHome,
                 onAnalysis = onNavigateToAnalysis,
                 onAccounts = {},
                 onSettings = onNavigateToSettings,
-                onAddTransaction = onNavigateToAddTransaction
+                onAddTransaction = { onNavigateToTransaction(-1L) }
             )
         },
         topBar = {
@@ -439,6 +443,7 @@ fun AccountsScreen(
             title = detailTitle,
             balance = uiState.detailBalance,
             transactions = uiState.detailTransactions,
+            adjustments = uiState.detailAdjustments,
             currencySymbol = sym,
             isCard = uiState.selectedDetailCard != null,
             account = uiState.selectedDetailAccount,
@@ -483,7 +488,7 @@ fun AccountsScreen(
             onOpenCardTransactions = { viewModel.openCardTransactions(isCurrentCycle = false) },
             onOpenCurrentSpends = { viewModel.openCardTransactions(isCurrentCycle = true) },
             onCloseCardTransactions = viewModel::closeCardTransactions,
-            onNavigateToAddTransaction = onNavigateToAddTransaction
+            onNavigateToTransaction = onNavigateToTransaction
         )
     }
 }
@@ -645,6 +650,7 @@ private fun DetailScreen(
     title: String,
     balance: Double,
     transactions: List<Transaction>,
+    adjustments: List<BalanceAdjustment>,
     currencySymbol: String,
     isCard: Boolean,
     account: BankAccount?,
@@ -672,12 +678,17 @@ private fun DetailScreen(
     onOpenCardTransactions: () -> Unit,
     onOpenCurrentSpends: () -> Unit,
     onCloseCardTransactions: () -> Unit,
-    onNavigateToAddTransaction: () -> Unit
+    onNavigateToTransaction: (Long) -> Unit
 ) {
     // Intercept back when card transactions screen is open
     BackHandler(enabled = showCardTransactions) { onCloseCardTransactions() }
 
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember(account?.id, card?.id, title) { mutableIntStateOf(0) }
+    val tabs = if (account != null) {
+        listOf("All", "Credit", "Debit", "Adjustments")
+    } else {
+        listOf("All", "Credit", "Debit")
+    }
 
     val filteredTxns = when (selectedTab) {
         1 -> transactions.filter { it.type == TransactionType.INCOME }
@@ -686,6 +697,7 @@ private fun DetailScreen(
     }
 
     val dateFormatter = DateTimeFormatter.ofPattern("dd MMM")
+    val swipeThresholdPx = 72f
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -720,7 +732,7 @@ private fun DetailScreen(
                         Spacer(Modifier.width(8.dp))
                         // + → navigate to Add Transaction
                         IconButton(
-                            onClick = onNavigateToAddTransaction,
+                            onClick = { onNavigateToTransaction(-1L) },
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceContainer)
@@ -829,47 +841,112 @@ private fun DetailScreen(
                 }
             }
 
-            // ── Tabs ─────────────────────────────────────────────────────────
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.primary
-            ) {
-                listOf("All", "Credit", "Debit").forEachIndexed { idx, label ->
-                    Tab(
-                        selected = selectedTab == idx,
-                        onClick = { selectedTab = idx },
-                        text = {
-                            Text(
-                                label, fontWeight = if (selectedTab == idx)
-                                    FontWeight.Bold else FontWeight.Normal
-                            )
+            Column(
+                modifier = Modifier.pointerInput(tabs.size, selectedTab) {
+                    var totalHorizontalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { _, dragAmount ->
+                            totalHorizontalDrag += dragAmount
+                        },
+                        onDragEnd = {
+                            when {
+                                totalHorizontalDrag > swipeThresholdPx && selectedTab > 0 -> {
+                                    selectedTab -= 1
+                                }
+
+                                totalHorizontalDrag < -swipeThresholdPx && selectedTab < tabs.lastIndex -> {
+                                    selectedTab += 1
+                                }
+                            }
+                            totalHorizontalDrag = 0f
+                        },
+                        onDragCancel = {
+                            totalHorizontalDrag = 0f
                         }
                     )
                 }
-            }
-
-            if (filteredTxns.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "No transactions",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                // ── Tabs ─────────────────────────────────────────────────────
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    edgePadding = 2.dp
                 ) {
-                    items(filteredTxns, key = { it.id }) { txn ->
-                        DetailTransactionRow(txn, dateFormatter, currencySymbol)
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                            thickness = 0.5.dp
+                    tabs.forEachIndexed { idx, label ->
+                        Tab(
+                            selected = selectedTab == idx,
+                            onClick = { selectedTab = idx },
+                            text = {
+                                Text(
+                                    text = label,
+                                    fontWeight = if (selectedTab == idx) {
+                                        FontWeight.Bold
+                                    } else {
+                                        FontWeight.Normal
+                                    },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         )
                     }
-                    item { Spacer(Modifier.height(32.dp)) }
+                }
+
+                if (account != null && selectedTab == 3) {
+                    if (adjustments.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "No adjustments",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            items(adjustments, key = { it.id }) { adjustment ->
+                                BalanceAdjustmentRow(adjustment, dateFormatter, currencySymbol)
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                    thickness = 0.5.dp
+                                )
+                            }
+                            item { Spacer(Modifier.height(32.dp)) }
+                        }
+                    }
+                } else if (filteredTxns.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            "No transactions",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        items(filteredTxns, key = { it.id }) { txn ->
+                            DetailTransactionRow(
+                                txn = txn,
+                                dateFormatter = dateFormatter,
+                                currencySymbol = currencySymbol,
+                                onClick = { onNavigateToTransaction(txn.id) }
+                            )
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                thickness = 0.5.dp
+                            )
+                        }
+                        item { Spacer(Modifier.height(32.dp)) }
+                    }
                 }
             }
         }
@@ -926,6 +1003,45 @@ private fun DetailScreen(
                 onNavigateBack = onCloseCardTransactions
             )
         }
+    }
+}
+
+@Composable
+private fun BalanceAdjustmentRow(
+    adjustment: BalanceAdjustment,
+    dateFormatter: DateTimeFormatter,
+    currencySymbol: String
+) {
+    val amountColor = if (adjustment.amountDelta < 0) {
+        ExpenseRed
+    } else {
+        IncomeGreen
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            adjustment.adjustedAt.format(dateFormatter),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(20.dp))
+        Text(
+            "Balance Adjustment",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "${if (adjustment.amountDelta < 0) "-" else "+"}$currencySymbol${fmtAmt(abs(adjustment.amountDelta))}",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = amountColor
+        )
     }
 }
 
@@ -1834,7 +1950,8 @@ private fun PaymentModeIcon(
 private fun DetailTransactionRow(
     txn: Transaction,
     dateFormatter: DateTimeFormatter,
-    currencySymbol: String
+    currencySymbol: String,
+    onClick: () -> Unit
 ) {
     val isExpense = txn.type == TransactionType.EXPENSE
     val amountColor = if (isExpense) ExpenseRed else IncomeGreen
@@ -1844,20 +1961,21 @@ private fun DetailTransactionRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             txn.dateTime.format(dateFormatter),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(54.dp)
+            modifier = Modifier.width(60.dp)
         )
         Text(
             title,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.expensetracker.data.local.AppDatabase
 import com.expensetracker.data.local.dao.AttachmentDao
+import com.expensetracker.data.local.dao.BalanceAdjustmentDao
 import com.expensetracker.data.local.dao.BankAccountDao
 import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
@@ -15,6 +16,8 @@ import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
 import com.expensetracker.data.repository.AttachmentRepository
 import com.expensetracker.data.repository.AttachmentRepositoryImpl
+import com.expensetracker.data.repository.BalanceAdjustmentRepository
+import com.expensetracker.data.repository.BalanceAdjustmentRepositoryImpl
 import com.expensetracker.data.repository.BankAccountRepository
 import com.expensetracker.data.repository.BankAccountRepositoryImpl
 import com.expensetracker.data.repository.BudgetRepository
@@ -49,10 +52,37 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `balance_adjustments` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `bankAccountId` INTEGER NOT NULL,
+                    `previousBalance` REAL NOT NULL,
+                    `newBalance` REAL NOT NULL,
+                    `amountDelta` REAL NOT NULL,
+                    `adjustedAtMillis` INTEGER NOT NULL,
+                    `userId` TEXT NOT NULL,
+                    FOREIGN KEY(`bankAccountId`) REFERENCES `bank_accounts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_bankAccountId` " +
+                        "ON `balance_adjustments` (`bankAccountId`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_userId` " +
+                        "ON `balance_adjustments` (`userId`)"
+            )
+        }
+    }
+
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
-            .addMigrations(MIGRATION_3_4)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .build()
 
@@ -64,6 +94,10 @@ object DatabaseModule {
 
     @Provides
     fun provideBankAccountDao(db: AppDatabase): BankAccountDao = db.bankAccountDao()
+
+    @Provides
+    fun provideBalanceAdjustmentDao(db: AppDatabase): BalanceAdjustmentDao =
+        db.balanceAdjustmentDao()
 
     @Provides
     fun providePaymentModeDao(db: AppDatabase): PaymentModeDao = db.paymentModeDao()
@@ -109,6 +143,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBankAccountRepository(impl: BankAccountRepositoryImpl): BankAccountRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBalanceAdjustmentRepository(
+        impl: BalanceAdjustmentRepositoryImpl
+    ): BalanceAdjustmentRepository
 
     @Binds
     @Singleton

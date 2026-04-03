@@ -6,6 +6,7 @@ import android.util.Log
 import com.expensetracker.data.export.CsvExporter
 import com.expensetracker.data.export.PdfExporter
 import com.expensetracker.data.local.dao.AttachmentDao
+import com.expensetracker.data.local.dao.BalanceAdjustmentDao
 import com.expensetracker.data.local.dao.BankAccountDao
 import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
@@ -17,6 +18,7 @@ import com.expensetracker.data.local.entity.TransactionEntity
 import com.expensetracker.data.local.entity.toDomain
 import com.expensetracker.data.local.entity.toEntity
 import com.expensetracker.domain.model.Attachment
+import com.expensetracker.domain.model.BalanceAdjustment
 import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.Budget
 import com.expensetracker.domain.model.Category
@@ -95,6 +97,11 @@ interface BankAccountRepository {
     suspend fun insertAccount(account: BankAccount): Long
     suspend fun updateAccount(account: BankAccount)
     suspend fun deleteAccount(account: BankAccount)
+}
+
+interface BalanceAdjustmentRepository {
+    fun getAdjustmentsForAccount(bankAccountId: Long, userId: String): Flow<List<BalanceAdjustment>>
+    suspend fun insertAdjustment(adjustment: BalanceAdjustment): Long
 }
 
 interface PaymentModeRepository {
@@ -434,6 +441,22 @@ class BankAccountRepositoryImpl @Inject constructor(
 
     override suspend fun deleteAccount(account: BankAccount) =
         dao.deleteAccount(account.toEntity())
+}
+
+@Singleton
+class BalanceAdjustmentRepositoryImpl @Inject constructor(
+    private val dao: BalanceAdjustmentDao
+) : BalanceAdjustmentRepository {
+    override fun getAdjustmentsForAccount(
+        bankAccountId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustment>> =
+        dao.getAdjustmentsForAccount(bankAccountId, userId).map { list ->
+            list.map { it.toDomain() }
+        }
+
+    override suspend fun insertAdjustment(adjustment: BalanceAdjustment): Long =
+        dao.insertAdjustment(adjustment.toEntity())
 }
 
 @Singleton

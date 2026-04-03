@@ -45,6 +45,26 @@ data class BankAccountEntity(
     val userId: String
 )
 
+@Entity(
+    tableName = "balance_adjustments",
+    foreignKeys = [ForeignKey(
+        entity = BankAccountEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["bankAccountId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("bankAccountId"), Index("userId")]
+)
+data class BalanceAdjustmentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bankAccountId: Long,
+    val previousBalance: Double,
+    val newBalance: Double,
+    val amountDelta: Double,
+    val adjustedAtMillis: Long,
+    val userId: String
+)
+
 /**
  * A payment mode linked to a bank account (nullable for CASH/WALLET/standalone).
  * Credit cards are stored separately in [CreditCardEntity].

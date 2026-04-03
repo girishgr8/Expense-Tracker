@@ -3,11 +3,13 @@ package com.expensetracker.presentation.ui.accounts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
+import com.expensetracker.data.repository.BalanceAdjustmentRepository
 import com.expensetracker.data.repository.BankAccountRepository
 import com.expensetracker.data.repository.CreditCardRepository
 import com.expensetracker.data.repository.PaymentModeRepository
 import com.expensetracker.data.repository.TransactionRepository
 import com.expensetracker.data.repository.UserPreferencesRepository
+import com.expensetracker.domain.model.BalanceAdjustment
 import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.CreditCard
 import com.expensetracker.domain.model.PaymentMode
@@ -16,12 +18,14 @@ import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
@@ -51,6 +55,7 @@ data class AccountsUiState(
     val selectedDetailAccount: BankAccount? = null,
     val selectedDetailCard: CreditCard? = null,
     val detailTransactions: List<Transaction> = emptyList(),
+    val detailAdjustments: List<BalanceAdjustment> = emptyList(),
     val detailBalance: Double = 0.0,
     val detailLinkedModes: List<PaymentMode> = emptyList(),
     val showEditAccountSheet: Boolean = false,
@@ -64,6 +69,7 @@ data class AccountsUiState(
 @HiltViewModel
 class AccountsViewModel @Inject constructor(
     private val bankAccountRepository: BankAccountRepository,
+    private val balanceAdjustmentRepository: BalanceAdjustmentRepository,
     private val paymentModeRepository: PaymentModeRepository,
     private val creditCardRepository: CreditCardRepository,
     private val transactionRepository: TransactionRepository,
@@ -74,6 +80,7 @@ class AccountsViewModel @Inject constructor(
     private val userId get() = authManager.userId
     private val _uiState = MutableStateFlow(AccountsUiState())
     val uiState: StateFlow<AccountsUiState> = _uiState.asStateFlow()
+    private var detailAdjustmentsJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -142,6 +149,12 @@ class AccountsViewModel @Inject constructor(
     }
 
     fun openAccountDetail(account: BankAccount) {
+        detailAdjustmentsJob?.cancel()
+        detailAdjustmentsJob = viewModelScope.launch {
+            balanceAdjustmentRepository.getAdjustmentsForAccount(account.id, userId).collect { adjustments ->
+                _uiState.update { it.copy(detailAdjustments = adjustments) }
+            }
+        }
         viewModelScope.launch {
             // Collect all payment mode ids linked to this account
             val modeIds =
@@ -181,11 +194,14 @@ class AccountsViewModel @Inject constructor(
     }
 
     fun closeDetail() = _uiState.update {
+        detailAdjustmentsJob?.cancel()
+        detailAdjustmentsJob = null
         it.copy(
             selectedDetailMode = null,
             selectedDetailAccount = null,
             selectedDetailCard = null,
             detailTransactions = emptyList(),
+            detailAdjustments = emptyList(),
             detailBalance = 0.0,
             detailLinkedModes = emptyList(),
             showEditAccountSheet = false,
@@ -232,16 +248,29 @@ class AccountsViewModel @Inject constructor(
 
     fun saveEditedAccount(account: BankAccount, name: String, balance: Double) {
         viewModelScope.launch {
-            bankAccountRepository.updateAccount(account.copy(name = name, balance = balance))
+            val updatedAccount = account.copy(name = name, balance = balance)
+            val delta = balance - account.balance
+
+            bankAccountRepository.updateAccount(updatedAccount)
+            if (delta != 0.0) {
+                balanceAdjustmentRepository.insertAdjustment(
+                    BalanceAdjustment(
+                        bankAccountId = account.id,
+                        previousBalance = account.balance,
+                        newBalance = balance,
+                        amountDelta = delta,
+                        adjustedAt = LocalDateTime.now(),
+                        userId = userId
+                    )
+                )
+            }
             // Refresh linked modes for new detail state
             val linkedModes = _uiState.value.allModes.filter { it.bankAccountId == account.id }
             _uiState.update {
                 it.copy(
                     showEditAccountSheet = false,
                     detailBalance = balance,
-                    selectedDetailAccount = it.selectedDetailAccount?.copy(
-                        name = name, balance = balance
-                    ),
+                    selectedDetailAccount = updatedAccount,
                     detailLinkedModes = linkedModes
                 )
             }
