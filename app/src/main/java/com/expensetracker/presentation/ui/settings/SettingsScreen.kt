@@ -1,6 +1,8 @@
 package com.expensetracker.presentation.ui.settings
 
 import android.app.TimePickerDialog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +57,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -111,9 +115,20 @@ fun SettingsScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
     var showFormatSheet by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let(settingsViewModel::importTransactionsFromCsv) }
 
     LaunchedEffect(Unit) {
         exportViewModel.loadFilters()
+    }
+
+    LaunchedEffect(uiState.importTransactionsMessage) {
+        uiState.importTransactionsMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            settingsViewModel.clearImportTransactionsMessage()
+        }
     }
 
     if (showTimePicker) {
@@ -170,7 +185,9 @@ fun SettingsScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(bottomBar = {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
             AppBottomBar(
                 currentRoute = "settings",
                 onHome = onNavigateToHome,
@@ -546,7 +563,18 @@ fun SettingsScreen(
                             icon = Icons.Default.Download,
                             title = "Import Transactions",
                             subtitle = "Import data from a spreadsheet(.csv)"
-                        ) { }
+                        ) {
+                            if (uiState.isImportingTransactions) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            } else {
+                                IconButton(onClick = { importLauncher.launch("text/*") }) {
+                                    Icon(
+                                        Icons.Default.ChevronRight,
+                                        contentDescription = "Import Transactions"
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 

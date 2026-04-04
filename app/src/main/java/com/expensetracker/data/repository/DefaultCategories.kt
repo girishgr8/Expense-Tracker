@@ -21,7 +21,7 @@ object DefaultCategories {
         Category(name = "Subscriptions", icon = "subscriptions", colorHex = "#6D4C41", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Taxes", icon = "monetization_on", colorHex = "#C62828", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Gifts & Donation", icon = "card_gift_card", colorHex = "#EC407A", transactionType = TransactionType.EXPENSE, isDefault = true),
-        Category(name = "Other Expense", icon = "more_horiz", colorHex = "#9E9E9E", transactionType = TransactionType.EXPENSE, isDefault = true),
+        Category(name = "Others", icon = "more_horiz", colorHex = "#9E9E9E", transactionType = TransactionType.EXPENSE, isDefault = true),
 
         // Income categories
         Category(name = "Salary", icon = "work", colorHex = "#4CAF50", transactionType = TransactionType.INCOME, isDefault = true),
@@ -30,7 +30,7 @@ object DefaultCategories {
         Category(name = "Contribution", icon = "people", colorHex = "#009688", transactionType = TransactionType.INCOME, isDefault = true),
         Category(name = "Rental Income", icon = "house", colorHex = "#9C27B0", transactionType = TransactionType.INCOME, isDefault = true),
         Category(name = "Bonus", icon = "star", colorHex = "#FFC107", transactionType = TransactionType.INCOME, isDefault = true),
-        Category(name = "Other Income", icon = "attach_money", colorHex = "#009688", transactionType = TransactionType.INCOME, isDefault = true),
+        Category(name = "Others", icon = "more_horiz", colorHex = "#009688", transactionType = TransactionType.INCOME, isDefault = true),
 
         // Transfer
         Category(name = "Transfer", icon = "swap_horiz", colorHex = "#607D8B", transactionType = TransactionType.TRANSFER, isDefault = true),

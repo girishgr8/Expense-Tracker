@@ -103,6 +103,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -566,12 +567,18 @@ private fun AmountEntryRow(
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                 .padding(0.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Calculate,
+            Image(
+                painter = painterResource(id = R.drawable.ic_calculator_logo),
                 contentDescription = "Calculator",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(28.dp),
+                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
             )
+//            Icon(
+//                imageVector = Icons.Default.Calculate,
+//                contentDescription = "Calculator",
+//                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+//                modifier = Modifier.size(24.dp)
+//            )
         }
     }
 }

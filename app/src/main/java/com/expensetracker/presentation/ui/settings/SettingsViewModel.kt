@@ -1,17 +1,24 @@
 package com.expensetracker.presentation.ui.settings
 
+import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
 import com.expensetracker.data.repository.CategoryRepository
+import com.expensetracker.data.repository.CreditCardRepository
 import com.expensetracker.data.repository.PaymentModeRepository
+import com.expensetracker.data.repository.TransactionRepository
 import com.expensetracker.data.repository.UserPreferencesRepository
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.PaymentMode
+import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.util.DriveBackupScheduler
+import com.opencsv.CSVReader
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,10 +26,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.InputStreamReader
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -59,7 +69,9 @@ data class SettingsUiState(
     val isCheckingBackup: Boolean = false,
     val isRestoring: Boolean = false,
     val restoreError: String? = null,
-    val restoreSuccess: Boolean = false
+    val restoreSuccess: Boolean = false,
+    val isImportingTransactions: Boolean = false,
+    val importTransactionsMessage: String? = null
 )
 
 @HiltViewModel
@@ -68,7 +80,10 @@ class SettingsViewModel @Inject constructor(
     private val authManager: AuthManager,
     private val driveBackupScheduler: DriveBackupScheduler,
     private val categoryRepository: CategoryRepository,
-    private val paymentModeRepository: PaymentModeRepository
+    private val paymentModeRepository: PaymentModeRepository,
+    private val creditCardRepository: CreditCardRepository,
+    private val transactionRepository: TransactionRepository,
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -291,4 +306,162 @@ class SettingsViewModel @Inject constructor(
     fun logout() = viewModelScope.launch {
         authManager.signOut()
     }
+
+    fun importTransactionsFromCsv(uri: Uri) = viewModelScope.launch {
+        _uiState.update { it.copy(isImportingTransactions = true, importTransactionsMessage = null) }
+        runCatching {
+            val userId = authManager.userId
+            val categories = categoryRepository.getAllCategories(userId).first()
+            val paymentModes = paymentModeRepository.getAllModes(userId).first()
+            val creditCards = creditCardRepository.getAllCards(userId).first()
+            val imported = parseTransactionsFromCsv(uri, userId, categories, paymentModes, creditCards)
+            imported.forEach { transactionRepository.insertTransaction(it) }
+            imported.size
+        }.onSuccess { count ->
+            _uiState.update {
+                it.copy(
+                    isImportingTransactions = false,
+                    importTransactionsMessage = if (count == 1) {
+                        "Imported 1 transaction"
+                    } else {
+                        "Imported $count transactions"
+                    }
+                )
+            }
+        }.onFailure { error ->
+            _uiState.update {
+                it.copy(
+                    isImportingTransactions = false,
+                    importTransactionsMessage = error.message ?: "Failed to import transactions"
+                )
+            }
+        }
+    }
+
+    fun clearImportTransactionsMessage() {
+        _uiState.update { it.copy(importTransactionsMessage = null) }
+    }
+
+    private fun parseTransactionsFromCsv(
+        uri: Uri,
+        userId: String,
+        categories: List<Category>,
+        paymentModes: List<PaymentMode>,
+        creditCards: List<com.expensetracker.domain.model.CreditCard>
+    ): List<Transaction> {
+        val rows = mutableListOf<Transaction>()
+        val formatter = DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendPattern("yyyy-MM-dd H:mm")
+            .toFormatter(Locale.getDefault())
+
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            CSVReader(InputStreamReader(input)).use { reader ->
+                val header = reader.readNext()?.map { it.trim() }.orEmpty()
+                require(header.isNotEmpty()) { "CSV header is missing" }
+                val index = header.withIndex().associate { it.value.lowercase() to it.index }
+
+                fun cell(row: Array<String>, name: String): String =
+                    index[name.lowercase()]?.let { row.getOrNull(it) }?.trim().orEmpty()
+
+                generateSequence { reader.readNext() }.forEach { row ->
+                    if (row.all { it.isBlank() }) return@forEach
+
+                    val type = parseTransactionType(cell(row, "type")) ?: return@forEach
+                    val category = resolveCategory(
+                        requestedName = cell(row, "Category"),
+                        type = type,
+                        categories = categories
+                    ) ?: return@forEach
+
+                    val amount = cell(row, "Amount").replace(",", "").toDoubleOrNull() ?: return@forEach
+                    val dateTime = LocalDateTime.parse(cell(row, "Date"), formatter)
+
+                    val fromMatch = resolvePaymentMatch(cell(row, "Payment mode"), paymentModes, creditCards)
+                    val toMatch = resolvePaymentMatch(cell(row, "To payment mode"), paymentModes, creditCards)
+                    val tags = cell(row, "Tags")
+                        .split(Regex("\\s+"))
+                        .map { it.trim().trimStart('#').lowercase() }
+                        .filter { it.isNotBlank() }
+
+                    rows += Transaction(
+                        type = type,
+                        amount = amount,
+                        categoryId = category.id,
+                        categoryName = category.name,
+                        categoryIcon = category.icon,
+                        categoryColorHex = category.colorHex,
+                        paymentModeId = fromMatch.mode?.id,
+                        creditCardId = fromMatch.card?.id,
+                        paymentModeName = fromMatch.label,
+                        toPaymentModeId = toMatch.mode?.id,
+                        toCreditCardId = toMatch.card?.id,
+                        toPaymentModeName = toMatch.label,
+                        note = cell(row, "Note"),
+                        dateTime = dateTime,
+                        tags = tags,
+                        attachments = emptyList(),
+                        userId = userId
+                    )
+                }
+            }
+        } ?: error("Unable to open selected CSV file")
+
+        return rows
+    }
+
+    private fun parseTransactionType(raw: String): TransactionType? = when (raw.trim().uppercase()) {
+        "EXPENSE" -> TransactionType.EXPENSE
+        "INCOME" -> TransactionType.INCOME
+        "TRANSFER" -> TransactionType.TRANSFER
+        else -> null
+    }
+
+    private fun resolveCategory(
+        requestedName: String,
+        type: TransactionType,
+        categories: List<Category>
+    ): Category? {
+        val normalized = requestedName.normalizeLookup()
+        return categories.firstOrNull {
+            it.name.normalizeLookup() == normalized &&
+                    (it.transactionType == type || it.transactionType == null)
+        } ?: categories.firstOrNull {
+            it.name.normalizeLookup() == "others" &&
+                    (it.transactionType == type || it.transactionType == null)
+        }
+    }
+
+    private data class PaymentImportMatch(
+        val mode: PaymentMode? = null,
+        val card: com.expensetracker.domain.model.CreditCard? = null,
+        val label: String = ""
+    )
+
+    private fun resolvePaymentMatch(
+        raw: String,
+        paymentModes: List<PaymentMode>,
+        creditCards: List<com.expensetracker.domain.model.CreditCard>
+    ): PaymentImportMatch {
+        val normalized = raw.normalizeLookup()
+        if (normalized.isBlank()) return PaymentImportMatch()
+
+        paymentModes.firstOrNull { mode ->
+            listOf(
+                mode.displayLabel,
+                mode.bankAccountName,
+                mode.identifier,
+                mode.type.displayName()
+            ).any { it.normalizeLookup() == normalized }
+        }?.let { return PaymentImportMatch(mode = it, label = it.displayLabel) }
+
+        creditCards.firstOrNull { card ->
+            card.name.normalizeLookup() == normalized || card.displayLabel.normalizeLookup() == normalized
+        }?.let { return PaymentImportMatch(card = it, label = it.displayLabel) }
+
+        return PaymentImportMatch(label = raw.trim())
+    }
+
+    private fun String.normalizeLookup(): String =
+        trim().lowercase().replace(Regex("\\s+"), " ")
 }
