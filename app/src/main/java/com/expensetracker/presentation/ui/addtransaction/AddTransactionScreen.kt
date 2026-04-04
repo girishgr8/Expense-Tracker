@@ -165,6 +165,12 @@ fun AddTransactionScreen(
         }
     }
 
+    val fieldAccent = remember(uiState.selectedCategory) {
+        uiState.selectedCategory?.let { category ->
+            runCatching { Color(category.colorHex.toColorInt()) }.getOrDefault(AccentOrange)
+        } ?: AccentOrange
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -212,18 +218,21 @@ fun AddTransactionScreen(
 
             TransactionDateTimeRow(
                 dateTime = uiState.dateTime,
+                accentColor = fieldAccent,
                 onDateClick = { showDatePicker = true },
                 onTimeClick = { showTimePicker = true }
             )
 
             AmountEntryRow(
                 amount = uiState.amount,
+                accentColor = fieldAccent,
                 onAmountChange = viewModel::setAmount,
                 onOpenCalculator = { showCalculator = true }
             )
 
             CategorySelectionRow(
                 category = uiState.selectedCategory,
+                accentColor = fieldAccent,
                 onClick = { showCategorySheet = true }
             )
 
@@ -232,6 +241,7 @@ fun AddTransactionScreen(
                 value = uiState.selectedPaymentOption?.let(::paymentOptionHeadline).orEmpty(),
                 supporting = uiState.selectedPaymentOption?.let(::paymentOptionSupportingText),
                 icon = paymentOptionIcon(uiState.selectedPaymentOption),
+                accentColor = fieldAccent,
                 placeholder = "Select payment mode",
                 onClick = { paymentSheetTarget = PaymentSheetTarget.FROM }
             )
@@ -243,6 +253,7 @@ fun AddTransactionScreen(
                     value = uiState.selectedToPaymentOption?.let(::paymentOptionHeadline).orEmpty(),
                     supporting = uiState.selectedToPaymentOption?.let(::paymentOptionSupportingText),
                     icon = paymentOptionIcon(uiState.selectedToPaymentOption),
+                    accentColor = fieldAccent,
                     placeholder = "Select destination account",
                     onClick = { paymentSheetTarget = PaymentSheetTarget.TO }
                 )
@@ -256,11 +267,16 @@ fun AddTransactionScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            SeamlessNoteField(note = uiState.note, onNoteChange = viewModel::setNote)
+            SeamlessNoteField(
+                note = uiState.note,
+                accentColor = fieldAccent,
+                onNoteChange = viewModel::setNote
+            )
 
             SeamlessTagsSection(
                 tags = uiState.tags,
                 suggestions = uiState.tagSuggestions,
+                accentColor = fieldAccent,
                 onAddTag = viewModel::addTag,
                 onRemoveTag = viewModel::removeTag,
                 onSearchTag = viewModel::searchTags
@@ -269,6 +285,7 @@ fun AddTransactionScreen(
             // Fix 3: single attachment, image preview, proper PDF display
             SeamlessAttachmentRow(
                 attachment = uiState.attachments.firstOrNull(),
+                accentColor = fieldAccent,
                 onPickAttachment = {
                     // MIME filter: only PDF + images
                     fileLauncher.launch("*/*")
@@ -424,6 +441,7 @@ private val AccentOrange = Color(0xFFFF9F2E)
 @Composable
 private fun TransactionDateTimeRow(
     dateTime: LocalDateTime,
+    accentColor: Color,
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit
 ) {
@@ -438,11 +456,13 @@ private fun TransactionDateTimeRow(
         DateTimeInlineField(
             icon = Icons.Default.CalendarMonth,
             value = dateTime.format(dateFmt),
+            accentColor = accentColor,
             onClick = onDateClick
         )
         DateTimeInlineField(
             icon = Icons.Default.Schedule,
             value = dateTime.format(timeFmt).uppercase(),
+            accentColor = accentColor,
             onClick = onTimeClick
         )
     }
@@ -453,6 +473,7 @@ private fun DateTimeInlineField(
     modifier: Modifier = Modifier,
     icon: ImageVector,
     value: String,
+    accentColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -465,7 +486,7 @@ private fun DateTimeInlineField(
         Icon(
             imageVector = icon,
             contentDescription = "Date/Time Field",
-            tint = AccentOrange,
+            tint = accentColor,
             modifier = Modifier.size(22.dp)
         )
         Spacer(Modifier.width(16.dp))
@@ -485,6 +506,7 @@ private fun DateTimeInlineField(
 @Composable
 private fun AmountEntryRow(
     amount: String,
+    accentColor: Color,
     onAmountChange: (String) -> Unit,
     onOpenCalculator: () -> Unit
 ) {
@@ -495,7 +517,7 @@ private fun AmountEntryRow(
         Text(
             text = "₹",
             style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp),
-            color = AccentOrange,
+            color = accentColor,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.width(16.dp))
@@ -557,6 +579,7 @@ private fun AmountEntryRow(
 @Composable
 private fun CategorySelectionRow(
     category: Category?,
+    accentColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -568,12 +591,17 @@ private fun CategorySelectionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (category != null) {
-            CategoryIconBubble(category = category, size = 36)
+            Icon(
+                imageVector = com.expensetracker.presentation.ui.categories.CategoryIcons.get(category.icon),
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(26.dp)
+            )
         } else {
             Icon(
                 imageVector = Icons.Default.Category,
                 contentDescription = null,
-                tint = AccentOrange,
+                tint = accentColor,
                 modifier = Modifier.size(26.dp)
             )
         }
@@ -644,6 +672,7 @@ private fun PaymentSelectorField(
     value: String,
     supporting: String?,
     icon: ImageVector,
+    accentColor: Color,
     placeholder: String,
     onClick: () -> Unit
 ) {
@@ -659,7 +688,7 @@ private fun PaymentSelectorField(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = accentColor,
             modifier = Modifier.size(24.dp)
         )
         Spacer(Modifier.width(16.dp))
@@ -1919,8 +1948,12 @@ private fun maskIdentifier(value: String): String {
 // ─── Seamless Note Field ──────────────────────────────────────────────────────
 
 @Composable
-private fun SeamlessNoteField(note: String, onNoteChange: (String) -> Unit) {
-    val accent = MaterialTheme.colorScheme.primary
+private fun SeamlessNoteField(
+    note: String,
+    accentColor: Color,
+    onNoteChange: (String) -> Unit
+) {
+    val accent = accentColor
     val onSurface = MaterialTheme.colorScheme.onSurface
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
@@ -1963,12 +1996,13 @@ private fun SeamlessNoteField(note: String, onNoteChange: (String) -> Unit) {
 private fun SeamlessTagsSection(
     tags: List<String>,
     suggestions: List<Tag>,
+    accentColor: Color,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
     onSearchTag: (String) -> Unit
 ) {
     var tagInput by remember { mutableStateOf("") }
-    val accent = MaterialTheme.colorScheme.primary
+    val accent = accentColor
     val onSurface = MaterialTheme.colorScheme.onSurface
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
@@ -2071,10 +2105,11 @@ private fun PillTagChip(tag: String, onRemove: () -> Unit) {
 @Composable
 private fun SeamlessAttachmentRow(
     attachment: Attachment?,
+    accentColor: Color,
     onPickAttachment: () -> Unit,
     onRemoveAttachment: () -> Unit
 ) {
-    val accent = MaterialTheme.colorScheme.primary
+    val accent = accentColor
 
     Column {
         // Tap row — shown always if no attachment yet, or if we want to replace
