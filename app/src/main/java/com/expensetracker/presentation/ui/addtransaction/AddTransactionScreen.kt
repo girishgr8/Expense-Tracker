@@ -758,7 +758,7 @@ private fun PaymentOptionSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 960.dp)
+                .heightIn(max = 720.dp)
                 .padding(bottom = 20.dp)
         ) {
             Row(

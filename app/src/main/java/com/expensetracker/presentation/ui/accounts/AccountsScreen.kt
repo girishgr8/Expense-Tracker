@@ -2020,22 +2020,37 @@ private fun PaymentModeIcon(
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.onPrimaryContainer
 ) {
-    if (type == PaymentModeType.UPI) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_upi_logo),
-            contentDescription = "UPI",
-            modifier = modifier
-        )
-    } else {
-        val icon = when (type) {
-            PaymentModeType.DEBIT_CARD -> Icons.Default.CreditCard
-            PaymentModeType.NET_BANKING -> Icons.Default.Language
-            PaymentModeType.CHEQUE -> Icons.Default.EditNote
-            PaymentModeType.CASH -> Icons.Default.Payments
-            PaymentModeType.WALLET -> Icons.Default.AccountBalanceWallet
-            else -> Icons.Default.Payment
+    when (type) {
+        PaymentModeType.UPI -> {
+            Image(
+                painter = painterResource(id = R.drawable.ic_upi_logo),
+                contentDescription = "UPI",
+                modifier = modifier
+            )
         }
-        Icon(icon, contentDescription = null, modifier = modifier, tint = tint)
+        PaymentModeType.DEBIT_CARD -> {
+            Image(
+                painter = painterResource(id = R.drawable.ic_payment_card_logo),
+                contentDescription = "Debit Card",
+                modifier = modifier
+            )
+        }
+        PaymentModeType.WALLET -> {
+            Image(
+                painter = painterResource(id = R.drawable.ic_wallet_logo),
+                contentDescription = "Wallet",
+                modifier = modifier
+            )
+        }
+        else -> {
+            val icon = when (type) {
+                PaymentModeType.NET_BANKING -> Icons.Default.Language
+                PaymentModeType.CHEQUE -> Icons.Default.EditNote
+                PaymentModeType.CASH -> Icons.Default.Payments
+                else -> Icons.Default.Payment
+            }
+            Icon(icon, contentDescription = null, modifier = modifier, tint = tint)
+        }
     }
 }
 
