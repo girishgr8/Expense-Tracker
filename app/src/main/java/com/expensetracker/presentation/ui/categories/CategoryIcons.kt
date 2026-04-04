@@ -121,6 +121,7 @@ object CategoryIcons {
         "laptop"              to Icons.Default.Laptop,
         "star"                to Icons.Default.Star,
         "monetization_on"     to Icons.Default.MonetizationOn,
+        "card_gift_card"      to Icons.Default.CardGiftcard,
 
         // ── Insurance & Protection ───────────────────────────────────────────
         "shield"              to Icons.Default.Shield,
@@ -183,7 +184,8 @@ object CategoryIcons {
         "Finance & Work" to listOf(
             "work", "business_center", "account_balance", "trending_up",
             "savings", "paid", "attach_money", "currency_rupee",
-            "currency_bitcoin", "laptop", "star", "real_estate_agent", "monetization_on"
+            "currency_bitcoin", "laptop", "star", "real_estate_agent",
+            "monetization_on", "card_gift_card"
         ),
         "Insurance" to listOf(
             "shield", "security", "verified_user", "health_and_safety"

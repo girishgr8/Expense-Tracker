@@ -372,8 +372,8 @@ fun AccountsScreen(
         AddAccountSheet(
             currencySymbol = uiState.currencySymbol,
             onDismiss = viewModel::closeAddSheet,
-            onSaveBank = { name, balance, colorHex, modes ->
-                viewModel.saveAccountWithModes(name, balance, colorHex, modes)
+            onSaveBank = { name, balance, colorHex, accountIdentifier, modes ->
+                viewModel.saveAccountWithModes(name, balance, colorHex, accountIdentifier, modes)
             },
             onSaveWallet = { identifier ->
                 viewModel.saveMode(null, PaymentModeType.WALLET, identifier)
@@ -474,8 +474,8 @@ fun AccountsScreen(
                     viewModel.closeEditCardSheet()
                 }
             },
-            onSaveEditAccount = { acc, name, bal ->
-                viewModel.saveEditedAccount(acc, name, bal)
+            onSaveEditAccount = { acc, name, bal, modes ->
+                viewModel.saveEditedAccount(acc, name, bal, modes)
             },
             onSaveEditModeBalance = { mode, balance ->
                 viewModel.saveEditedModeBalance(mode, balance)
@@ -487,9 +487,6 @@ fun AccountsScreen(
             onDeleteCard = { card ->
                 viewModel.deleteCreditCard(card)
                 viewModel.closeDetail()
-            },
-            onLinkMode = { accId, type, id ->
-                viewModel.addModeToAccount(accId, type, id)
             },
             onDeleteMode = viewModel::deleteModeFromDetail,
             onOpenCardTransactions = { viewModel.openCardTransactions(isCurrentCycle = false) },
@@ -681,11 +678,10 @@ private fun DetailScreen(
     onCloseEditLimitSheet: () -> Unit,
     onSaveCardAvailableLimit: (CreditCard, Double) -> Unit,
     onSaveEditCard: (String, Double, Double, Int, Int, String) -> Unit,
-    onSaveEditAccount: (BankAccount, String, Double) -> Unit,
+    onSaveEditAccount: (BankAccount, String, Double, List<PaymentMode>) -> Unit,
     onSaveEditModeBalance: (PaymentMode, Double) -> Unit,
     onDeleteAccount: (BankAccount) -> Unit,
     onDeleteCard: (CreditCard) -> Unit,
-    onLinkMode: (Long, PaymentModeType, String) -> Unit,
     onDeleteMode: (PaymentMode) -> Unit,
     onOpenCardTransactions: () -> Unit,
     onOpenCurrentSpends: () -> Unit,
@@ -989,9 +985,8 @@ private fun DetailScreen(
             account = account,
             linkedModes = linkedModes,
             onDismiss = onCloseEditSheet,
-            onSave = { name, bal -> onSaveEditAccount(account, name, bal) },
+            onSave = { name, bal, modes -> onSaveEditAccount(account, name, bal, modes) },
             onDelete = { onDeleteAccount(account) },
-            onAddMode = { type, id -> onLinkMode(account.id, type, id) },
             onDeleteMode = onDeleteMode
         )
     }
@@ -1646,17 +1641,20 @@ private fun EditAccountSheet(
     account: BankAccount,
     linkedModes: List<PaymentMode>,
     onDismiss: () -> Unit,
-    onSave: (name: String, balance: Double) -> Unit,
+    onSave: (name: String, balance: Double, linkedModes: List<PaymentMode>) -> Unit,
     onDelete: () -> Unit,
-    onAddMode: (PaymentModeType, String) -> Unit,
     onDeleteMode: (PaymentMode) -> Unit
 ) {
     var editName by remember(account) { mutableStateOf(account.name) }
     var editBalance by remember(account) { mutableStateOf(account.balance.toString()) }
+    var localLinkedModes by remember(account.id, linkedModes) { mutableStateOf(linkedModes) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showModeAddRow by remember { mutableStateOf(false) }
     var newModeType by remember { mutableStateOf(PaymentModeType.DEBIT_CARD) }
     var newModeId by remember { mutableStateOf("") }
+    var tempModeIdSeed by remember(account.id) { mutableStateOf(-1L) }
+    var editingMode by remember { mutableStateOf<PaymentMode?>(null) }
+    var modePendingDelete by remember { mutableStateOf<PaymentMode?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1820,7 +1818,7 @@ private fun EditAccountSheet(
                 Spacer(Modifier.height(8.dp))
 
                 // Existing linked modes
-                linkedModes.forEach { mode ->
+                localLinkedModes.forEach { mode ->
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -1844,7 +1842,7 @@ private fun EditAccountSheet(
                             overflow = TextOverflow.Ellipsis
                         )
                         // Edit mode button — no background, no fixed size clip, just plain IconButton
-                        IconButton(onClick = { /* future: edit mode inline */ }) {
+                        IconButton(onClick = { editingMode = mode }) {
                             Icon(
                                 Icons.Default.Edit, "Edit",
                                 Modifier.size(18.dp),
@@ -1852,7 +1850,7 @@ private fun EditAccountSheet(
                             )
                         }
                         // Delete mode button
-                        IconButton(onClick = { onDeleteMode(mode) }) {
+                        IconButton(onClick = { modePendingDelete = mode }) {
                             Icon(
                                 Icons.Default.Delete, "Delete",
                                 Modifier.size(18.dp),
@@ -1905,7 +1903,14 @@ private fun EditAccountSheet(
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
                             TextButton(onClick = {
-                                onAddMode(newModeType, newModeId.trim())
+                                localLinkedModes = localLinkedModes + PaymentMode(
+                                    id = tempModeIdSeed,
+                                    bankAccountId = account.id,
+                                    type = newModeType,
+                                    identifier = newModeId.trim(),
+                                    userId = account.userId
+                                )
+                                tempModeIdSeed -= 1
                                 newModeId = ""; showModeAddRow = false
                             }) { Text("Add") }
                         }
@@ -1923,7 +1928,7 @@ private fun EditAccountSheet(
                 Button(
                     onClick = {
                         val bal = editBalance.toDoubleOrNull() ?: account.balance
-                        if (editName.isNotBlank()) onSave(editName, bal)
+                        if (editName.isNotBlank()) onSave(editName, bal, localLinkedModes)
                     },
                     enabled = editName.isNotBlank(),
                     shape = RoundedCornerShape(24.dp),
@@ -1954,6 +1959,54 @@ private fun EditAccountSheet(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (editingMode != null) {
+        AddEditPaymentModeDialog(
+            editing = editingMode,
+            accounts = listOf(account),
+            preselectedAccountId = account.id,
+            onDismiss = { editingMode = null },
+            onSave = { _, type, identifier ->
+                localLinkedModes = localLinkedModes.map { mode ->
+                    if (mode.id == editingMode?.id) {
+                        mode.copy(type = type, identifier = identifier)
+                    } else {
+                        mode
+                    }
+                }
+                editingMode = null
+            }
+        )
+    }
+
+    if (modePendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = { modePendingDelete = null },
+            title = { Text("Delete Payment Mode") },
+            text = {
+                Text(
+                    "Delete ${modePendingDelete?.type?.displayName()}${
+                        modePendingDelete?.identifier?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
+                    } from this account?"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        modePendingDelete?.let { mode ->
+                            localLinkedModes = localLinkedModes.filter { it.id != mode.id }
+                        }
+                        modePendingDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { modePendingDelete = null }) { Text("Cancel") }
             }
         )
     }
@@ -2038,7 +2091,7 @@ private fun AddAccountSheet(
     currencySymbol: String,
     onDismiss: () -> Unit,
     onSaveBank: (
-        name: String, balance: Double, colorHex: String,
+        name: String, balance: Double, colorHex: String, accountIdentifier: String,
         modes: List<Pair<PaymentModeType, String>>
     ) -> Unit,
     onSaveWallet: (identifier: String) -> Unit,
@@ -2053,6 +2106,7 @@ private fun AddAccountSheet(
     // ── Bank Account state ────────────────────────────────────────────────────
     var bankName by remember { mutableStateOf("") }
     var bankBalance by remember { mutableStateOf("") }
+    var bankAccountLastFour by remember { mutableStateOf("") }
     var pendingModes by remember { mutableStateOf<List<Pair<PaymentModeType, String>>>(emptyList()) }
     var showModeAddRow by remember { mutableStateOf(false) }
     var newModeType by remember { mutableStateOf(PaymentModeType.DEBIT_CARD) }
@@ -2247,6 +2301,50 @@ private fun AddAccountSheet(
                             )
                         }
 
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Bank Account Last 4 Digits",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "#",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Light,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            BasicTextField(
+                                value = bankAccountLastFour,
+                                onValueChange = { input ->
+                                    bankAccountLastFour = input.filter { it.isDigit() }.take(4)
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(vertical = 12.dp),
+                                textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                decorationBox = { inner ->
+                                    if (bankAccountLastFour.isEmpty()) {
+                                        Text(
+                                            "1234",
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                .copy(alpha = 0.4f)
+                                        )
+                                    }
+                                    inner()
+                                }
+                            )
+                        }
+
                         Spacer(Modifier.height(20.dp))
 
                         // Linked payment modes section
@@ -2272,6 +2370,37 @@ private fun AddAccountSheet(
                         }
 
                         Spacer(Modifier.height(8.dp))
+
+                        val autoLinkedModeIdentifier = bankAccountLastFour
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            PaymentModeIcon(
+                                type = PaymentModeType.NET_BANKING,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                "Bank Account" +
+                                    if (autoLinkedModeIdentifier.isNotEmpty()) " (${autoLinkedModeIdentifier})" else "",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Default",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                            thickness = 0.5.dp
+                        )
 
                         if (pendingModes.isEmpty() && !showModeAddRow) {
                             // Empty state matching image
@@ -2403,21 +2532,24 @@ private fun AddAccountSheet(
                             ) { Text("Cancel") }
                         }
 
-                        Spacer(Modifier.height(88.dp))  // room for Save button
-                    }
-
-                    // Save button pinned to bottom
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
-                        contentAlignment = Alignment.CenterEnd
-                    ) {
+                        Spacer(Modifier.height(24.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
                         Button(
                             onClick = {
                                 val bal = bankBalance.toDoubleOrNull() ?: 0.0
                                 if (bankName.isNotBlank())
-                                    onSaveBank(bankName, bal, "#6750A4", pendingModes)
+                                    onSaveBank(
+                                        bankName,
+                                        bal,
+                                        "#6750A4",
+                                        bankAccountLastFour,
+                                        pendingModes
+                                    )
                             },
                             enabled = bankName.isNotBlank(),
                             shape = RoundedCornerShape(24.dp),
@@ -2430,6 +2562,8 @@ private fun AddAccountSheet(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                        }
+                        Spacer(Modifier.height(16.dp))
                     }
                 }
 

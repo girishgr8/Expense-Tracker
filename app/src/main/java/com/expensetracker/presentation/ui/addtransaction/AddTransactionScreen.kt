@@ -2,8 +2,10 @@ package com.expensetracker.presentation.ui.addtransaction
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,8 +43,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tag
@@ -59,7 +63,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -67,6 +74,7 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -77,22 +85,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.expensetracker.R
 import com.expensetracker.domain.model.Attachment
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.PaymentOption
+import com.expensetracker.domain.model.PaymentModeType
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.theme.AppTypography
@@ -113,6 +126,7 @@ fun AddTransactionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var paymentSheetTarget by remember { mutableStateOf<PaymentSheetTarget?>(null) }
 
     // Accepts only PDF and images
     val fileLauncher = rememberLauncherForActivityResult(
@@ -209,34 +223,25 @@ fun AddTransactionScreen(
                 )
             }
 
-            // Payment Account Selector
-            SelectorField(
-                label = if (uiState.transactionType == TransactionType.TRANSFER) "From Account" else "Payment Account",
-                value = uiState.selectedPaymentOption?.displayLabel ?: "",
-                icon = Icons.Default.AccountBalance,
-                placeholder = "Select Account"
-            ) { dismiss ->
-                PaymentOptionDropdown(
-                    options = uiState.paymentOptions,
-                    selected = uiState.selectedPaymentOption,
-                    onSelect = { opt -> viewModel.setPaymentOption(opt); dismiss() }
-                )
-            }
+            PaymentSelectorField(
+                label = if (uiState.transactionType == TransactionType.TRANSFER) "From Account" else "Payment mode",
+                value = uiState.selectedPaymentOption?.let(::paymentOptionHeadline).orEmpty(),
+                supporting = uiState.selectedPaymentOption?.let(::paymentOptionSupportingText),
+                icon = paymentOptionIcon(uiState.selectedPaymentOption),
+                placeholder = "Select payment mode",
+                onClick = { paymentSheetTarget = PaymentSheetTarget.FROM }
+            )
 
             // To Account (Transfer only)
             if (uiState.transactionType == TransactionType.TRANSFER) {
-                SelectorField(
+                PaymentSelectorField(
                     label = "To Account",
-                    value = uiState.selectedToPaymentOption?.displayLabel ?: "",
-                    icon = Icons.Default.AccountBalance,
-                    placeholder = "Select Destination Account"
-                ) { dismiss ->
-                    PaymentOptionDropdown(
-                        options = uiState.paymentOptions.filter { it.id != uiState.selectedPaymentOption?.id },
-                        selected = uiState.selectedToPaymentOption,
-                        onSelect = { opt -> viewModel.setToPaymentOption(opt); dismiss() }
-                    )
-                }
+                    value = uiState.selectedToPaymentOption?.let(::paymentOptionHeadline).orEmpty(),
+                    supporting = uiState.selectedToPaymentOption?.let(::paymentOptionSupportingText),
+                    icon = paymentOptionIcon(uiState.selectedToPaymentOption),
+                    placeholder = "Select destination account",
+                    onClick = { paymentSheetTarget = PaymentSheetTarget.TO }
+                )
             }
 
             // ── Other Details ─────────────────────────────────────────────────
@@ -291,6 +296,44 @@ fun AddTransactionScreen(
 
             Spacer(Modifier.height(32.dp))
         }
+    }
+
+    val sheetOptions = when (paymentSheetTarget) {
+        PaymentSheetTarget.FROM -> uiState.paymentOptions
+        PaymentSheetTarget.TO -> uiState.paymentOptions.filterNot {
+            samePaymentOption(it, uiState.selectedPaymentOption)
+        }
+        null -> emptyList()
+    }
+    val selectedSheetOption = when (paymentSheetTarget) {
+        PaymentSheetTarget.FROM -> uiState.selectedPaymentOption
+        PaymentSheetTarget.TO -> uiState.selectedToPaymentOption
+        null -> null
+    }
+
+    if (paymentSheetTarget != null) {
+        PaymentOptionSheet(
+            title = when (paymentSheetTarget) {
+                PaymentSheetTarget.FROM -> if (uiState.transactionType == TransactionType.TRANSFER) {
+                    "Select From Account"
+                } else {
+                    "Select Payment Mode"
+                }
+                PaymentSheetTarget.TO -> "Select Destination Account"
+                null -> ""
+            },
+            options = sheetOptions,
+            selected = selectedSheetOption,
+            onSelect = { option ->
+                when (paymentSheetTarget) {
+                    PaymentSheetTarget.FROM -> viewModel.setPaymentOption(option)
+                    PaymentSheetTarget.TO -> viewModel.setToPaymentOption(option)
+                    null -> Unit
+                }
+                paymentSheetTarget = null
+            },
+            onDismiss = { paymentSheetTarget = null }
+        )
     }
 }
 
@@ -507,6 +550,70 @@ private fun SelectorField(
     }
 }
 
+private enum class PaymentSheetTarget { FROM, TO }
+
+@Composable
+private fun PaymentSelectorField(
+    label: String,
+    value: String,
+    supporting: String?,
+    icon: ImageVector,
+    placeholder: String,
+    onClick: () -> Unit
+) {
+    val hasValue = value.isNotBlank()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (hasValue) value else placeholder,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (hasValue) FontWeight.Medium else FontWeight.Normal,
+                color = if (hasValue) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+//            if (!supporting.isNullOrBlank()) {
+//                Spacer(Modifier.height(2.dp))
+//                Text(
+//                    text = supporting,
+//                    style = MaterialTheme.typography.bodySmall,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+//                    maxLines = 1,
+//                    overflow = TextOverflow.Ellipsis
+//                )
+//            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 // ─── Category Dropdown ────────────────────────────────────────────────────────
 
 @Composable
@@ -610,6 +717,428 @@ private fun PaymentOptionDropdown(
             )
         }
     }
+}
+
+private data class PaymentOptionSheetSection(
+    val title: String,
+    val icon: ImageVector,
+    val groups: List<PaymentOptionSheetGroup>
+)
+
+private sealed interface PaymentOptionSheetGroup {
+    data class BankAccountGroup(
+        val bankName: String,
+        val primaryOption: PaymentOption.Mode,
+        val modes: List<PaymentOption.Mode>
+    ) : PaymentOptionSheetGroup
+
+    data class SimpleOptions(
+        val options: List<PaymentOption>
+    ) : PaymentOptionSheetGroup
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PaymentOptionSheet(
+    title: String,
+    options: List<PaymentOption>,
+    selected: PaymentOption?,
+    onSelect: (PaymentOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sections = remember(options) { buildPaymentOptionSections(options) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 960.dp)
+                .padding(bottom = 20.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 16.dp, top = 15.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Close,
+                            contentDescription = "Close",
+                            modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+
+            if (sections.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No payment modes available yet",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 15.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    sections.forEach { section ->
+                        PaymentOptionSectionCard(
+                            section = section,
+                            selected = selected,
+                            onSelect = onSelect
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentOptionSectionCard(
+    section: PaymentOptionSheetSection,
+    selected: PaymentOption?,
+    onSelect: (PaymentOption) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = section.icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = section.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            )
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                section.groups.forEachIndexed { index, group ->
+                    when (group) {
+                        is PaymentOptionSheetGroup.BankAccountGroup -> BankAccountOptionGroup(
+                            group = group,
+                            selected = selected,
+                            onSelect = onSelect
+                        )
+                        is PaymentOptionSheetGroup.SimpleOptions -> group.options.forEachIndexed { optionIndex, option ->
+                            PaymentOptionRow(
+                                option = option,
+                                selected = selected?.id == option.id &&
+                                        selected::class == option::class,
+                                onClick = { onSelect(option) }
+                            )
+                            if (optionIndex < group.options.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                    thickness = 0.6.dp
+                                )
+                            }
+                        }
+                    }
+                    if (index < section.groups.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 10.dp, end = 5.dp, top = 2.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            thickness = 0.6.dp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BankAccountOptionGroup(
+    group: PaymentOptionSheetGroup.BankAccountGroup,
+    selected: PaymentOption?,
+    onSelect: (PaymentOption) -> Unit
+) {
+    val isPrimarySelected = selected is PaymentOption.Mode && selected.mode.id == group.primaryOption.mode.id
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onSelect(group.primaryOption) }
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(
+                selected = isPrimarySelected,
+                onClick = null,
+                modifier = Modifier.scale(0.7f),
+                colors = RadioButtonDefaults.colors(
+                    selectedColor = MaterialTheme.colorScheme.primary,
+                    unselectedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = group.bankName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Normal,
+                modifier = Modifier.weight(1f)
+            )
+            group.primaryOption.mode.identifier
+                .takeIf { it.isNotBlank() }
+                ?.let {
+                    Text(
+                        text = maskIdentifier(it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+        }
+
+        if (group.modes.isNotEmpty()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Linked payment modes",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 10.dp, bottom = 4.dp)
+            )
+            group.modes.forEachIndexed { index, option ->
+                PaymentOptionRow(
+                    option = option,
+                    selected = selected is PaymentOption.Mode && selected.mode.id == option.mode.id,
+                    onClick = { onSelect(option) },
+                    contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 3.dp, bottom = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentOptionRow(
+    option: PaymentOption,
+    selected: Boolean,
+    onClick: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(contentPadding),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = null,
+            modifier = Modifier.scale(0.7f),
+            colors = RadioButtonDefaults.colors(
+                selectedColor = MaterialTheme.colorScheme.primary,
+                unselectedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            )
+        )
+        Spacer(Modifier.width(4.dp))
+        if (option is PaymentOption.Mode) {
+            Icon(
+                imageVector = Icons.Default.QrCode,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = paymentOptionHeadline(option),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+//            paymentOptionSupportingText(option)?.takeIf { it.isNotBlank() }?.let { supporting ->
+//                Text(
+//                    text = supporting,
+//                    style = MaterialTheme.typography.bodySmall,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+//                    maxLines = 1,
+//                    overflow = TextOverflow.Ellipsis
+//                )
+//            }
+        }
+        paymentOptionTrailingText(option)?.let { trailing ->
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = trailing,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun buildPaymentOptionSections(options: List<PaymentOption>): List<PaymentOptionSheetSection> {
+    val modeOptions = options.filterIsInstance<PaymentOption.Mode>()
+    val cardOptions = options.filterIsInstance<PaymentOption.Card>()
+
+    val bankGroups = modeOptions
+        .filter { it.mode.bankAccountId != null }
+        .groupBy { it.mode.bankAccountId to it.mode.bankAccountName }
+        .values
+        .map { groupedModes ->
+            val primary = groupedModes.firstOrNull { it.mode.type == PaymentModeType.NET_BANKING }
+                ?: groupedModes.first()
+            PaymentOptionSheetGroup.BankAccountGroup(
+                bankName = groupedModes.first().mode.bankAccountName.ifBlank { "Bank Account" },
+                primaryOption = primary,
+                modes = groupedModes
+                    .filterNot { samePaymentOption(it, primary) }
+                    .sortedBy { paymentOptionHeadline(it) }
+            )
+        }
+        .sortedBy { it.bankName.lowercase() }
+
+    val standaloneGroups = modeOptions
+        .filter { it.mode.bankAccountId == null }
+        .groupBy { standaloneSectionTitle(it.mode.type) }
+        .toSortedMap()
+        .map { (title, groupedModes) ->
+            PaymentOptionSheetSection(
+                title = title,
+                icon = standaloneSectionIcon(groupedModes.first().mode.type),
+                groups = listOf(
+                    PaymentOptionSheetGroup.SimpleOptions(
+                        groupedModes.sortedBy { paymentOptionHeadline(it) }
+                    )
+                )
+            )
+        }
+
+    val sections = mutableListOf<PaymentOptionSheetSection>()
+    if (bankGroups.isNotEmpty()) {
+        sections += PaymentOptionSheetSection(
+            title = "Bank Accounts",
+            icon = Icons.Default.AccountBalance,
+            groups = bankGroups
+        )
+    }
+    if (cardOptions.isNotEmpty()) {
+        sections += PaymentOptionSheetSection(
+            title = "Credit Cards",
+            icon = Icons.Default.CreditCard,
+            groups = listOf(
+                PaymentOptionSheetGroup.SimpleOptions(
+                    cardOptions.sortedBy { paymentOptionHeadline(it) }
+                )
+            )
+        )
+    }
+    sections += standaloneGroups
+    return sections
+}
+
+private fun paymentOptionIcon(option: PaymentOption?): ImageVector = when (option) {
+    is PaymentOption.Card -> Icons.Default.CreditCard
+    is PaymentOption.Mode -> standaloneSectionIcon(option.mode.type)
+    null -> Icons.Default.AccountBalance
+}
+
+private fun standaloneSectionIcon(type: PaymentModeType): ImageVector = when (type) {
+    PaymentModeType.DEBIT_CARD -> Icons.Default.CreditCard
+    PaymentModeType.UPI -> Icons.Default.SwapHoriz
+    PaymentModeType.NET_BANKING -> Icons.Default.AccountBalance
+    PaymentModeType.CHEQUE -> Icons.Default.Edit
+    PaymentModeType.CASH -> Icons.Default.AccountBalance
+    PaymentModeType.WALLET -> Icons.Default.Image
+    PaymentModeType.OTHER -> Icons.Default.AccountBalance
+}
+
+private fun standaloneSectionTitle(type: PaymentModeType): String = when (type) {
+    PaymentModeType.CASH -> "Cash"
+    PaymentModeType.WALLET -> "Wallets"
+    PaymentModeType.OTHER -> "Other payment modes"
+    else -> "Payment Modes"
+}
+
+private fun paymentOptionHeadline(option: PaymentOption): String = when (option) {
+    is PaymentOption.Card -> option.card.name
+    is PaymentOption.Mode -> when {
+        option.mode.identifier.isNotBlank() -> option.mode.identifier
+        option.mode.bankAccountName.isNotBlank() -> option.mode.bankAccountName
+        else -> option.mode.type.displayName()
+    }
+}
+
+private fun paymentOptionSupportingText(option: PaymentOption): String? = when (option) {
+    is PaymentOption.Card -> "Credit card"
+    is PaymentOption.Mode -> buildString {
+        if (option.mode.bankAccountName.isNotBlank() &&
+            option.mode.identifier.isNotBlank() &&
+            option.mode.identifier != option.mode.bankAccountName
+        ) {
+            append(option.mode.bankAccountName)
+            append(" • ")
+        }
+        append(option.mode.type.displayName())
+    }.takeIf { it.isNotBlank() }
+}
+
+private fun paymentOptionTrailingText(option: PaymentOption): String? = when (option) {
+    is PaymentOption.Card -> null
+    is PaymentOption.Mode -> option.mode.identifier
+        .takeIf { it.isNotBlank() && it.any(Char::isDigit) }
+        ?.let(::maskIdentifier)
+}
+
+private fun samePaymentOption(left: PaymentOption?, right: PaymentOption?): Boolean {
+    if (left == null || right == null) return false
+    return left.id == right.id && left::class == right::class
+}
+
+private fun maskIdentifier(value: String): String {
+    val digits = value.filter(Char::isDigit)
+    if (digits.length >= 4) return "*".repeat(digits.length - 4) + digits.takeLast(4)
+    return value
 }
 
 // ─── Seamless Note Field ──────────────────────────────────────────────────────

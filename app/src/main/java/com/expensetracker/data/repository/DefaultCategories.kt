@@ -20,6 +20,7 @@ object DefaultCategories {
         Category(name = "Personal Care", icon = "face", colorHex = "#FB8C00", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Subscriptions", icon = "subscriptions", colorHex = "#6D4C41", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Taxes", icon = "monetization_on", colorHex = "#C62828", transactionType = TransactionType.EXPENSE, isDefault = true),
+        Category(name = "Gifts & Donation", icon = "card_gift_card", colorHex = "#EC407A", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Other Expense", icon = "more_horiz", colorHex = "#9E9E9E", transactionType = TransactionType.EXPENSE, isDefault = true),
 
         // Income categories

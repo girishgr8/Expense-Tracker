@@ -327,6 +327,15 @@ class AccountsViewModel @Inject constructor(
     fun closeEditModeBalanceSheet() = _uiState.update { it.copy(showEditModeBalanceSheet = false) }
 
     fun saveEditedAccount(account: BankAccount, name: String, balance: Double) {
+        saveEditedAccount(account, name, balance, _uiState.value.detailLinkedModes)
+    }
+
+    fun saveEditedAccount(
+        account: BankAccount,
+        name: String,
+        balance: Double,
+        linkedModes: List<PaymentMode>
+    ) {
         viewModelScope.launch {
             val updatedAccount = account.copy(name = name, balance = balance)
             val delta = balance - account.balance
@@ -344,14 +353,30 @@ class AccountsViewModel @Inject constructor(
                     )
                 )
             }
-            // Refresh linked modes for new detail state
-            val linkedModes = _uiState.value.allModes.filter { it.bankAccountId == account.id }
+            val existingModes = _uiState.value.allModes.filter { it.bankAccountId == account.id }
+            val requestedModeIds = linkedModes.filter { it.id > 0 }.map { it.id }.toSet()
+
+            existingModes
+                .filter { it.id !in requestedModeIds }
+                .forEach { paymentModeRepository.deleteMode(it) }
+
+            val savedModes = linkedModes.map { mode ->
+                val normalized = mode.copy(bankAccountId = account.id, userId = userId)
+                if (mode.id > 0) {
+                    paymentModeRepository.updateMode(normalized)
+                    normalized
+                } else {
+                    val insertedId = paymentModeRepository.insertMode(normalized.copy(id = 0))
+                    normalized.copy(id = insertedId)
+                }
+            }
+
             _uiState.update {
                 it.copy(
                     showEditAccountSheet = false,
                     detailBalance = balance,
                     selectedDetailAccount = updatedAccount,
-                    detailLinkedModes = linkedModes
+                    detailLinkedModes = savedModes
                 )
             }
         }
@@ -414,13 +439,19 @@ class AccountsViewModel @Inject constructor(
         name: String,
         balance: Double,
         colorHex: String,
+        accountIdentifier: String,
         pendingModes: List<Pair<PaymentModeType, String>>   // type to identifier
     ) {
         viewModelScope.launch {
             val accountId = bankAccountRepository.insertAccount(
                 BankAccount(name = name, balance = balance, colorHex = colorHex, userId = userId)
             )
-            pendingModes.forEach { (type, identifier) ->
+            val initialModes = buildList {
+                add(PaymentModeType.NET_BANKING to accountIdentifier.trim())
+                addAll(pendingModes)
+            }.distinctBy { (type, identifier) -> type to identifier.trim().lowercase() }
+
+            initialModes.forEach { (type, identifier) ->
                 paymentModeRepository.insertMode(
                     PaymentMode(
                         bankAccountId = accountId,
