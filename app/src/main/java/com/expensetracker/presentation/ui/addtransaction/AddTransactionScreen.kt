@@ -1,8 +1,5 @@
 package com.expensetracker.presentation.ui.addtransaction
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -15,15 +12,20 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -33,10 +35,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
@@ -45,8 +50,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Money
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -54,10 +60,12 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Wallet
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -77,8 +85,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -94,7 +106,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -108,16 +119,18 @@ import coil.compose.AsyncImage
 import com.expensetracker.R
 import com.expensetracker.domain.model.Attachment
 import com.expensetracker.domain.model.Category
-import com.expensetracker.domain.model.PaymentOption
 import com.expensetracker.domain.model.PaymentModeType
+import com.expensetracker.domain.model.PaymentOption
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.TransactionType
-import com.expensetracker.presentation.theme.AppTypography
+import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
 import java.io.File
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -129,8 +142,11 @@ fun AddTransactionScreen(
     viewModel: AddTransactionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
     var paymentSheetTarget by remember { mutableStateOf<PaymentSheetTarget?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var showCalculator by remember { mutableStateOf(false) }
+    var showCategorySheet by remember { mutableStateOf(false) }
 
     // Accepts only PDF and images
     val fileLauncher = rememberLauncherForActivityResult(
@@ -179,7 +195,6 @@ fun AddTransactionScreen(
             )
         }
     ) { padding ->
-        // Fix 2: imePadding() ensures the scroll area shrinks above the keyboard
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -195,35 +210,22 @@ fun AddTransactionScreen(
                 onSelect = viewModel::setTransactionType
             )
 
-            // Fix 1: Date & Time first — styled card row
-            DateTimeCard(
+            TransactionDateTimeRow(
                 dateTime = uiState.dateTime,
-                onDateTimeChange = viewModel::setDateTime,
-                context = context
+                onDateClick = { showDatePicker = true },
+                onTimeClick = { showTimePicker = true }
             )
 
-            // Amount Input
-            AmountInputField(
+            AmountEntryRow(
                 amount = uiState.amount,
                 onAmountChange = viewModel::setAmount,
-                type = uiState.transactionType
+                onOpenCalculator = { showCalculator = true }
             )
 
-            // Category Selector
-            SelectorField(
-                label = "Category",
-                value = uiState.selectedCategory?.name ?: "",
-                icon = Icons.Default.Category,
-                placeholder = "Select Category"
-            ) { dismiss ->
-                CategoryDropdown(
-                    categories = uiState.categories.filter {
-                        it.transactionType == uiState.transactionType || it.transactionType == null
-                    },
-                    selected = uiState.selectedCategory,
-                    onSelect = { cat -> viewModel.setCategory(cat); dismiss() }
-                )
-            }
+            CategorySelectionRow(
+                category = uiState.selectedCategory,
+                onClick = { showCategorySheet = true }
+            )
 
             PaymentSelectorField(
                 label = if (uiState.transactionType == TransactionType.TRANSFER) "From Account" else "Payment mode",
@@ -275,25 +277,6 @@ fun AddTransactionScreen(
                     uiState.attachments.firstOrNull()?.let { viewModel.removeAttachment(it) }
                 }
             )
-//            Spacer(Modifier.height(12.dp))
-//
-//            Button(
-//                onClick = viewModel::saveTransaction,
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(56.dp),
-//                shape = RoundedCornerShape(16.dp),
-//                enabled = !uiState.isLoading
-//            ) {
-//                if (uiState.isLoading) {
-//                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-//                } else {
-//                    Text(
-//                        if (uiState.isEditMode) "Update Transaction" else "Save Transaction",
-//                        fontWeight = FontWeight.Bold
-//                    )
-//                }
-//            }
         }
     }
 
@@ -318,8 +301,11 @@ fun AddTransactionScreen(
                 } else {
                     "Select Payment Mode"
                 }
+
                 PaymentSheetTarget.TO -> "Select Destination Account"
-                null -> ""
+                else -> {
+                    ""
+                }
             },
             options = sheetOptions,
             selected = selectedSheetOption,
@@ -332,6 +318,62 @@ fun AddTransactionScreen(
                 paymentSheetTarget = null
             },
             onDismiss = { paymentSheetTarget = null }
+        )
+    }
+
+    if (showDatePicker) {
+        TransactionDatePickerDialog(
+            dateTime = uiState.dateTime,
+            onConfirm = {
+                viewModel.setDateTime(
+                    uiState.dateTime
+                        .withYear(it.year)
+                        .withMonth(it.monthValue)
+                        .withDayOfMonth(it.dayOfMonth)
+                )
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+
+    if (showTimePicker) {
+        TransactionTimePickerDialog(
+            dateTime = uiState.dateTime,
+            onConfirm = { hour, minute ->
+                viewModel.setDateTime(uiState.dateTime.withHour(hour).withMinute(minute))
+                showTimePicker = false
+            },
+            onDismiss = { showTimePicker = false }
+        )
+    }
+
+    if (showCalculator) {
+        AmountCalculatorSheet(
+            initialAmount = uiState.amount,
+            onDone = {
+                viewModel.setAmount(it)
+                showCalculator = false
+            },
+            onDismiss = { showCalculator = false }
+        )
+    }
+
+    if (showCategorySheet) {
+        CategoryPickerSheet(
+            categories = uiState.categories.filter {
+                it.transactionType == uiState.transactionType || it.transactionType == null
+            },
+            selected = uiState.selectedCategory,
+            onSelect = {
+                viewModel.setCategory(it)
+                showCategorySheet = false
+            },
+            onManageCategories = {
+                showCategorySheet = false
+                onNavigateToCategories()
+            },
+            onDismiss = { showCategorySheet = false }
         )
     }
 }
@@ -375,148 +417,189 @@ private fun TransactionTypeTabs(selected: TransactionType, onSelect: (Transactio
     }
 }
 
-// ─── Fix 1: Date & Time Card ──────────────────────────────────────────────────
+// ─── Transaction Header Fields ────────────────────────────────────────────────
+
+private val AccentOrange = Color(0xFFFF9F2E)
 
 @Composable
-private fun DateTimeCard(
+private fun TransactionDateTimeRow(
     dateTime: LocalDateTime,
-    onDateTimeChange: (LocalDateTime) -> Unit,
-    context: android.content.Context
+    onDateClick: () -> Unit,
+    onTimeClick: () -> Unit
 ) {
-    val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM dd yyyy")
+    val dateFmt = DateTimeFormatter.ofPattern("dd MMM yyyy")
     val timeFmt = DateTimeFormatter.ofPattern("hh:mm a")
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            // Date button
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        DatePickerDialog(
-                            context,
-                            { _, y, m, d ->
-                                onDateTimeChange(
-                                    dateTime.withYear(y).withMonth(m + 1).withDayOfMonth(d)
-                                )
-                            },
-                            dateTime.year, dateTime.monthValue - 1, dateTime.dayOfMonth
-                        ).show()
-                    }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    Icons.Default.CalendarMonth,
-                    contentDescription = "Pick date",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Column {
-                    Text(
-                        "Date",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        dateTime.format(dateFmt),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+        DateTimeInlineField(
+            icon = Icons.Default.CalendarMonth,
+            value = dateTime.format(dateFmt),
+            onClick = onDateClick
+        )
+        DateTimeInlineField(
+            icon = Icons.Default.Schedule,
+            value = dateTime.format(timeFmt).uppercase(),
+            onClick = onTimeClick
+        )
+    }
+}
 
-            // Vertical divider
-            HorizontalDivider(
-                modifier = Modifier
-                    .height(48.dp)
-                    .width(0.5.dp)
-                    .align(Alignment.CenterVertically),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+@Composable
+private fun DateTimeInlineField(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    value: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = "Date/Time Field",
+            tint = AccentOrange,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontSize = 16.sp,
+                lineHeight = 20.sp
+            ),
+            fontWeight = FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun AmountEntryRow(
+    amount: String,
+    onAmountChange: (String) -> Unit,
+    onOpenCalculator: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = "₹",
+            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 24.sp),
+            color = AccentOrange,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Amount",
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-
-            // Time button
-            Row(
-                modifier = Modifier
-                    .weight(0.65f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        TimePickerDialog(
-                            context,
-                            { _, h, min -> onDateTimeChange(dateTime.withHour(h).withMinute(min)) },
-                            dateTime.hour, dateTime.minute, false
-                        ).show()
+            Spacer(Modifier.height(4.dp))
+            BasicTextField(
+                value = amount,
+                onValueChange = {
+                    if (it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) onAmountChange(it)
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                textStyle = MaterialTheme.typography.headlineLarge.copy(
+                    fontSize = 22.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Normal
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                decorationBox = { inner ->
+                    if (amount.isBlank()) {
+                        Text(
+                            text = "0",
+                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 22.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                        )
                     }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Schedule,
-                    contentDescription = "Pick time",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Column {
-                    Text(
-                        "Time",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        dateTime.format(timeFmt),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+                    inner()
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        IconButton(
+            onClick = onOpenCalculator,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+        ) {
+            Icon(
+                imageVector = Icons.Default.Calculate,
+                contentDescription = "Calculator",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }
 
-// ─── Amount Input ─────────────────────────────────────────────────────────────
-
 @Composable
-private fun AmountInputField(
-    amount: String,
-    onAmountChange: (String) -> Unit,
-    type: TransactionType
+private fun CategorySelectionRow(
+    category: Category?,
+    onClick: () -> Unit
 ) {
-    val color = when (type) {
-        TransactionType.INCOME -> IncomeGreen
-        TransactionType.EXPENSE -> ExpenseRed
-        TransactionType.TRANSFER -> TransferBlue
-    }
-    OutlinedTextField(
-        value = amount,
-        onValueChange = { if (it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) onAmountChange(it) },
-        label = { Text("Amount") },
-        leadingIcon = {
-            Text(
-                "₹", style = MaterialTheme.typography.titleLarge, color = color,
-                modifier = Modifier.padding(start = 8.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (category != null) {
+            CategoryIconBubble(category = category, size = 36)
+        } else {
+            Icon(
+                imageVector = Icons.Default.Category,
+                contentDescription = null,
+                tint = AccentOrange,
+                modifier = Modifier.size(26.dp)
             )
-        },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        textStyle = MaterialTheme.typography.headlineSmall.copy(
-            color = color,
-            fontWeight = FontWeight.Bold
-        ),
-        singleLine = true
-    )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Category",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = category?.name ?: "Select category",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (category != null) FontWeight.Medium else FontWeight.Normal,
+                color = if (category != null) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
+    }
 }
 
 // ─── Selector Field ───────────────────────────────────────────────────────────
@@ -593,16 +676,16 @@ private fun PaymentSelectorField(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-//            if (!supporting.isNullOrBlank()) {
-//                Spacer(Modifier.height(2.dp))
-//                Text(
-//                    text = supporting,
-//                    style = MaterialTheme.typography.bodySmall,
-//                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-//                    maxLines = 1,
-//                    overflow = TextOverflow.Ellipsis
-//                )
-//            }
+            if (hasValue && !supporting.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = supporting,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         Icon(
@@ -647,6 +730,628 @@ private fun ColumnScope.CategoryDropdown(
             onClick = { onSelect(cat) }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TransactionDatePickerDialog(
+    dateTime: LocalDateTime,
+    onConfirm: (java.time.LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val zoneId = remember { ZoneId.systemDefault() }
+    val initialMillis = remember(dateTime) {
+        dateTime.atZone(zoneId).toInstant().toEpochMilli()
+    }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        onConfirm(
+                            Instant.ofEpochMilli(millis)
+                                .atZone(zoneId)
+                                .toLocalDate()
+                        )
+                    }
+                }
+            ) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("CANCEL") } }
+    ) {
+        DatePicker(state = datePickerState, showModeToggle = true)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TransactionTimePickerDialog(
+    dateTime: LocalDateTime,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showTextInput by remember { mutableStateOf(false) }
+    val pickerState = rememberTimePickerState(
+        initialHour = dateTime.hour,
+        initialMinute = dateTime.minute,
+        is24Hour = false
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "SELECT TIME",
+                style = MaterialTheme.typography.labelLarge,
+                letterSpacing = 2.sp
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (showTextInput) {
+                    TimeInput(state = pickerState)
+                } else {
+                    TimePicker(state = pickerState)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(pickerState.hour, pickerState.minute) }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { showTextInput = !showTextInput }) {
+                    Icon(
+                        imageVector = Icons.Default.Keyboard,
+                        contentDescription = "Toggle input mode"
+                    )
+                }
+                TextButton(onClick = onDismiss) { Text("CANCEL") }
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AmountCalculatorSheet(
+    initialAmount: String,
+    onDone: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var expression by remember(initialAmount) {
+        mutableStateOf(initialAmount.takeIf { it.isNotBlank() } ?: "0")
+    }
+    val evaluated = remember(expression) { evaluateCalculatorExpression(expression) }
+    evaluated?.let(::formatAmountValue) ?: expression
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CalculatorHeaderButton(text = "Cancel", onClick = onDismiss)
+                CalculatorHeaderButton(
+                    text = "Done",
+                    onClick = {
+                        evaluated?.let { onDone(formatAmountValue(it)) }
+                    },
+                    enabled = evaluated != null
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f))
+                    .padding(horizontal = 24.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = expression.ifBlank { "0" },
+                    style = MaterialTheme.typography.headlineMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = evaluated?.let(::formatAmountValue) ?: "",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(460.dp)
+            ) {
+                Row(Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .weight(3f)
+                            .fillMaxHeight()
+                    ) {
+                        CalculatorRow(
+                            "C", "⌫", "%"
+                        ) { input ->
+                            expression = reduceCalculatorInput(expression, input)
+                        }
+                        CalculatorRow("7", "8", "9") { input ->
+                            expression = reduceCalculatorInput(expression, input)
+                        }
+                        CalculatorRow("4", "5", "6") { input ->
+                            expression = reduceCalculatorInput(expression, input)
+                        }
+                        CalculatorRow("1", "2", "3") { input ->
+                            expression = reduceCalculatorInput(expression, input)
+                        }
+                        CalculatorRow("00", "0", ".") { input ->
+                            expression = reduceCalculatorInput(expression, input)
+                        }
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    ) {
+                        listOf("÷", "×", "-", "+", "=").forEach { op ->
+                            CalculatorOperationButton(
+                                label = op,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                expression = reduceCalculatorInput(expression, op)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalculatorHeaderButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(24.dp),
+        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 10.dp)
+    ) { Text(text, fontWeight = FontWeight.Bold) }
+}
+
+@Composable
+private fun CalculatorRow(
+    vararg labels: String,
+    onTap: (String) -> Unit
+) {
+    Row(
+//        modifier = Modifier.weight(1f),
+        horizontalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        labels.forEach { label ->
+            CalculatorKeyButton(
+                label = label,
+                modifier = Modifier.weight(1f),
+                onClick = { onTap(label) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CalculatorKeyButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        when (label) {
+            "⌫" -> Icon(
+                Icons.AutoMirrored.Filled.Backspace,
+                contentDescription = "Backspace",
+                modifier = Modifier.size(32.dp)
+            )
+
+            else -> Text(
+                label,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+private fun CalculatorOperationButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                if (label == "=") MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
+                else MaterialTheme.colorScheme.background
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Normal
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryPickerSheet(
+    categories: List<Category>,
+    selected: Category?,
+    onSelect: (Category) -> Unit,
+    onManageCategories: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var gridMode by remember { mutableStateOf(true) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.6f)
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Select Category",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(start = 10.dp)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GridListToggle(
+                        gridMode = gridMode,
+                        onGrid = { gridMode = true },
+                        onList = { gridMode = false }
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    CircularIconButton(Icons.Default.Edit, "Manage categories", onManageCategories)
+                    CircularIconButton(Icons.Default.Close, "Close", onDismiss)
+                }
+            }
+
+            if (gridMode) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(categories.size) { index ->
+                        val category = categories[index]
+                        CategoryGridItem(
+                            category = category,
+                            selected = selected?.id == category.id,
+                            onClick = { onSelect(category) }
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    contentPadding = PaddingValues(bottom = 8.dp)
+                ) {
+                    items(categories) { category ->
+                        CategoryListItem(
+                            category = category,
+                            selected = selected?.id == category.id,
+                            onClick = { onSelect(category) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GridListToggle(
+    gridMode: Boolean,
+    onGrid: () -> Unit,
+    onList: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        TogglePillButton(
+            selected = gridMode,
+            icon = Icons.Default.GridView,
+            onClick = onGrid
+        )
+        TogglePillButton(
+            selected = !gridMode,
+            icon = Icons.AutoMirrored.Filled.ViewList,
+            onClick = onList
+        )
+    }
+}
+
+@Composable
+private fun TogglePillButton(
+    selected: Boolean,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) MaterialTheme.colorScheme.background else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun CircularIconButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+private fun CategoryGridItem(
+    category: Category,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    else Color.Transparent
+                )
+                .padding(4.dp)
+        ) {
+            CategoryIconBubble(category = category, size = 40)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun CategoryListItem(
+    category: Category,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                else Color.Transparent
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CategoryIconBubble(category = category, size = 40)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier.weight(1f)
+        )
+        if (selected) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+private fun reduceCalculatorInput(expression: String, input: String): String = when (input) {
+    "C" -> "0"
+    "⌫" -> expression.dropLast(1).ifBlank { "0" }
+    "=" -> evaluateCalculatorExpression(expression)?.let(::formatAmountValue) ?: expression
+    "%" -> applyPercentToExpression(expression)
+    "+", "-", "×", "÷" -> appendOperator(expression, input)
+    "." -> appendDecimal(expression)
+    else -> appendDigit(expression, input)
+}
+
+private fun appendDigit(expression: String, digit: String): String {
+    if (expression == "0") {
+        return digit.trimStart('0').ifBlank { "0" }
+    }
+    if (expression.takeLastWhile { it.isDigit() }.length >= 12) return expression
+    return expression + digit
+}
+
+private fun appendDecimal(expression: String): String {
+    val tail = expression.takeLastWhile { it.isDigit() || it == '.' }
+    return if (tail.contains('.')) expression else "$expression."
+}
+
+private fun appendOperator(expression: String, operator: String): String {
+    val trimmed = expression.trim()
+    if (trimmed.isBlank()) return "0"
+    return if (trimmed.last() in listOf('+', '-', '×', '÷')) {
+        trimmed.dropLast(1) + operator
+    } else {
+        "$trimmed$operator"
+    }
+}
+
+private fun applyPercentToExpression(expression: String): String {
+    val match = Regex("(\\d+(?:\\.\\d+)?)$").find(expression) ?: return expression
+    val number = match.value.toDoubleOrNull() ?: return expression
+    val replacement = formatAmountValue(number / 100.0)
+    return expression.replaceRange(match.range, replacement)
+}
+
+private fun evaluateCalculatorExpression(expression: String): Double? {
+    val normalized = expression.replace('×', '*').replace('÷', '/').trim()
+    if (normalized.isBlank()) return null
+    return runCatching {
+        val values = ArrayDeque<Double>()
+        val ops = ArrayDeque<Char>()
+        var i = 0
+        while (i < normalized.length) {
+            val c = normalized[i]
+            when {
+                c == ' ' -> i++
+                c.isDigit() || c == '.' -> {
+                    val start = i
+                    while (i < normalized.length &&
+                        (normalized[i].isDigit() || normalized[i] == '.')
+                    ) {
+                        i++
+                    }
+                    values.addLast(normalized.substring(start, i).toDouble())
+                    continue
+                }
+
+                c in charArrayOf('+', '-', '*', '/') -> {
+                    while (ops.isNotEmpty() && precedence(ops.last()) >= precedence(c)) {
+                        applyTopOperation(values, ops.removeLast())
+                    }
+                    ops.addLast(c)
+                }
+
+                else -> return null
+            }
+            i++
+        }
+        while (ops.isNotEmpty()) {
+            applyTopOperation(values, ops.removeLast())
+        }
+        values.singleOrNull()
+    }.getOrNull()
+}
+
+private fun precedence(op: Char): Int = when (op) {
+    '*', '/' -> 2
+    '+', '-' -> 1
+    else -> 0
+}
+
+private fun applyTopOperation(values: ArrayDeque<Double>, op: Char) {
+    if (values.size < 2) return
+    val right = values.removeLast()
+    val left = values.removeLast()
+    val result = when (op) {
+        '+' -> left + right
+        '-' -> left - right
+        '*' -> left * right
+        '/' -> if (right == 0.0) 0.0 else left / right
+        else -> left
+    }
+    values.addLast(result)
+}
+
+private fun formatAmountValue(amount: Double): String {
+    val rounded = kotlin.math.round(amount * 100) / 100
+    return if (rounded % 1.0 == 0.0) rounded.toLong().toString()
+    else "%,.2f".format(rounded).replace(",", "")
 }
 
 // ─── Payment Option Dropdown ──────────────────────────────────────────────────
@@ -780,9 +1485,11 @@ private fun PaymentOptionSheet(
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Close,
+                        Icon(
+                            Icons.Default.Close,
                             contentDescription = "Close",
-                            modifier = Modifier.size(18.dp))
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -854,7 +1561,11 @@ private fun PaymentOptionSectionCard(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             )
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp)
+            ) {
                 section.groups.forEachIndexed { index, group ->
                     when (group) {
                         is PaymentOptionSheetGroup.BankAccountGroup -> BankAccountOptionGroup(
@@ -862,6 +1573,7 @@ private fun PaymentOptionSectionCard(
                             selected = selected,
                             onSelect = onSelect
                         )
+
                         is PaymentOptionSheetGroup.SimpleOptions -> group.options.forEachIndexed { optionIndex, option ->
                             PaymentOptionRow(
                                 option = option,
@@ -897,7 +1609,8 @@ private fun BankAccountOptionGroup(
     selected: PaymentOption?,
     onSelect: (PaymentOption) -> Unit
 ) {
-    val isPrimarySelected = selected is PaymentOption.Mode && selected.mode.id == group.primaryOption.mode.id
+    val isPrimarySelected =
+        selected is PaymentOption.Mode && selected.mode.id == group.primaryOption.mode.id
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -947,7 +1660,12 @@ private fun BankAccountOptionGroup(
                     option = option,
                     selected = selected is PaymentOption.Mode && selected.mode.id == option.mode.id,
                     onClick = { onSelect(option) },
-                    contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 3.dp, bottom = 6.dp)
+                    contentPadding = PaddingValues(
+                        start = 10.dp,
+                        end = 10.dp,
+                        top = 3.dp,
+                        bottom = 6.dp
+                    )
                 )
             }
         }
@@ -1032,16 +1750,19 @@ private fun PaymentModeSheetIcon(
             contentDescription = "UPI",
             modifier = modifier
         )
+
         PaymentModeType.DEBIT_CARD -> Image(
             painter = painterResource(id = R.drawable.ic_payment_card_logo),
             contentDescription = "Debit Card",
             modifier = modifier
         )
+
         PaymentModeType.WALLET -> Image(
             painter = painterResource(id = R.drawable.ic_wallet_logo),
             contentDescription = "Wallet",
             modifier = modifier
         )
+
         else -> {
             val icon = when (type) {
                 PaymentModeType.NET_BANKING -> Icons.Default.AccountBalance
@@ -1148,6 +1869,7 @@ private fun paymentOptionHeadline(option: PaymentOption): String = when (option)
         option.mode.bankAccountId != null &&
                 option.mode.type == PaymentModeType.NET_BANKING &&
                 option.mode.bankAccountName.isNotBlank() -> option.mode.bankAccountName
+
         option.mode.identifier.isNotBlank() -> option.mode.identifier
         option.mode.bankAccountName.isNotBlank() -> option.mode.bankAccountName
         else -> option.mode.type.displayName()
