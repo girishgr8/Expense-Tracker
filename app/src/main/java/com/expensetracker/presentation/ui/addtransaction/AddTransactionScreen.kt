@@ -44,12 +44,16 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Money
+import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -185,8 +189,6 @@ fun AddTransactionScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(Modifier.height(4.dp))
-
             // Transaction Type Tabs
             TransactionTypeTabs(
                 selected = uiState.transactionType,
@@ -273,28 +275,25 @@ fun AddTransactionScreen(
                     uiState.attachments.firstOrNull()?.let { viewModel.removeAttachment(it) }
                 }
             )
-
-            Spacer(Modifier.height(24.dp))
-
-            Button(
-                onClick = viewModel::saveTransaction,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = !uiState.isLoading
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-                } else {
-                    Text(
-                        if (uiState.isEditMode) "Update Transaction" else "Save Transaction",
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(32.dp))
+//            Spacer(Modifier.height(12.dp))
+//
+//            Button(
+//                onClick = viewModel::saveTransaction,
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .height(56.dp),
+//                shape = RoundedCornerShape(16.dp),
+//                enabled = !uiState.isLoading
+//            ) {
+//                if (uiState.isLoading) {
+//                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+//                } else {
+//                    Text(
+//                        if (uiState.isEditMode) "Update Transaction" else "Save Transaction",
+//                        fontWeight = FontWeight.Bold
+//                    )
+//                }
+//            }
         }
     }
 
@@ -389,7 +388,7 @@ private fun DateTimeCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -979,12 +978,11 @@ private fun PaymentOptionRow(
             )
         )
         Spacer(Modifier.width(4.dp))
-        if (option is PaymentOption.Mode) {
-            Icon(
-                imageVector = Icons.Default.QrCode,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+        if (option is PaymentOption.Mode && shouldShowSheetLeadingIcon(option.mode.type)) {
+            PaymentModeSheetIcon(
+                type = option.mode.type,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.width(12.dp))
         }
@@ -1012,6 +1010,50 @@ private fun PaymentOptionRow(
                 text = trailing,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun shouldShowSheetLeadingIcon(type: PaymentModeType): Boolean = when (type) {
+    PaymentModeType.CASH, PaymentModeType.WALLET -> false
+    else -> true
+}
+
+@Composable
+private fun PaymentModeSheetIcon(
+    type: PaymentModeType,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.primary
+) {
+    when (type) {
+        PaymentModeType.UPI -> Image(
+            painter = painterResource(id = R.drawable.ic_upi_logo),
+            contentDescription = "UPI",
+            modifier = modifier
+        )
+        PaymentModeType.DEBIT_CARD -> Image(
+            painter = painterResource(id = R.drawable.ic_payment_card_logo),
+            contentDescription = "Debit Card",
+            modifier = modifier
+        )
+        PaymentModeType.WALLET -> Image(
+            painter = painterResource(id = R.drawable.ic_wallet_logo),
+            contentDescription = "Wallet",
+            modifier = modifier
+        )
+        else -> {
+            val icon = when (type) {
+                PaymentModeType.NET_BANKING -> Icons.Default.AccountBalance
+                PaymentModeType.CHEQUE -> Icons.Default.EditNote
+                PaymentModeType.CASH -> Icons.Default.Payments
+                else -> Icons.Default.Payment
+            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = modifier
             )
         }
     }
@@ -1088,8 +1130,8 @@ private fun standaloneSectionIcon(type: PaymentModeType): ImageVector = when (ty
     PaymentModeType.UPI -> Icons.Default.SwapHoriz
     PaymentModeType.NET_BANKING -> Icons.Default.AccountBalance
     PaymentModeType.CHEQUE -> Icons.Default.Edit
-    PaymentModeType.CASH -> Icons.Default.AccountBalance
-    PaymentModeType.WALLET -> Icons.Default.Image
+    PaymentModeType.CASH -> Icons.Default.Payments
+    PaymentModeType.WALLET -> Icons.Default.Wallet
     PaymentModeType.OTHER -> Icons.Default.AccountBalance
 }
 
@@ -1103,6 +1145,9 @@ private fun standaloneSectionTitle(type: PaymentModeType): String = when (type) 
 private fun paymentOptionHeadline(option: PaymentOption): String = when (option) {
     is PaymentOption.Card -> option.card.name
     is PaymentOption.Mode -> when {
+        option.mode.bankAccountId != null &&
+                option.mode.type == PaymentModeType.NET_BANKING &&
+                option.mode.bankAccountName.isNotBlank() -> option.mode.bankAccountName
         option.mode.identifier.isNotBlank() -> option.mode.identifier
         option.mode.bankAccountName.isNotBlank() -> option.mode.bankAccountName
         else -> option.mode.type.displayName()
@@ -1320,7 +1365,7 @@ private fun SeamlessAttachmentRow(
                     "Add attachment",
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )
                 Icon(
                     Icons.Default.ChevronRight, null,
@@ -1329,6 +1374,7 @@ private fun SeamlessAttachmentRow(
                 )
             }
             HorizontalDivider(
+                modifier = Modifier.padding(start = 38.dp),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 thickness = 0.5.dp
             )
