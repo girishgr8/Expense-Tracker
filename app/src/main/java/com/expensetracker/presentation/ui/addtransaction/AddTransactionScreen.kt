@@ -489,23 +489,24 @@ private fun AmountEntryRow(
     onOpenCalculator: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
+        modifier = Modifier.fillMaxWidth().padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = "₹",
-            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 24.sp),
+            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp),
             color = AccentOrange,
             fontWeight = FontWeight.SemiBold
         )
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Amount",
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Light,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
             BasicTextField(
                 value = amount,
                 onValueChange = {
@@ -520,14 +521,16 @@ private fun AmountEntryRow(
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
                 decorationBox = { inner ->
-                    if (amount.isBlank()) {
-                        Text(
-                            text = "0",
-                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 22.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
-                        )
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (amount.isBlank()) {
+                            Text(
+                                text = "0",
+                                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 22.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                            )
+                        }
+                        inner()
                     }
-                    inner()
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -536,9 +539,10 @@ private fun AmountEntryRow(
         IconButton(
             onClick = onOpenCalculator,
             modifier = Modifier
-                .size(52.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                .padding(0.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Calculate,
@@ -832,7 +836,9 @@ private fun AmountCalculatorSheet(
         mutableStateOf(initialAmount.takeIf { it.isNotBlank() } ?: "0")
     }
     val evaluated = remember(expression) { evaluateCalculatorExpression(expression) }
-    evaluated?.let(::formatAmountValue) ?: expression
+    val evaluatedText = evaluated
+        ?.let(::formatAmountValue)
+        ?.takeIf { it != expression.ifBlank { "0" } }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -877,12 +883,14 @@ private fun AmountCalculatorSheet(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = evaluated?.let(::formatAmountValue) ?: "",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (evaluatedText != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = evaluatedText,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Box(
@@ -949,12 +957,12 @@ private fun CalculatorHeaderButton(
 }
 
 @Composable
-private fun CalculatorRow(
+private fun ColumnScope.CalculatorRow(
     vararg labels: String,
     onTap: (String) -> Unit
 ) {
     Row(
-//        modifier = Modifier.weight(1f),
+        modifier = Modifier.weight(1f),
         horizontalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         labels.forEach { label ->
@@ -975,7 +983,7 @@ private fun CalculatorKeyButton(
 ) {
     Box(
         modifier = modifier
-            .fillMaxHeight()
+            .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -984,12 +992,12 @@ private fun CalculatorKeyButton(
             "⌫" -> Icon(
                 Icons.AutoMirrored.Filled.Backspace,
                 contentDescription = "Backspace",
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(28.dp)
             )
 
             else -> Text(
                 label,
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp),
                 fontWeight = FontWeight.Normal
             )
         }
@@ -1004,7 +1012,7 @@ private fun CalculatorOperationButton(
 ) {
     Box(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .background(
                 if (label == "=") MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
                 else MaterialTheme.colorScheme.background
