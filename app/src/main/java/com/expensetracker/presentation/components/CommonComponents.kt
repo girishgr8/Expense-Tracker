@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -461,7 +462,7 @@ fun AppBottomBar(
             NavigationBarItem(
                 selected = currentRoute == "dashboard",
                 onClick  = onHome,
-                icon     = { Icon(Icons.Default.Home, "Home") },
+                icon = { Icon(painter = painterResource(id = R.drawable.ic_home), contentDescription = "Home", modifier = Modifier.size(28.dp)) },
                 label    = {
                     Text("Home",
                         fontWeight = if (currentRoute == "dashboard") FontWeight.Bold
@@ -473,7 +474,7 @@ fun AppBottomBar(
             NavigationBarItem(
                 selected = currentRoute == "analysis",
                 onClick  = onAnalysis,
-                icon     = { Icon(Icons.Default.BarChart, null) },
+                icon     = { Icon(painter = painterResource(id = R.drawable.ic_analysis), "Analysis", modifier = Modifier.size(28.dp)) },
                 label    = {
                     Text("Analysis",
                         fontWeight = if (currentRoute == "analysis") FontWeight.Bold
@@ -494,7 +495,7 @@ fun AppBottomBar(
             NavigationBarItem(
                 selected = currentRoute == "accounts",
                 onClick  = onAccounts,
-                icon     = { Icon(Icons.Default.AccountBalance, null) },
+                icon     = { Icon(painter = painterResource(id = R.drawable.ic_bank_account), "Accounts", modifier = Modifier.size(28.dp)) },
                 label    = {
                     Text("Accounts",
                         fontWeight = if (currentRoute == "accounts") FontWeight.Bold
@@ -506,7 +507,7 @@ fun AppBottomBar(
             NavigationBarItem(
                 selected = currentRoute == "settings",
                 onClick  = onSettings,
-                icon     = { Icon(Icons.Default.MoreHoriz, null) },
+                icon     = { Icon(painter = painterResource(id = R.drawable.ic_more_horiz), "More", modifier = Modifier.size(28.dp)) },
                 label    = {
                     Text("More",
                         fontWeight = if (currentRoute == "settings") FontWeight.Bold
