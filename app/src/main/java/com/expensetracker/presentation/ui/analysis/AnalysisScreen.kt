@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -63,10 +64,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.domain.model.TransactionType
@@ -420,10 +424,12 @@ private fun SummaryCard(sym: String, expense: Double, income: Double, balance: D
                         color = ExpenseRed, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "$sym${fmtAmt(expense)}",
+                    AutoResizingAmountText(
+                        text = "$sym${fmtAmt(expense)}",
                         style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
@@ -433,10 +439,13 @@ private fun SummaryCard(sym: String, expense: Double, income: Double, balance: D
                         color = IncomeGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "$sym${fmtAmt(income)}",
+                    AutoResizingAmountText(
+                        text = "$sym${fmtAmt(income)}",
                         style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
                     )
                 }
             }
@@ -457,16 +466,61 @@ private fun SummaryCard(sym: String, expense: Double, income: Double, balance: D
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        "${if (balance >= 0) "+" else ""}$sym${fmtAmt(balance)}",
+                    AutoResizingAmountText(
+                        text = "${if (balance >= 0) "+" else ""}$sym${fmtAmt(balance)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (balance >= 0) IncomeGreen else ExpenseRed
+                        color = if (balance >= 0) IncomeGreen else ExpenseRed,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.End,
+                        maxFontSize = MaterialTheme.typography.titleMedium.fontSize,
+                        minFontSize = 12.sp
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun AutoResizingAmountText(
+    text: String,
+    style: TextStyle,
+    fontWeight: FontWeight,
+    color: Color,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start,
+    maxFontSize: TextUnit = style.fontSize,
+    minFontSize: TextUnit = 18.sp
+) {
+    var fontSize by remember(text) { mutableStateOf(maxFontSize) }
+    var readyToDraw by remember(text) { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        style = style.copy(fontSize = fontSize),
+        fontWeight = fontWeight,
+        color = color,
+        textAlign = textAlign,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        modifier = modifier.drawWithContent {
+            if (readyToDraw) drawContent()
+        },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth) {
+                val next = (fontSize.value - 1f).sp
+                if (next.value >= minFontSize.value) {
+                    fontSize = next
+                } else {
+                    readyToDraw = true
+                }
+            } else {
+                readyToDraw = true
+            }
+        }
+    )
 }
 
 // ─── Trend Card ───────────────────────────────────────────────────────────────

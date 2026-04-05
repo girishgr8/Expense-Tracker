@@ -10,6 +10,7 @@ import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -89,6 +90,7 @@ class AnalysisViewModel @Inject constructor(
     private var anchorWeek  = LocalDate.now().with(DayOfWeek.MONDAY)
     private var anchorMonth = YearMonth.now()
     private var anchorYear  = LocalDate.now().year
+    private var refreshJob: Job? = null
 
     private val _uiState = MutableStateFlow(AnalysisUiState())
     val uiState: StateFlow<AnalysisUiState> = _uiState.asStateFlow()
@@ -149,7 +151,8 @@ class AnalysisViewModel @Inject constructor(
     }
 
     private fun refresh() {
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val result = withContext(Dispatchers.IO) { compute() }
             // Preserve independently-toggled fields that don't trigger a recompute
@@ -162,14 +165,14 @@ class AnalysisViewModel @Inject constructor(
 
     private suspend fun compute(): AnalysisUiState {
         val (start, end, label) = periodRange()
-        val allTxns = transactionRepository.getAllTransactionsOneShot(userId)
-
         val inRange = if (start != null && end != null) {
-            val startDt = start.atStartOfDay()
-            val endDt   = end.atTime(23, 59, 59)
-            allTxns.filter { !it.dateTime.isBefore(startDt) && !it.dateTime.isAfter(endDt) }
+            transactionRepository.getTransactionsInRangeOneShot(
+                userId = userId,
+                start = start.atStartOfDay(),
+                end = end.atTime(23, 59, 59)
+            )
         } else {
-            allTxns
+            transactionRepository.getAllTransactionsOneShot(userId)
         }
 
         val expense = inRange.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }

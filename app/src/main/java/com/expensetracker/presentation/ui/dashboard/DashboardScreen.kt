@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,13 +55,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -640,11 +644,12 @@ private fun CashFlowCard(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "₹${fmtAmt(summary.totalExpense)}",
+                    AutoResizingAmountText(
+                        text = "₹${fmtAmt(summary.totalExpense)}",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
@@ -656,11 +661,13 @@ private fun CashFlowCard(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "₹${fmtAmt(summary.totalIncome)}",
+                    AutoResizingAmountText(
+                        text = "₹${fmtAmt(summary.totalIncome)}",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
                     )
                 }
             }
@@ -685,16 +692,61 @@ private fun CashFlowCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.75f)
                     )
-                    Text(
-                        "${if (summary.netBalance >= 0) "+" else ""}₹${fmtAmt(summary.netBalance)}",
+                    AutoResizingAmountText(
+                        text = "${if (summary.netBalance >= 0) "+" else ""}₹${fmtAmt(summary.netBalance)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (summary.netBalance >= 0) IncomeGreen else ExpenseRed
+                        color = if (summary.netBalance >= 0) IncomeGreen else ExpenseRed,
+                        modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End),
+                        textAlign = TextAlign.End,
+                        maxFontSize = MaterialTheme.typography.titleMedium.fontSize,
+                        minFontSize = 12.sp
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun AutoResizingAmountText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    fontWeight: FontWeight,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start,
+    maxFontSize: TextUnit = style.fontSize,
+    minFontSize: TextUnit = 18.sp
+) {
+    var fontSize by remember(text) { mutableStateOf(maxFontSize) }
+    var readyToDraw by remember(text) { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        style = style.copy(fontSize = fontSize),
+        color = color,
+        fontWeight = fontWeight,
+        textAlign = textAlign,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        modifier = modifier.drawWithContent {
+            if (readyToDraw) drawContent()
+        },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth) {
+                val next = (fontSize.value - 1f).sp
+                if (next.value >= minFontSize.value) {
+                    fontSize = next
+                } else {
+                    readyToDraw = true
+                }
+            } else {
+                readyToDraw = true
+            }
+        }
+    )
 }
 
 // ─── Quick Actions ────────────────────────────────────────────────────────────

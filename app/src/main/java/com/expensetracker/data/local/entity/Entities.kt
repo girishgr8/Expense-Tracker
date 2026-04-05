@@ -8,7 +8,15 @@ import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.PaymentModeType
 import com.expensetracker.domain.model.TransactionType
 
-@Entity(tableName = "transactions")
+@Entity(
+    tableName = "transactions",
+    indices = [
+        Index(value = ["userId", "dateTimeMillis"]),
+        Index(value = ["userId", "type", "dateTimeMillis"]),
+        Index(value = ["userId", "categoryId", "dateTimeMillis"]),
+        Index(value = ["userId", "paymentModeId", "dateTimeMillis"])
+    ]
+)
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val type: TransactionType,

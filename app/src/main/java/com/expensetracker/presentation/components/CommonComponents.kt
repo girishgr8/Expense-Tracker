@@ -1,5 +1,6 @@
 package com.expensetracker.presentation.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,13 +45,16 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
+import com.expensetracker.R
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.theme.CardGradientEnd
@@ -447,17 +451,17 @@ fun AppBottomBar(
             // Shared active/inactive colors for all items
             val navItemColors = NavigationBarItemDefaults.colors(
                 selectedIconColor   = MaterialTheme.colorScheme.onSecondaryContainer,
-                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
                 selectedTextColor   = MaterialTheme.colorScheme.onSurface,
-                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                indicatorColor      = MaterialTheme.colorScheme.secondaryContainer
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
+                indicatorColor      = MaterialTheme.colorScheme.surfaceContainer
             )
 
             // Home
             NavigationBarItem(
                 selected = currentRoute == "dashboard",
                 onClick  = onHome,
-                icon     = { Icon(Icons.Default.Home, null) },
+                icon     = { Icon(Icons.Default.Home, "Home") },
                 label    = {
                     Text("Home",
                         fontWeight = if (currentRoute == "dashboard") FontWeight.Bold

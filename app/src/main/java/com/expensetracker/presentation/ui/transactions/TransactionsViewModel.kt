@@ -12,8 +12,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class TransactionsUiState(
@@ -42,18 +45,20 @@ class TransactionsViewModel @Inject constructor(
     private val userId get() = authManager.userId
     private val _uiState = MutableStateFlow(TransactionsUiState())
     val uiState: StateFlow<TransactionsUiState> = _uiState.asStateFlow()
+    private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
+    private val filterFlow = MutableStateFlow(TransactionFilter())
+    private var filterJob: Job? = null
 
     init {
         loadData()
+        observeFilteredTransactions()
     }
 
     private fun loadData() {
         viewModelScope.launch {
             transactionRepository.getAllTransactions(userId).collect { txns ->
-                _uiState.update { state ->
-                    val filtered = applyFilter(txns, state.filter)
-                    state.copy(transactions = txns, filteredTransactions = filtered)
-                }
+                transactionsFlow.value = txns
+                _uiState.update { state -> state.copy(transactions = txns) }
             }
         }
         viewModelScope.launch {
@@ -73,11 +78,32 @@ class TransactionsViewModel @Inject constructor(
         }
     }
 
-    fun updateFilter(filter: TransactionFilter) {
-        _uiState.update { state ->
-            val filtered = applyFilter(state.transactions, filter)
-            state.copy(filter = filter, filteredTransactions = filtered)
+    private fun observeFilteredTransactions() {
+        filterJob?.cancel()
+        filterJob = viewModelScope.launch {
+            combine(
+                transactionsFlow,
+                filterFlow.debounce { filter ->
+                    if (filter.searchQuery.isBlank()) 0L else 150L
+                }
+            ) { transactions, filter ->
+                transactions to filter
+            }.collectLatest { (transactions, filter) ->
+                val filtered = withContext(Dispatchers.Default) {
+                    applyFilter(transactions, filter)
+                }
+                _uiState.update { state ->
+                    state.copy(
+                        filter = filter,
+                        filteredTransactions = filtered
+                    )
+                }
+            }
         }
+    }
+
+    fun updateFilter(filter: TransactionFilter) {
+        filterFlow.value = filter
     }
 
     private fun applyFilter(

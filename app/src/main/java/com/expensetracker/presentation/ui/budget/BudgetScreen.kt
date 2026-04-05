@@ -808,13 +808,15 @@ private fun PastBudgetCard(
     val pct = progress.percentage.coerceIn(0f, 100f)
     val spent = progress.spent
     val limit = progress.budget.totalLimit
-    val saved = (limit - spent).coerceAtLeast(0.0)
+    val delta = limit - spent
+    val isExceeded = delta < 0
+    val remaining = abs(delta)
 
     val title = if (progress.budget.period == BudgetPeriod.MONTHLY && progress.budget.month != null)
         "${monthNames.getOrElse(progress.budget.month) { "" }} ${progress.budget.year}"
     else "${progress.budget.year}"
 
-    val progressColor = Color(0xFF00C896) // exact green tone from UI
+    val progressColor = if (isExceeded) ExpenseRed else Color(0xFF00C896)
 
     Card(
         modifier = Modifier
@@ -866,15 +868,16 @@ private fun PastBudgetCard(
                     horizontalAlignment = Alignment.End
                 ) {
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.0f", saved)}",
+                        "₹${String.format(Locale.getDefault(), "%,.0f", remaining)}",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = if (isExceeded) ExpenseRed else MaterialTheme.colorScheme.onSurface
                     )
 
                     Text(
-                        "Saved",
+                        if (isExceeded) "Exceeded" else "Saved",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isExceeded) ExpenseRed else MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(Modifier.height(6.dp))

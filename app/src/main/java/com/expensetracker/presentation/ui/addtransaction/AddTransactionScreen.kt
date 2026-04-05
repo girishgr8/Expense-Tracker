@@ -41,7 +41,6 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
@@ -303,6 +302,7 @@ fun AddTransactionScreen(
         PaymentSheetTarget.TO -> uiState.paymentOptions.filterNot {
             samePaymentOption(it, uiState.selectedPaymentOption)
         }
+
         null -> emptyList()
     }
     val selectedSheetOption = when (paymentSheetTarget) {
@@ -512,7 +512,9 @@ private fun AmountEntryRow(
     onOpenCalculator: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -573,12 +575,6 @@ private fun AmountEntryRow(
                 modifier = Modifier.size(28.dp),
                 colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
             )
-//            Icon(
-//                imageVector = Icons.Default.Calculate,
-//                contentDescription = "Calculator",
-//                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-//                modifier = Modifier.size(24.dp)
-//            )
         }
     }
 }
@@ -599,7 +595,9 @@ private fun CategorySelectionRow(
     ) {
         if (category != null) {
             Icon(
-                imageVector = com.expensetracker.presentation.ui.categories.CategoryIcons.get(category.icon),
+                imageVector = com.expensetracker.presentation.ui.categories.CategoryIcons.get(
+                    category.icon
+                ),
                 contentDescription = null,
                 tint = accentColor,
                 modifier = Modifier.size(26.dp)
@@ -1101,7 +1099,9 @@ private fun CategoryPickerSheet(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(start = 10.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 10.dp)
                 )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

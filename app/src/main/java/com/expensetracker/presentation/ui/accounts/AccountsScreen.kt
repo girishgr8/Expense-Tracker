@@ -2023,7 +2023,7 @@ private fun PaymentModeIcon(
     when (type) {
         PaymentModeType.UPI -> {
             Image(
-                painter = painterResource(id = R.drawable.ic_upi_logo),
+                painter = painterResource(id = R.drawable.ic_upi),
                 contentDescription = "UPI",
                 modifier = modifier
             )

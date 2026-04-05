@@ -3,22 +3,73 @@ package com.expensetracker.presentation.ui.transactions
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.expensetracker.domain.model.*
-import com.expensetracker.presentation.components.*
+import com.expensetracker.domain.model.Category
+import com.expensetracker.domain.model.PaymentMode
+import com.expensetracker.domain.model.Tag
+import com.expensetracker.domain.model.Transaction
+import com.expensetracker.domain.model.TransactionFilter
+import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.components.EmptyState
+import com.expensetracker.presentation.components.LoadingOverlay
+import com.expensetracker.presentation.components.TransactionListItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,7 +171,9 @@ fun TransactionsScreen(
                             ),
                             backgroundContent = {
                                 Box(
-                                    Modifier.fillMaxSize().padding(end = 16.dp),
+                                    Modifier
+                                        .fillMaxSize()
+                                        .padding(end = 16.dp),
                                     contentAlignment = Alignment.CenterEnd
                                 ) {
                                     Icon(
@@ -140,7 +193,7 @@ fun TransactionsScreen(
                             AlertDialog(
                                 onDismissRequest = { showDeleteDialog = false },
                                 title = { Text("Delete Transaction") },
-                                text  = { Text("Are you sure you want to delete this transaction?") },
+                                text = { Text("Are you sure you want to delete this transaction?") },
                                 confirmButton = {
                                     TextButton(onClick = {
                                         viewModel.deleteTransaction(txn.id)
@@ -177,8 +230,8 @@ fun TransactionsScreen(
     selectedTransaction?.let { txn ->
         TransactionDetailSheet(
             transaction = txn,
-            onEdit    = { onNavigateToEdit(txn.id); selectedTransaction = null },
-            onDelete  = { viewModel.deleteTransaction(txn.id); selectedTransaction = null },
+            onEdit = { onNavigateToEdit(txn.id); selectedTransaction = null },
+            onDelete = { viewModel.deleteTransaction(txn.id); selectedTransaction = null },
             onDismiss = { selectedTransaction = null }
         )
     }
@@ -192,17 +245,36 @@ private fun SearchBar(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var localQuery by rememberSaveable { mutableStateOf(query) }
+
+    LaunchedEffect(query) {
+        if (query != localQuery) {
+            localQuery = query
+        }
+    }
+
     OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
+        value = localQuery,
+        onValueChange = {
+            localQuery = it
+            onQueryChange(it)
+        },
         placeholder = { Text("Search transactions...") },
-        leadingIcon  = { Icon(Icons.Default.Search, null) },
-        trailingIcon = if (query.isNotEmpty()) {
-            { IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Default.Close, null) } }
+        leadingIcon = { Icon(Icons.Default.Search, null) },
+        trailingIcon = if (localQuery.isNotEmpty()) {
+            {
+                IconButton(onClick = {
+                    localQuery = ""
+                    onQueryChange("")
+                }) {
+                    Icon(Icons.Default.Close, null)
+                }
+            }
         } else null,
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        singleLine = true
+        singleLine = true,
+        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.ContentOrLtr)
     )
 }
 
@@ -220,7 +292,7 @@ private fun ActiveFilterChips(
     AnimatedVisibility(
         visible = hasFilters,
         enter = expandVertically(),
-        exit  = shrinkVertically()
+        exit = shrinkVertically()
     ) {
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -229,8 +301,8 @@ private fun ActiveFilterChips(
             item {
                 FilterChip(
                     selected = true,
-                    onClick  = onClearFilter,
-                    label    = { Text("Clear All") },
+                    onClick = onClearFilter,
+                    label = { Text("Clear All") },
                     trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(14.dp)) }
                 )
             }
@@ -310,14 +382,14 @@ private fun FilterBottomSheet(
                 item {
                     FilterChip(
                         selected = localFilter.year == null,
-                        onClick  = { localFilter = localFilter.copy(year = null) },
-                        label    = { Text("All") }
+                        onClick = { localFilter = localFilter.copy(year = null) },
+                        label = { Text("All") }
                     )
                 }
                 items(years) { year ->
                     FilterChip(
                         selected = localFilter.year == year,
-                        onClick  = {
+                        onClick = {
                             localFilter = localFilter.copy(
                                 year = if (localFilter.year == year) null else year
                             )
@@ -336,14 +408,14 @@ private fun FilterBottomSheet(
                 item {
                     FilterChip(
                         selected = localFilter.month == null,
-                        onClick  = { localFilter = localFilter.copy(month = null) },
-                        label    = { Text("All") }
+                        onClick = { localFilter = localFilter.copy(month = null) },
+                        label = { Text("All") }
                     )
                 }
                 items(months.mapIndexed { i, m -> Pair(i + 1, m) }) { (idx, mon) ->
                     FilterChip(
                         selected = localFilter.month == idx,
-                        onClick  = {
+                        onClick = {
                             localFilter = localFilter.copy(
                                 month = if (localFilter.month == idx) null else idx
                             )
@@ -363,7 +435,7 @@ private fun FilterBottomSheet(
                 TransactionType.entries.forEach { type ->
                     FilterChip(
                         selected = type in localFilter.transactionTypes,
-                        onClick  = {
+                        onClick = {
                             localFilter = if (type in localFilter.transactionTypes)
                                 localFilter.copy(
                                     transactionTypes = localFilter.transactionTypes - type
@@ -388,7 +460,7 @@ private fun FilterBottomSheet(
                 items(categories) { cat ->
                     FilterChip(
                         selected = cat.id in localFilter.categoryIds,
-                        onClick  = {
+                        onClick = {
                             localFilter = if (cat.id in localFilter.categoryIds)
                                 localFilter.copy(categoryIds = localFilter.categoryIds - cat.id)
                             else localFilter.copy(categoryIds = localFilter.categoryIds + cat.id)
@@ -407,7 +479,7 @@ private fun FilterBottomSheet(
                 items(modes) { mode ->
                     FilterChip(
                         selected = mode.id in localFilter.paymentModeIds,
-                        onClick  = {
+                        onClick = {
                             localFilter = if (mode.id in localFilter.paymentModeIds)
                                 localFilter.copy(
                                     paymentModeIds = localFilter.paymentModeIds - mode.id

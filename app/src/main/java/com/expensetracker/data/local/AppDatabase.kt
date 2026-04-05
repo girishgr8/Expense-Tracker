@@ -35,7 +35,7 @@ import com.expensetracker.data.local.entity.TransactionEntity
         BudgetEntity::class,
         TagEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

@@ -150,6 +150,20 @@ interface TransactionDao {
 
     @Query(
         """
+        SELECT * FROM transactions
+        WHERE userId = :userId
+        AND dateTimeMillis BETWEEN :startMillis AND :endMillis
+        ORDER BY dateTimeMillis DESC
+        """
+    )
+    suspend fun getTransactionsInRangeOneShot(
+        userId: String,
+        startMillis: Long,
+        endMillis: Long
+    ): List<TransactionEntity>
+
+    @Query(
+        """
     SELECT strftime('%Y', dateTimeMillis / 1000, 'unixepoch') AS year,
            strftime('%m', dateTimeMillis / 1000, 'unixepoch') AS month
     FROM transactions

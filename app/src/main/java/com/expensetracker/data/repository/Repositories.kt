@@ -77,6 +77,11 @@ interface TransactionRepository {
     suspend fun getAllExpense(userId: String, start: LocalDateTime?, end: LocalDateTime?): Double
 
     suspend fun getAllTransactionsOneShot(userId: String): List<Transaction>
+    suspend fun getTransactionsInRangeOneShot(
+        userId: String,
+        start: LocalDateTime,
+        end: LocalDateTime
+    ): List<Transaction>
 
     suspend fun getAvailableFilters(userId: String): List<ExportFilter>
 }
@@ -176,13 +181,19 @@ class TransactionRepositoryImpl @Inject constructor(
         dt?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
 
     override fun getAllTransactions(userId: String): Flow<List<Transaction>> =
-        transactionDao.getAllTransactions(userId).map { it.map { e -> e.enriched() } }
+        transactionDao.getAllTransactions(userId).map { entities ->
+            enrichTransactions(entities, userId = userId, includeAttachments = false)
+        }
 
     override fun getRecentTransactions(userId: String, limit: Int): Flow<List<Transaction>> =
-        transactionDao.getRecentTransactionsFlow(userId, limit).map { it.map { e -> e.enriched() } }
+        transactionDao.getRecentTransactionsFlow(userId, limit).map { entities ->
+            enrichTransactions(entities, userId = userId, includeAttachments = false)
+        }
 
     override fun searchTransactions(userId: String, query: String): Flow<List<Transaction>> =
-        transactionDao.searchTransactions(userId, query).map { it.map { e -> e.enriched() } }
+        transactionDao.searchTransactions(userId, query).map { entities ->
+            enrichTransactions(entities, userId = userId, includeAttachments = false)
+        }
 
     private suspend fun TransactionEntity.enriched(): Transaction {
         val category = categoryDao.getCategoryById(categoryId)
@@ -233,6 +244,64 @@ class TransactionRepositoryImpl @Inject constructor(
 
     override suspend fun getTransactionById(id: Long): Transaction? =
         transactionDao.getTransactionById(id)?.enriched()
+
+    private suspend fun enrichTransactions(
+        entities: List<TransactionEntity>,
+        userId: String,
+        includeAttachments: Boolean
+    ): List<Transaction> {
+        if (entities.isEmpty()) return emptyList()
+
+        val categoriesById = categoryDao.getAllCategoriesOneShot(userId)
+            .associateBy { it.id }
+        val bankAccountsById = bankAccountDao.getAllAccountsOneShot(userId)
+            .associateBy { it.id }
+        val paymentModesById = paymentModeDao.getAllModesOneShot(userId)
+            .associateBy { it.id }
+        val creditCardsById = creditCardDao.getAllCardsOneShot(userId)
+            .associateBy { it.id }
+        val attachmentsByTxnId = if (includeAttachments) {
+            attachmentDao.getAttachmentsForTransactions(entities.map { it.id })
+                .groupBy { it.transactionId }
+        } else {
+            emptyMap<Long, List<com.expensetracker.data.local.entity.AttachmentEntity>>()
+        }
+
+        return entities.map { entity ->
+            val category = categoriesById[entity.categoryId]
+            val fromLabel = when {
+                entity.paymentModeId != null -> {
+                    val mode = paymentModesById[entity.paymentModeId]
+                    val bankName = mode?.bankAccountId?.let { bankAccountsById[it]?.name } ?: ""
+                    mode?.toDomain(bankName)?.displayLabel ?: ""
+                }
+                entity.creditCardId != null -> {
+                    creditCardsById[entity.creditCardId]?.toDomain()?.displayLabel ?: ""
+                }
+                else -> ""
+            }
+            val toLabel = when {
+                entity.toPaymentModeId != null -> {
+                    val mode = paymentModesById[entity.toPaymentModeId]
+                    val bankName = mode?.bankAccountId?.let { bankAccountsById[it]?.name } ?: ""
+                    mode?.toDomain(bankName)?.displayLabel ?: ""
+                }
+                entity.toCreditCardId != null -> {
+                    creditCardsById[entity.toCreditCardId]?.toDomain()?.displayLabel ?: ""
+                }
+                else -> ""
+            }
+
+            entity.toDomain(
+                categoryName = category?.name ?: "",
+                categoryIcon = category?.icon ?: "category",
+                categoryColorHex = category?.colorHex ?: "#6750A4",
+                paymentModeName = fromLabel,
+                toPaymentModeName = toLabel,
+                attachments = attachmentsByTxnId[entity.id]?.map { it.toDomain() } ?: emptyList()
+            )
+        }
+    }
 
     override suspend fun insertTransaction(transaction: Transaction): Long {
         val id = transactionDao.insertTransaction(transaction.toEntity())
@@ -363,7 +432,25 @@ class TransactionRepositoryImpl @Inject constructor(
     ): Double = transactionDao.getAllExpense(userId, toEpochMilli(start), toEpochMilli(end))
 
     override suspend fun getAllTransactionsOneShot(userId: String): List<Transaction> =
-        transactionDao.getAllTransactionsOneShot(userId).map { it.enriched() }
+        enrichTransactions(
+            transactionDao.getAllTransactionsOneShot(userId),
+            userId = userId,
+            includeAttachments = false
+        )
+
+    override suspend fun getTransactionsInRangeOneShot(
+        userId: String,
+        start: LocalDateTime,
+        end: LocalDateTime
+    ): List<Transaction> = enrichTransactions(
+        transactionDao.getTransactionsInRangeOneShot(
+            userId = userId,
+            startMillis = toEpochMilli(start) ?: 0L,
+            endMillis = toEpochMilli(end) ?: 0L
+        ),
+        userId = userId,
+        includeAttachments = false
+    )
 
     override suspend fun getAvailableFilters(userId: String): List<ExportFilter> {
         val result = transactionDao.getAvailableYearMonths(userId)

@@ -130,10 +130,31 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_transactions_userId_dateTimeMillis` " +
+                    "ON `transactions` (`userId`, `dateTimeMillis`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_transactions_userId_type_dateTimeMillis` " +
+                    "ON `transactions` (`userId`, `type`, `dateTimeMillis`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_transactions_userId_categoryId_dateTimeMillis` " +
+                    "ON `transactions` (`userId`, `categoryId`, `dateTimeMillis`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_transactions_userId_paymentModeId_dateTimeMillis` " +
+                    "ON `transactions` (`userId`, `paymentModeId`, `dateTimeMillis`)"
+            )
+        }
+    }
+
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
-            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .fallbackToDestructiveMigration()
             .build()
 

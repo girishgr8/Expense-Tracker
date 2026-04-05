@@ -21,6 +21,9 @@ interface CategoryDao {
     @Query("SELECT * FROM categories WHERE userId = :userId OR userId = '' ORDER BY name ASC")
     fun getAllCategories(userId: String): Flow<List<CategoryEntity>>
 
+    @Query("SELECT * FROM categories WHERE userId = :userId OR userId = '' ORDER BY name ASC")
+    suspend fun getAllCategoriesOneShot(userId: String): List<CategoryEntity>
+
     @Query("SELECT * FROM categories WHERE (userId = :userId OR userId = '') AND (transactionType IS NULL OR transactionType = :type) ORDER BY name ASC")
     fun getCategoriesByType(userId: String, type: String): Flow<List<CategoryEntity>>
 
@@ -47,6 +50,9 @@ interface CategoryDao {
 interface BankAccountDao {
     @Query("SELECT * FROM bank_accounts WHERE userId = :userId ORDER BY name ASC")
     fun getAllAccounts(userId: String): Flow<List<BankAccountEntity>>
+
+    @Query("SELECT * FROM bank_accounts WHERE userId = :userId")
+    suspend fun getAllAccountsOneShot(userId: String): List<BankAccountEntity>
 
     @Query("SELECT * FROM bank_accounts WHERE id = :id")
     suspend fun getAccountById(id: Long): BankAccountEntity?
@@ -135,6 +141,9 @@ interface CreditCardDao {
     @Query("SELECT * FROM credit_cards WHERE userId = :userId ORDER BY name ASC")
     fun getAllCards(userId: String): Flow<List<CreditCardEntity>>
 
+    @Query("SELECT * FROM credit_cards WHERE userId = :userId")
+    suspend fun getAllCardsOneShot(userId: String): List<CreditCardEntity>
+
     @Query("SELECT * FROM credit_cards WHERE id = :id")
     suspend fun getCardById(id: Long): CreditCardEntity?
 
@@ -155,6 +164,9 @@ interface AttachmentDao {
 
     @Query("SELECT * FROM attachments WHERE transactionId = :transactionId")
     suspend fun getAttachmentsForTransactionOneShot(transactionId: Long): List<AttachmentEntity>
+
+    @Query("SELECT * FROM attachments WHERE transactionId IN (:transactionIds)")
+    suspend fun getAttachmentsForTransactions(transactionIds: List<Long>): List<AttachmentEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttachment(attachment: AttachmentEntity): Long
