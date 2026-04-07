@@ -8,14 +8,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toColorLong
+import androidx.compose.ui.platform.LocalView
 import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.expensetracker.presentation.navigation.AppNavGraph
@@ -78,6 +84,18 @@ fun AppRoot() {
         ExpenseTrackerTheme(
             darkTheme = isDark, dynamicColor = useDynamicColor
         ) {
+            // Match gesture nav bar color to the app bottom bar
+            val view = LocalView.current
+            // Transparent nav bar — the app draws its own bottom bar color
+            val navBarColor = MaterialTheme.colorScheme.surfaceContainer.toArgb()
+            SideEffect {
+                val window = (view.context as android.app.Activity).window
+                window.navigationBarColor = navBarColor
+                // Tell the system whether the nav bar icons should be light or dark
+                WindowInsetsControllerCompat(window, view).apply {
+                    isAppearanceLightNavigationBars = !isDark
+                }
+            }
             Surface(modifier = Modifier.fillMaxSize()) {
                 AppNavGraph(navController = navController, mainViewModel = mainViewModel)
             }
