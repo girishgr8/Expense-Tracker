@@ -117,6 +117,9 @@ import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
+import com.expensetracker.presentation.components.LocalCurrencyFormat
+import com.expensetracker.presentation.components.LocalCurrencySymbol
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TextWarning
@@ -130,10 +133,9 @@ import kotlin.math.abs
 
 // ─── Amount formatting helper ─────────────────────────────────────────────────
 /** Formats an amount without trailing .00 — e.g. 10.0 → "10", 10.5 → "10.50" */
-private fun fmtAmt(amount: Double): String {
-    val long = amount.toLong()
-    return if (amount == long.toDouble()) "%,d".format(long) else "%,.2f".format(amount)
-}
+@Composable
+private fun fmtAmt(amount: Double): String =
+    formatAmountForDisplay(amount, LocalCurrencyFormat.current)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1604,7 +1606,7 @@ private fun CardTransactionRow(txn: Transaction, currencySymbol: String) {
                 )
                 Spacer(Modifier.width(4.dp))
                 val cardName = txn.paymentModeName.ifEmpty { "Credit Card" }
-                    .replace(Regex("""\s*\(₹[^)]+\)"""), "").trim()
+                    .replace(Regex("""\s*\([^)]*available\)"""), "").trim()
                 Text(
                     text = cardName,
                     style = MaterialTheme.typography.bodySmall,
@@ -1645,6 +1647,7 @@ private fun EditAccountSheet(
     onDelete: () -> Unit,
     onDeleteMode: (PaymentMode) -> Unit
 ) {
+    val currencySymbol = LocalCurrencySymbol.current
     var editName by remember(account) { mutableStateOf(account.name) }
     var editBalance by remember(account) { mutableStateOf(account.balance.toString()) }
     var localLinkedModes by remember(account.id, linkedModes) { mutableStateOf(linkedModes) }
@@ -1761,7 +1764,7 @@ private fun EditAccountSheet(
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "₹",
+                        currencySymbol,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Light,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -2976,6 +2979,7 @@ private fun EditCreditCardSheet(
     onSave: (String, Double, Double, Int, Int, String) -> Unit,
     onDelete: () -> Unit
 ) {
+    val currencySymbol = LocalCurrencySymbol.current
     var name by remember(card) { mutableStateOf(card.name) }
     var availableLimit by remember(card) { mutableStateOf(card.availableLimit.toLong().toString()) }
     var totalLimit by remember(card) { mutableStateOf(card.totalLimit.toLong().toString()) }
@@ -3086,7 +3090,7 @@ private fun EditCreditCardSheet(
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "₹",
+                        currencySymbol,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Light,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -3126,7 +3130,7 @@ private fun EditCreditCardSheet(
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "₹",
+                        currencySymbol,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Light,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -3478,6 +3482,7 @@ private fun AddEditAccountDialog(
     onDismiss: () -> Unit,
     onSave: (name: String, balance: Double, colorHex: String) -> Unit
 ) {
+    val currencySymbol = LocalCurrencySymbol.current
     var name by remember { mutableStateOf(editing?.name ?: "") }
     var balance by remember { mutableStateOf(editing?.balance?.toString() ?: "0") }
     var colorHex by remember { mutableStateOf(editing?.colorHex ?: "#6750A4") }
@@ -3505,7 +3510,7 @@ private fun AddEditAccountDialog(
                     label = { Text("Current Balance") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.CurrencyRupee, null) },
+                    leadingIcon = { Text(currencySymbol, fontWeight = FontWeight.SemiBold) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 Text("Colour", style = MaterialTheme.typography.labelLarge)
@@ -3557,8 +3562,9 @@ private fun AddEditCreditCardDialog(
     onSave: (
         name: String, availableLimit: Double, totalLimit: Double,
         billingCycleDate: Int, paymentDueDate: Int, colorHex: String
-    ) -> Unit
+) -> Unit
 ) {
+    val currencySymbol = LocalCurrencySymbol.current
     var name by remember { mutableStateOf(editing?.name ?: "") }
     var availableLimit by remember { mutableStateOf(editing?.availableLimit?.toString() ?: "") }
     var totalLimit by remember { mutableStateOf(editing?.totalLimit?.toString() ?: "") }
@@ -3592,18 +3598,18 @@ private fun AddEditCreditCardDialog(
                     leadingIcon = { Icon(Icons.Default.CreditCard, null) })
                 OutlinedTextField(
                     value = availableLimit, onValueChange = { availableLimit = it },
-                    label = { Text("Current Available Limit (₹)") },
+                    label = { Text("Current Available Limit ($currencySymbol)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.CurrencyRupee, null) },
+                    leadingIcon = { Text(currencySymbol, fontWeight = FontWeight.SemiBold) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 OutlinedTextField(
                     value = totalLimit, onValueChange = { totalLimit = it },
-                    label = { Text("Total Credit Limit (₹)") },
+                    label = { Text("Total Credit Limit ($currencySymbol)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.CurrencyRupee, null) },
+                    leadingIcon = { Text(currencySymbol, fontWeight = FontWeight.SemiBold) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

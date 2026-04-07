@@ -30,6 +30,7 @@ import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -692,6 +693,7 @@ class TagRepositoryImpl @Inject constructor(
 @Singleton
 class ExportRepositoryImpl @Inject constructor(
     private val transactionRepository: TransactionRepository,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ExportRepository {
 
     override suspend fun exportTransactions(
@@ -713,6 +715,8 @@ class ExportRepositoryImpl @Inject constructor(
         val sortedTransactions = filteredTransactions.sortedByDescending {
             it.dateTime
         }
+        val currencySymbol = userPreferencesRepository.currencySymbol.first()
+        val currencyFormat = userPreferencesRepository.currencyFormat.first()
 
         val uri = if (isPdf) {
             PdfExporter.generate(
@@ -720,7 +724,9 @@ class ExportRepositoryImpl @Inject constructor(
                 sortedTransactions,
                 userName,
                 userEmail,
-                filter.displayName
+                filter.displayName,
+                currencySymbol,
+                currencyFormat
             )
         } else {
             CsvExporter.generate(context, sortedTransactions)

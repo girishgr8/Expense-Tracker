@@ -59,7 +59,10 @@ import androidx.compose.ui.unit.dp
 import com.expensetracker.domain.model.Attachment
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.components.LocalCurrencyFormat
+import com.expensetracker.presentation.components.LocalCurrencySymbol
 import com.expensetracker.presentation.components.TagChip
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
@@ -69,10 +72,9 @@ import java.time.format.DateTimeFormatter
 
 // ─── Amount formatting helper ─────────────────────────────────────────────────
 /** Formats an amount without trailing .00 — e.g. 10.0 → "10", 10.5 → "10.50" */
-private fun fmtAmt(amount: Double): String {
-    val long = amount.toLong()
-    return if (amount == long.toDouble()) "%,d".format(long) else "%,.2f".format(amount)
-}
+@Composable
+private fun fmtAmt(amount: Double): String =
+    formatAmountForDisplay(amount, LocalCurrencyFormat.current)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +95,7 @@ fun TransactionDetailSheet(
         TransactionType.EXPENSE -> "-"
         TransactionType.TRANSFER -> "↔"
     }
+    val currencySymbol = LocalCurrencySymbol.current
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
@@ -130,7 +133,7 @@ fun TransactionDetailSheet(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "$prefix₹${fmtAmt(transaction.amount)}",
+                        text = "$prefix$currencySymbol${fmtAmt(transaction.amount)}",
                         style = MaterialTheme.typography.displaySmall,
                         color = headerColor,
                         fontWeight = FontWeight.ExtraBold

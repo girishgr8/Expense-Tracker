@@ -13,6 +13,7 @@ import android.provider.MediaStore
 import androidx.core.graphics.toColorInt
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import java.time.format.DateTimeFormatter
 
 object PdfExporter {
@@ -58,7 +59,9 @@ object PdfExporter {
         transactions: List<Transaction>,
         userName: String,
         userEmail: String,
-        filterLabel: String
+        filterLabel: String,
+        currencySymbol: String = "₹",
+        currencyFormat: String = "millions"
     ): Uri? {
         if (transactions.isEmpty()) return null
 
@@ -85,8 +88,8 @@ object PdfExporter {
         fillBackground()
 
         // ── Page 1: header + summary + table header ───────────────────────────
-        var y = drawDocumentHeader(canvas, userName, userEmail)
-        y = drawSummarySection(canvas, transactions, filterLabel, y)
+        var y = drawDocumentHeader(canvas, userName, userEmail, currencySymbol)
+        y = drawSummarySection(canvas, transactions, filterLabel, y, currencySymbol, currencyFormat)
         y = drawTableHeader(canvas, y)
 
         // ── Transaction rows ──────────────────────────────────────────────────
@@ -99,7 +102,7 @@ object PdfExporter {
                 finishAndNewPage()
                 y = drawTableHeaderContinuation(canvas)
             }
-            y = drawTransactionRow(canvas, txn, y, dateFmt, timeFmt)
+            y = drawTransactionRow(canvas, txn, y, dateFmt, timeFmt, currencySymbol, currencyFormat)
         }
 
         // Finish last page
@@ -124,7 +127,12 @@ object PdfExporter {
 
     // ── Header ────────────────────────────────────────────────────────────────
 
-    private fun drawDocumentHeader(canvas: Canvas, userName: String, userEmail: String): Int {
+    private fun drawDocumentHeader(
+        canvas: Canvas,
+        userName: String,
+        userEmail: String,
+        currencySymbol: String
+    ): Int {
         // Background strip
         val bgPaint = Paint().apply { color = COLOR_HEADER_BG; style = Paint.Style.FILL }
         canvas.drawRect(0f, 0f, PAGE_W.toFloat(), 130f, bgPaint)
@@ -137,12 +145,12 @@ object PdfExporter {
             color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 3f
         }
         canvas.drawCircle(MARGIN + 28f, 65f, 28f, logoBorderPaint)
-        // Logo "₹" symbol
+        // Logo currency symbol
         val logoTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE; textSize = 28f; isFakeBoldText = true; textAlign =
             Paint.Align.CENTER
         }
-        canvas.drawText("₹", MARGIN + 28f, 75f, logoTextPaint)
+        canvas.drawText(currencySymbol, MARGIN + 28f, 75f, logoTextPaint)
 
         // App name
         val appNamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -176,7 +184,12 @@ object PdfExporter {
     // ── Summary section ───────────────────────────────────────────────────────
 
     private fun drawSummarySection(
-        canvas: Canvas, transactions: List<Transaction>, filterLabel: String, startY: Int
+        canvas: Canvas,
+        transactions: List<Transaction>,
+        filterLabel: String,
+        startY: Int,
+        currencySymbol: String,
+        currencyFormat: String
     ): Int {
         val income = transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
         val expense = transactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
@@ -221,7 +234,7 @@ object PdfExporter {
             }
             if (idx == 1) "" else ""   // no prefix on spending
             canvas.drawText(
-                "₹${formatAmount(amount)}",
+                "$currencySymbol${formatAmount(amount, currencyFormat)}",
                 bx + 18, boxY + 52f, amtPaint
             )
 
@@ -295,7 +308,9 @@ object PdfExporter {
         txn: Transaction,
         startY: Int,
         dateFmt: DateTimeFormatter,
-        timeFmt: DateTimeFormatter
+        timeFmt: DateTimeFormatter,
+        currencySymbol: String,
+        currencyFormat: String
     ): Int {
         val rowH = measureRowHeight(txn)
         val midY = startY + rowH / 2f
@@ -325,7 +340,7 @@ object PdfExporter {
             color = amtColor; textSize = 25f; isFakeBoldText = true
         }
         canvas.drawText(
-            "${amtPrefix}₹${formatAmount(txn.amount)}",
+            "$amtPrefix$currencySymbol${formatAmount(txn.amount, currencyFormat)}",
             COL_AMT.toFloat(), midY - 6f, amtPaint
         )
 
@@ -438,13 +453,8 @@ object PdfExporter {
         return 1 + ((remaining + rowsPerPage - 1) / rowsPerPage)
     }
 
-    private fun formatAmount(amount: Double): String {
-        val long = amount.toLong()
-        return if (amount == long.toDouble())
-            "%,d".format(long)
-        else
-            "%,.1f".format(amount)
-    }
+    private fun formatAmount(amount: Double, currencyFormat: String): String =
+        formatAmountForDisplay(amount, currencyFormat, decimalFmt = "one")
 
     private fun parseColorSafe(hex: String): Int? = runCatching {
         Color.parseColor(if (hex.startsWith("#")) hex else "#$hex")

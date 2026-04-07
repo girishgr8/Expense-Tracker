@@ -2,7 +2,6 @@ package com.expensetracker.util
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 object FormatUtils {
 
@@ -27,24 +26,68 @@ object FormatUtils {
      *   "one"     — always 1 decimal place
      *   "two"     — always 2 decimal places
      */
-    fun Double.smartFormat(decimalPref: String = "default"): String = when (decimalPref) {
-        "none" -> String.format(Locale.getDefault(), "%,.0f", this)
-        "one"  -> String.format(Locale.getDefault(), "%,.1f", this)
-        "two"  -> String.format(Locale.getDefault(), "%,.2f", this)
-        else   -> {                               // "default" — optimized for readability
-            val long = toLong()
-            if (this == long.toDouble()) String.format(Locale.getDefault(), "%,d", long)
-            else String.format(Locale.getDefault(), "%,.2f", this)
+    fun Double.smartFormat(
+        decimalPref: String = "default",
+        currencyFormat: String = "millions"
+    ): String = formatAmountForDisplay(this, currencyFormat, decimalPref)
+
+    fun Double.toCurrency(
+        symbol: String = "₹",
+        currencyFormat: String = "millions"
+    ): String = "$symbol${smartFormat(currencyFormat = currencyFormat)}"
+
+    fun Double.toCurrencyCompact(
+        symbol: String = "₹",
+        currencyFormat: String = "millions"
+    ): String = when {
+        currencyFormat == "none" -> "$symbol${formatAmountForDisplay(this, currencyFormat, decimalFmt = "none")}"
+        currencyFormat == "lakhs" && this >= 1_00_000 -> "$symbol${"%.1f".format(this / 1_00_000)}L"
+        currencyFormat != "lakhs" && this >= 1_000_000 -> "$symbol${"%.1f".format(this / 1_000_000)}M"
+        this >= 1_000 -> "$symbol${"%.1f".format(this / 1_000)}K"
+        else -> "$symbol${formatAmountForDisplay(this, currencyFormat, decimalFmt = "none")}"
+    }
+
+    fun formatAmountForDisplay(
+        amount: Double,
+        currencyFormat: String,
+        decimalFmt: String = "default"
+    ): String {
+        val long = amount.toLong()
+        val formatted = when (decimalFmt) {
+            "none" -> "%.0f".format(amount)
+            "one" -> "%.1f".format(amount)
+            "two" -> "%.2f".format(amount)
+            else -> if (amount == long.toDouble()) "%d".format(long) else "%.2f".format(amount)
+        }
+        val parts = formatted.split(".", limit = 2)
+        val integerPart = parts.first()
+        val decimalPart = parts.getOrNull(1)
+        val sign = if (integerPart.startsWith("-")) "-" else ""
+        val digits = integerPart.removePrefix("-")
+        val groupedInteger = when (currencyFormat) {
+            "none" -> digits
+            "lakhs" -> groupIndianDigits(digits)
+            else -> groupWesternDigits(digits)
+        }
+        return buildString {
+            append(sign)
+            append(groupedInteger)
+            if (decimalPart != null) {
+                append(".")
+                append(decimalPart)
+            }
         }
     }
 
-    fun Double.toCurrency(symbol: String = "₹"): String =
-        "$symbol${smartFormat()}"
+    private fun groupWesternDigits(digits: String): String =
+        digits.reversed().chunked(3).joinToString(",").reversed()
 
-    fun Double.toCurrencyCompact(symbol: String = "₹"): String = when {
-        this >= 1_000_000 -> "$symbol${"%.1f".format(this / 1_000_000)}M"
-        this >= 1_000     -> "$symbol${"%.1f".format(this / 1_000)}K"
-        else              -> "$symbol${String.format("%,.0f", this)}"
+    private fun groupIndianDigits(digits: String): String {
+        if (digits.length <= 3) return digits
+        val suffix = digits.takeLast(3)
+        val prefix = digits.dropLast(3)
+        val groupedPrefix = prefix.reversed().chunked(2).joinToString(",").reversed()
+        return "$groupedPrefix,$suffix"
     }
 
     fun Long.toFileSize(): String = when {

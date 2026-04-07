@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -31,14 +30,12 @@ import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,8 +52,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -76,25 +73,21 @@ import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.components.LoadingOverlay
+import com.expensetracker.presentation.components.LocalCurrencyFormat
+import com.expensetracker.presentation.components.LocalCurrencySymbol
 import com.expensetracker.presentation.theme.CardGradientEnd
 import com.expensetracker.presentation.theme.CardGradientStart
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
-
 // ─── Amount formatting helper ─────────────────────────────────────────────────
 /** Formats an amount without trailing .00 — e.g. 10.0 → "10", 10.5 → "10.50" */
-private fun fmtAmt(amount: Double): String {
-    val long = amount.toLong()
-    return if (amount == long.toDouble()) "%,d".format(long) else "%,.2f".format(amount)
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -109,6 +102,8 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val currencySymbol = LocalCurrencySymbol.current
+    val currencyFormat = LocalCurrencyFormat.current
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -143,6 +138,8 @@ fun DashboardScreen(
                 CashFlowCard(
                     summary = uiState.summary,
                     selectedPeriod = uiState.selectedPeriod,
+                    currencySymbol = currencySymbol,
+                    currencyFormat = currencyFormat,
                     onPeriodChange = viewModel::selectPeriod,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
@@ -174,7 +171,8 @@ fun DashboardScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    TextButton(onClick = onNavigateToTransactions,
+                    TextButton(
+                        onClick = onNavigateToTransactions,
                         contentPadding = PaddingValues(end = 0.dp)
                     ) {
                         Text(
@@ -219,7 +217,11 @@ fun DashboardScreen(
                     ) {
                         Column {
                             uiState.recentTransactions.forEachIndexed { index, txn ->
-                                DashboardTransactionRow(txn = txn)
+                                DashboardTransactionRow(
+                                    txn = txn,
+                                    currencySymbol = currencySymbol,
+                                    currencyFormat = currencyFormat
+                                )
                                 if (index < uiState.recentTransactions.size - 1) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -246,6 +248,8 @@ fun DashboardScreen(
                 Spacer(Modifier.height(12.dp))
                 DashboardBudgetSection(
                     budgetProgress = uiState.budgetProgress,
+                    currencySymbol = currencySymbol,
+                    currencyFormat = currencyFormat,
                     onSetBudget = onNavigateToSetBudget,
                     onTapBudget = onNavigateToBudget
                 )
@@ -261,6 +265,8 @@ fun DashboardScreen(
 @Composable
 private fun DashboardBudgetSection(
     budgetProgress: BudgetProgress?,
+    currencySymbol: String,
+    currencyFormat: String,
     onSetBudget: () -> Unit,
     onTapBudget: () -> Unit
 ) {
@@ -341,7 +347,12 @@ private fun DashboardBudgetSection(
             }
         } else {
             // ── Budget exists — progress card ─────────────────────────────────
-            BudgetProgressInline(bp = budgetProgress, onTap = onTapBudget)
+            BudgetProgressInline(
+                bp = budgetProgress,
+                currencySymbol = currencySymbol,
+                currencyFormat = currencyFormat,
+                onTap = onTapBudget
+            )
         }
     }
 }
@@ -400,7 +411,12 @@ private fun BudgetPeriodPill(
 }
 
 @Composable
-private fun BudgetProgressInline(bp: BudgetProgress, onTap: () -> Unit) {
+private fun BudgetProgressInline(
+    bp: BudgetProgress,
+    currencySymbol: String,
+    currencyFormat: String,
+    onTap: () -> Unit
+) {
     val pct = (bp.percentage / 100f).coerceIn(0f, 1f)
     val barColor = when {
         bp.percentage >= 90f -> ExpenseRed
@@ -450,11 +466,16 @@ private fun BudgetProgressInline(bp: BudgetProgress, onTap: () -> Unit) {
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    "₹${fmtAmt(bp.spent)}",
+                    "$currencySymbol${formatAmountForDisplay(bp.spent, currencyFormat)}",
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "of ₹${fmtAmt(bp.budget.totalLimit)}",
+                    "of $currencySymbol${
+                        formatAmountForDisplay(
+                            bp.budget.totalLimit,
+                            currencyFormat
+                        )
+                    }",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -552,6 +573,8 @@ private fun DashboardHeader(
 private fun CashFlowCard(
     summary: MonthlySummary,
     selectedPeriod: SummaryPeriod,
+    currencySymbol: String,
+    currencyFormat: String,
     onPeriodChange: (SummaryPeriod) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -645,7 +668,12 @@ private fun CashFlowCard(
                     )
                     Spacer(Modifier.height(4.dp))
                     AutoResizingAmountText(
-                        text = "₹${fmtAmt(summary.totalExpense)}",
+                        text = "$currencySymbol${
+                            formatAmountForDisplay(
+                                summary.totalExpense,
+                                currencyFormat
+                            )
+                        }",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold,
@@ -662,7 +690,12 @@ private fun CashFlowCard(
                     )
                     Spacer(Modifier.height(4.dp))
                     AutoResizingAmountText(
-                        text = "₹${fmtAmt(summary.totalIncome)}",
+                        text = "$currencySymbol${
+                            formatAmountForDisplay(
+                                summary.totalIncome,
+                                currencyFormat
+                            )
+                        }",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold,
@@ -693,11 +726,18 @@ private fun CashFlowCard(
                         color = Color.White.copy(alpha = 0.75f)
                     )
                     AutoResizingAmountText(
-                        text = "${if (summary.netBalance >= 0) "+" else ""}₹${fmtAmt(summary.netBalance)}",
+                        text = "${if (summary.netBalance >= 0) "+" else ""}$currencySymbol${
+                            formatAmountForDisplay(
+                                summary.netBalance,
+                                currencyFormat
+                            )
+                        }",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = if (summary.netBalance >= 0) IncomeGreen else ExpenseRed,
-                        modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End),
+                        modifier = Modifier
+                            .weight(1f)
+                            .wrapContentWidth(Alignment.End),
                         textAlign = TextAlign.End,
                         maxFontSize = MaterialTheme.typography.titleMedium.fontSize,
                         minFontSize = 12.sp
@@ -830,7 +870,11 @@ private fun QuickActionTile(action: QuickAction, modifier: Modifier = Modifier) 
 // ─── Transaction Row (inside the grouped card) ────────────────────────────────
 
 @Composable
-private fun DashboardTransactionRow(txn: Transaction) {
+private fun DashboardTransactionRow(
+    txn: Transaction,
+    currencySymbol: String,
+    currencyFormat: String
+) {
     val dateFormatter = DateTimeFormatter.ofPattern("MMM dd")
     val title = txn.note.ifEmpty { txn.categoryName.ifEmpty { "Uncategorized" } }
 
@@ -857,10 +901,10 @@ private fun DashboardTransactionRow(txn: Transaction) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            // Payment mode — strip any parenthetical balance info e.g. "(₹X,XXX available)"
+            // Payment mode — strip any parenthetical balance info e.g. "(X available)"
             if (txn.paymentModeName.isNotEmpty()) {
                 val modeDisplay = txn.paymentModeName
-                    .replace(Regex("""\s*\(₹[^)]+\)"""), "").trim()
+                    .replace(Regex("""\s*\([^)]*available\)"""), "").trim()
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -896,7 +940,7 @@ private fun DashboardTransactionRow(txn: Transaction) {
                 TransactionType.TRANSFER -> ""
             }
             Text(
-                "$prefix₹${fmtAmt(txn.amount)}",
+                "$prefix$currencySymbol${formatAmountForDisplay(txn.amount, currencyFormat)}",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = amountColor

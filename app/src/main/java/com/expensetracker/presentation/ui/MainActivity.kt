@@ -19,6 +19,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.expensetracker.presentation.navigation.AppNavGraph
+import com.expensetracker.presentation.components.LocalCurrencyFormat
+import com.expensetracker.presentation.components.LocalCurrencySymbol
 import com.expensetracker.presentation.theme.ExpenseTrackerTheme
 import com.expensetracker.util.LocalHapticManager
 import com.expensetracker.util.rememberHapticManager
@@ -55,6 +57,8 @@ fun AppRoot() {
     val themeMode by mainViewModel.themeMode.collectAsState()
     val useDynamicColor by mainViewModel.useDynamicColor.collectAsState()
     val isHapticsEnabled by mainViewModel.isHapticsEnabled.collectAsState()
+    val currencySymbol by mainViewModel.currencySymbol.collectAsState()
+    val currencyFormat by mainViewModel.currencyFormat.collectAsState()
     val systemDark = isSystemInDarkTheme()
 
     val hapticManager = rememberHapticManager(isHapticsEnabled)
@@ -67,7 +71,9 @@ fun AppRoot() {
     }
 
     CompositionLocalProvider(
-        LocalHapticManager provides hapticManager
+        LocalHapticManager provides hapticManager,
+        LocalCurrencySymbol provides currencySymbol,
+        LocalCurrencyFormat provides currencyFormat
     ) {
         ExpenseTrackerTheme(
             darkTheme = isDark, dynamicColor = useDynamicColor

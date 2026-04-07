@@ -34,6 +34,7 @@ import com.expensetracker.data.repository.TagRepository
 import com.expensetracker.data.repository.TagRepositoryImpl
 import com.expensetracker.data.repository.TransactionRepository
 import com.expensetracker.data.repository.TransactionRepositoryImpl
+import com.expensetracker.data.repository.UserPreferencesRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -194,9 +195,10 @@ object ExportModule {
     @Provides
     @Singleton
     fun provideExportRepository(
-        transactionRepository: TransactionRepository
+        transactionRepository: TransactionRepository,
+        userPreferencesRepository: UserPreferencesRepository
     ): ExportRepository {
-        return ExportRepositoryImpl(transactionRepository)
+        return ExportRepositoryImpl(transactionRepository, userPreferencesRepository)
     }
 }
 

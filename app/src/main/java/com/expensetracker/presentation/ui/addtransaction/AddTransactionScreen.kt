@@ -124,6 +124,7 @@ import com.expensetracker.domain.model.PaymentOption
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.CategoryIconBubble
+import com.expensetracker.presentation.components.LocalCurrencySymbol
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
@@ -517,8 +518,9 @@ private fun AmountEntryRow(
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val currencySymbol = LocalCurrencySymbol.current
         Text(
-            text = "₹",
+            text = currencySymbol,
             style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp),
             color = accentColor,
             fontWeight = FontWeight.SemiBold
@@ -1960,13 +1962,12 @@ private fun SeamlessNoteField(
     accentColor: Color,
     onNoteChange: (String) -> Unit
 ) {
-    val accent = accentColor
     val onSurface = MaterialTheme.colorScheme.onSurface
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Icon(
-            Icons.AutoMirrored.Filled.Notes, null, tint = accent,
+            Icons.AutoMirrored.Filled.Notes, null, tint = accentColor,
             modifier = Modifier
                 .padding(top = 14.dp)
                 .size(22.dp)
@@ -1979,7 +1980,7 @@ private fun SeamlessNoteField(
                     .fillMaxWidth()
                     .padding(vertical = 12.dp),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = onSurface),
-                cursorBrush = SolidColor(accent),
+                cursorBrush = SolidColor(accentColor),
                 maxLines = 5,
                 decorationBox = { inner ->
                     if (note.isEmpty()) Text(
@@ -2009,13 +2010,12 @@ private fun SeamlessTagsSection(
     onSearchTag: (String) -> Unit
 ) {
     var tagInput by remember { mutableStateOf("") }
-    val accent = accentColor
     val onSurface = MaterialTheme.colorScheme.onSurface
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Icon(
-            Icons.Default.Tag, null, tint = accent,
+            Icons.Default.Tag, null, tint = accentColor,
             modifier = Modifier
                 .padding(top = 14.dp)
                 .size(22.dp)
@@ -2030,7 +2030,7 @@ private fun SeamlessTagsSection(
                         .weight(1f)
                         .padding(vertical = 12.dp),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = onSurface),
-                    cursorBrush = SolidColor(accent),
+                    cursorBrush = SolidColor(accentColor),
                     singleLine = true,
                     decorationBox = { inner ->
                         if (tagInput.isEmpty()) Text(
@@ -2047,7 +2047,7 @@ private fun SeamlessTagsSection(
                     ) {
                         Icon(
                             Icons.Default.Add, "Add Tag",
-                            Modifier.size(18.dp), tint = accent
+                            Modifier.size(18.dp), tint = accentColor
                         )
                     }
                 }
@@ -2116,7 +2116,6 @@ private fun SeamlessAttachmentRow(
     onPickAttachment: () -> Unit,
     onRemoveAttachment: () -> Unit
 ) {
-    val accent = accentColor
 
     Column {
         // Tap row — shown always if no attachment yet, or if we want to replace
@@ -2129,7 +2128,7 @@ private fun SeamlessAttachmentRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.AttachFile, null, tint = accent,
+                    Icons.Default.AttachFile, null, tint = accentColor,
                     modifier = Modifier.size(22.dp)
                 )
                 Spacer(Modifier.width(16.dp))

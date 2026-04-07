@@ -258,7 +258,7 @@ class AnalysisViewModel @Inject constructor(
         // Group by paymentModeName (strip balance parenthetical for cleaner labels)
         val grouped = txns
             .filter { it.paymentModeName.isNotEmpty() }
-            .groupBy { it.paymentModeName.replace(Regex("""\s*\(₹[^)]+\)"""), "").trim() }
+            .groupBy { it.paymentModeName.replace(Regex("""\s*\([^)]*available\)"""), "").trim() }
 
         return grouped.map { (name, list) ->
             PaymentModeSpend(

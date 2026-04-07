@@ -107,6 +107,9 @@ import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
+import com.expensetracker.presentation.components.LocalCurrencyFormat
+import com.expensetracker.presentation.components.LocalCurrencySymbol
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -289,6 +292,7 @@ fun BudgetScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var isMonthly by remember { mutableStateOf(true) }
+    val currencySymbol = LocalCurrencySymbol.current
     val now = YearMonth.now()
 
     val filteredBudgets = uiState.budgets.filter { p ->
@@ -316,6 +320,7 @@ fun BudgetScreen(
         BudgetAnalysisScreen(
             progress = selected,
             breakdown = uiState.analysisBreakdown,
+            currencySymbol = currencySymbol,
             onNavigateBack = viewModel::closeBudgetAnalysis,
             onEdit = {
                 viewModel.closeBudgetAnalysis()
@@ -394,6 +399,7 @@ fun BudgetScreen(
                     Spacer(Modifier.height(8.dp))
                     ActiveBudgetCard(
                         progress = activeBudget,
+                        currencySymbol = currencySymbol,
                         onOpen = { viewModel.openBudgetAnalysis(activeBudget) },
                         onEdit = {
                             if (onNavigateToAddBudget != null)
@@ -411,6 +417,7 @@ fun BudgetScreen(
                 if (upcomingBudget != null) {
                     UpcomingBudgetCard(
                         progress = upcomingBudget,
+                        currencySymbol = currencySymbol,
                         onEdit = {
                             if (onNavigateToAddBudget != null)
                                 onNavigateToAddBudget(upcomingBudget.budget.id)
@@ -436,6 +443,7 @@ fun BudgetScreen(
                 items(pastBudgets, key = { it.budget.id }) { progress ->
                     PastBudgetCard(
                         progress = progress,
+                        currencySymbol = currencySymbol,
                         onOpen = { viewModel.openBudgetAnalysis(progress) },
                         onDelete = { viewModel.deleteBudget(progress.budget) }
                     )
@@ -489,6 +497,7 @@ private fun SectionLabel(text: String) {
 @Composable
 private fun ActiveBudgetCard(
     progress: BudgetProgress,
+    currencySymbol: String,
     onOpen: () -> Unit,
     onEdit: () -> Unit
 ) {
@@ -595,7 +604,7 @@ private fun ActiveBudgetCard(
                     )
 
                     Text(
-                        text = "₹${String.format(Locale.getDefault(), "%,.0f", remaining)}",
+                        text = "$currencySymbol${formatBudgetAmount(remaining)}",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = if (isExceeded) ExpenseRed else MaterialTheme.colorScheme.onSurface
@@ -612,7 +621,7 @@ private fun ActiveBudgetCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.2f", spent)}",
+                        "$currencySymbol${formatBudgetAmount(spent)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -635,7 +644,7 @@ private fun ActiveBudgetCard(
                         )
                     }
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.0f", limit)}",
+                        "$currencySymbol${formatBudgetAmount(limit)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -673,7 +682,7 @@ private fun ActiveBudgetCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.0f", safePerDay)}/day",
+                        "$currencySymbol${formatBudgetAmount(safePerDay)}/day",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         color = arcColor
@@ -692,7 +701,11 @@ private fun ActiveBudgetCard(
 // ─── Upcoming budget card ─────────────────────────────────────────────────────
 
 @Composable
-private fun UpcomingBudgetCard(progress: BudgetProgress, onEdit: () -> Unit) {
+private fun UpcomingBudgetCard(
+    progress: BudgetProgress,
+    currencySymbol: String,
+    onEdit: () -> Unit
+) {
     val monthNames = listOf(
         "", "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
@@ -719,13 +732,7 @@ private fun UpcomingBudgetCard(progress: BudgetProgress, onEdit: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Budget: ₹${
-                        String.format(
-                            Locale.getDefault(),
-                            "%,.0f",
-                            progress.budget.totalLimit
-                        )
-                    }",
+                    "Budget: $currencySymbol${formatBudgetAmount(progress.budget.totalLimit)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -797,6 +804,7 @@ private fun PlanAheadCard(onAddBudget: () -> Unit) {
 @Composable
 private fun PastBudgetCard(
     progress: BudgetProgress,
+    currencySymbol: String,
     onOpen: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -851,13 +859,7 @@ private fun PastBudgetCard(
                     Spacer(Modifier.height(4.dp))
 
                     Text(
-                        "Budget: ₹${
-                            String.format(
-                                Locale.getDefault(),
-                                "%,.0f",
-                                limit
-                            )
-                        }",
+                        "Budget: $currencySymbol${formatBudgetAmount(limit)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -868,7 +870,7 @@ private fun PastBudgetCard(
                     horizontalAlignment = Alignment.End
                 ) {
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.0f", remaining)}",
+                        "$currencySymbol${formatBudgetAmount(remaining)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = if (isExceeded) ExpenseRed else MaterialTheme.colorScheme.onSurface
@@ -912,6 +914,7 @@ private fun PastBudgetCard(
 private fun BudgetAnalysisScreen(
     progress: BudgetProgress,
     breakdown: List<BudgetCategoryBreakdown>,
+    currencySymbol: String,
     onNavigateBack: () -> Unit,
     onEdit: () -> Unit
 ) {
@@ -973,7 +976,8 @@ private fun BudgetAnalysisScreen(
                     title = title,
                     spent = spent,
                     limit = limit,
-                    remaining = remaining
+                    remaining = remaining,
+                    currencySymbol = currencySymbol
                 )
             }
 
@@ -985,7 +989,7 @@ private fun BudgetAnalysisScreen(
                     )
                 }
                 items(budgetedCategories, key = { it.category.id }) { item ->
-                    BudgetedCategoryCard(item = item)
+                    BudgetedCategoryCard(item = item, currencySymbol = currencySymbol)
                 }
             }
 
@@ -997,7 +1001,10 @@ private fun BudgetAnalysisScreen(
                     )
                 }
                 item {
-                    IncludedCategoriesCard(breakdown = breakdown)
+                    IncludedCategoriesCard(
+                        breakdown = breakdown,
+                        currencySymbol = currencySymbol
+                    )
                 }
             }
 
@@ -1027,7 +1034,8 @@ private fun BudgetSummaryCard(
     title: String,
     spent: Double,
     limit: Double,
-    remaining: Double
+    remaining: Double,
+    currencySymbol: String
 ) {
     val pct = if (limit > 0) (spent * 100 / limit).toFloat().coerceIn(0f, 100f) else 0f
     val isExceeded = (limit - spent) < 0
@@ -1102,7 +1110,7 @@ private fun BudgetSummaryCard(
                         letterSpacing = 2.sp
                     )
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.0f", remaining)}",
+                        "$currencySymbol${formatBudgetAmount(remaining)}",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -1118,7 +1126,7 @@ private fun BudgetSummaryCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.2f", spent)}",
+                        "$currencySymbol${formatBudgetAmount(spent)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -1134,7 +1142,7 @@ private fun BudgetSummaryCard(
                         )
                     }
                     Text(
-                        "₹${String.format(Locale.getDefault(), "%,.0f", limit)}",
+                        "$currencySymbol${formatBudgetAmount(limit)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -1146,7 +1154,10 @@ private fun BudgetSummaryCard(
 }
 
 @Composable
-private fun BudgetedCategoryCard(item: BudgetCategoryBreakdown) {
+private fun BudgetedCategoryCard(
+    item: BudgetCategoryBreakdown,
+    currencySymbol: String
+) {
     val budgetLimit = item.budgetLimit ?: return
     val progress =
         if (budgetLimit > 0) (item.spent / budgetLimit).toFloat().coerceAtLeast(0f) else 0f
@@ -1181,7 +1192,7 @@ private fun BudgetedCategoryCard(item: BudgetCategoryBreakdown) {
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "Budget: ₹${formatBudgetAmount(budgetLimit)}",
+                            "Budget: $currencySymbol${formatBudgetAmount(budgetLimit)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1189,7 +1200,7 @@ private fun BudgetedCategoryCard(item: BudgetCategoryBreakdown) {
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "₹${formatBudgetAmount(item.spent)}",
+                        "$currencySymbol${formatBudgetAmount(item.spent)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -1224,8 +1235,8 @@ private fun BudgetedCategoryCard(item: BudgetCategoryBreakdown) {
             )
 
             Text(
-                if (delta >= 0) "You saved ₹${formatBudgetAmount(delta)}."
-                else "You exceeded by ₹${formatBudgetAmount(-delta)}.",
+                if (delta >= 0) "You saved $currencySymbol${formatBudgetAmount(delta)}."
+                else "You exceeded by $currencySymbol${formatBudgetAmount(-delta)}.",
                 style = MaterialTheme.typography.bodySmall,
                 color = if (delta >= 0) IncomeGreen else ExpenseRed,
                 fontWeight = FontWeight.Medium
@@ -1235,7 +1246,10 @@ private fun BudgetedCategoryCard(item: BudgetCategoryBreakdown) {
 }
 
 @Composable
-private fun IncludedCategoriesCard(breakdown: List<BudgetCategoryBreakdown>) {
+private fun IncludedCategoriesCard(
+    breakdown: List<BudgetCategoryBreakdown>,
+    currencySymbol: String
+) {
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -1244,7 +1258,7 @@ private fun IncludedCategoriesCard(breakdown: List<BudgetCategoryBreakdown>) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CategorySpendDonutChart(breakdown = breakdown)
             breakdown.forEach { item ->
-                IncludedCategoryRow(item = item)
+                IncludedCategoryRow(item = item, currencySymbol = currencySymbol)
             }
         }
     }
@@ -1290,7 +1304,7 @@ private fun CategorySpendDonutChart(breakdown: List<BudgetCategoryBreakdown>) {
 }
 
 @Composable
-private fun IncludedCategoryRow(item: BudgetCategoryBreakdown) {
+private fun IncludedCategoryRow(item: BudgetCategoryBreakdown, currencySymbol: String) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -1303,7 +1317,7 @@ private fun IncludedCategoryRow(item: BudgetCategoryBreakdown) {
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(
-            "₹${formatBudgetAmount(item.spent)}",
+            "$currencySymbol${formatBudgetAmount(item.spent)}",
             style = MaterialTheme.typography.bodyMedium,
         )
     }
@@ -1324,6 +1338,7 @@ fun AddBudgetScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val categories = uiState.categories
+    val currencySymbol = LocalCurrencySymbol.current
 
     val now = YearMonth.now()
     val monthNames = listOf(
@@ -1656,9 +1671,11 @@ fun AddBudgetScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            Icons.Default.CurrencyRupee, null, Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        Text(
+                            currencySymbol,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
                         )
                         BudgetLimitField(
                             value = limitInput, onChange = { limitInput = it },
@@ -1809,6 +1826,8 @@ private fun SetCategoryLimitsScreen(
     onBack: () -> Unit,
     onSave: (Map<Long, Double>) -> Unit
 ) {
+    val currencySymbol = LocalCurrencySymbol.current
+    val currencyFormat = LocalCurrencyFormat.current
     // Map of categoryId → limit string ("" means no limit)
     val limitInputs = remember(includedCategories.map { it.id }, existingLimits.hashCode()) {
         mutableStateMapOf<Long, String>().also { map ->
@@ -1828,10 +1847,7 @@ private fun SetCategoryLimitsScreen(
     }
     val remaining by remember { derivedStateOf { totalLimit - allocatedTotal } }
 
-    fun fmtAmt(d: Double): String {
-        val l = d.toLong()
-        return if (d == l.toDouble()) "%,d".format(l) else "%,.1f".format(d)
-    }
+    fun fmtAmt(d: Double): String = formatAmountForDisplay(d, currencyFormat)
 
     // Full-screen overlay using Dialog so it slides over AddBudgetScreen
     Dialog(
@@ -1969,7 +1985,7 @@ private fun SetCategoryLimitsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    "₹${fmtAmt(totalLimit)}",
+                                    "$currencySymbol${fmtAmt(totalLimit)}",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1981,7 +1997,7 @@ private fun SetCategoryLimitsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    "₹${fmtAmt(remaining.coerceAtLeast(0.0))}",
+                                    "$currencySymbol${fmtAmt(remaining.coerceAtLeast(0.0))}",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = if (remaining < 0) MaterialTheme.colorScheme.error
@@ -2050,6 +2066,7 @@ private fun CategoryLimitRow(
     selectedYear: Int,
     selectedMonth: Int?
 ) {
+    val currencySymbol = LocalCurrencySymbol.current
     // We could show actual spend here — but we'd need ViewModel access.
     // For now show the row UI matching the image; the spend hint is shown below.
     Card(
@@ -2118,7 +2135,7 @@ private fun CategoryLimitRow(
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                "₹", style = MaterialTheme.typography.bodySmall,
+                                currencySymbol, style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             BasicTextField(
@@ -2186,6 +2203,7 @@ private fun CopyBudgetSheet(
     onDismiss: () -> Unit,
     onSelect: (Budget) -> Unit
 ) {
+    val currencySymbol = LocalCurrencySymbol.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -2275,7 +2293,7 @@ private fun CopyBudgetSheet(
                                     )
                                 }
                                 Text(
-                                    "₹${formatBudgetAmount(budget.totalLimit)}",
+                                    "$currencySymbol${formatBudgetAmount(budget.totalLimit)}",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2301,14 +2319,9 @@ private fun Budget.monthName(): String =
     java.time.Month.of(month ?: 1)
         .getDisplayName(java.time.format.TextStyle.FULL, Locale.getDefault())
 
-private fun formatBudgetAmount(amount: Double): String {
-    val asLong = amount.toLong()
-    return if (amount == asLong.toDouble()) {
-        "%,d".format(asLong)
-    } else {
-        "%,.2f".format(amount)
-    }
-}
+@Composable
+private fun formatBudgetAmount(amount: Double): String =
+    formatAmountForDisplay(amount, LocalCurrencyFormat.current)
 
 // ─── Month / Year Picker Dialog ────────────────────────────────────
 

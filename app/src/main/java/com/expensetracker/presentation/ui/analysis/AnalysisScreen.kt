@@ -76,6 +76,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.components.CategoryIconBubble
+import com.expensetracker.presentation.components.LocalCurrencyFormat
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import java.time.LocalDate
@@ -86,10 +88,9 @@ import kotlin.math.sin
 
 // ─── Amount formatting helper ─────────────────────────────────────────────────
 /** Formats an amount without trailing .00 — e.g. 10.0 → "10", 10.5 → "10.50" */
-private fun fmtAmt(amount: Double): String {
-    val long = amount.toLong()
-    return if (amount == long.toDouble()) "%,d".format(long) else "%,.2f".format(amount)
-}
+@Composable
+private fun fmtAmt(amount: Double): String =
+    formatAmountForDisplay(amount, LocalCurrencyFormat.current)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -879,6 +880,7 @@ private fun LineChart(
         label = "line_anim"
     )
     val labelStep = maxOf(1, points.size / 12)
+    val currencyFormat = LocalCurrencyFormat.current
 
     Canvas(modifier = modifier) {
         val w = size.width
@@ -901,7 +903,7 @@ private fun LineChart(
             drawLine(gridColor, Offset(padL, y), Offset(w - 12f, y), strokeWidth = 0.8f)
             val labelVal = maxVal * (1.0 - g / 3.0)
             drawContext.canvas.nativeCanvas.drawText(
-                formatAxisVal(labelVal), 0f, y + 5f,
+                formatAxisVal(labelVal, currencyFormat), 0f, y + 5f,
                 android.graphics.Paint().apply {
                     color = android.graphics.Color.GRAY; textSize = 20f; isAntiAlias = true
                 }
@@ -961,10 +963,12 @@ private fun LineChart(
     }
 }
 
-private fun formatAxisVal(v: Double): String = when {
-    v >= 1_00_000 -> "${"%.1f".format(v / 1_00_000)}L"
+private fun formatAxisVal(v: Double, currencyFormat: String): String = when {
+    currencyFormat == "none" -> formatAmountForDisplay(v, currencyFormat, decimalFmt = "none")
+    currencyFormat == "lakhs" && v >= 1_00_000 -> "${"%.1f".format(v / 1_00_000)}L"
+    currencyFormat != "lakhs" && v >= 1_000_000 -> "${"%.1f".format(v / 1_000_000)}M"
     v >= 1_000 -> "${"%.0f".format(v / 1_000)}K"
-    else -> "%.0f".format(v)
+    else -> formatAmountForDisplay(v, currencyFormat, decimalFmt = "none")
 }
 
 // ─── Donut Chart (Canvas) ─────────────────────────────────────────────────────

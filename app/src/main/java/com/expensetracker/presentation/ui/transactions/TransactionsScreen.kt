@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -52,7 +51,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -80,7 +78,9 @@ import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.components.LoadingOverlay
-import com.expensetracker.presentation.components.fmtAmt
+import com.expensetracker.presentation.components.LocalCurrencyFormat
+import com.expensetracker.presentation.components.LocalCurrencySymbol
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -99,6 +99,8 @@ fun TransactionsScreen(
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
     var sortDescending by rememberSaveable { mutableStateOf(true) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val currencySymbol = LocalCurrencySymbol.current
+    val currencyFormat = LocalCurrencyFormat.current
 
     val sortedTransactions by remember(uiState.filteredTransactions, sortDescending) {
         derivedStateOf {
@@ -129,7 +131,11 @@ fun TransactionsScreen(
                 containerColor = MaterialTheme.colorScheme.onBackground,
                 contentColor = MaterialTheme.colorScheme.background
             ) {
-                Text("+", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Light)
+                Text(
+                    "+",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Light
+                )
             }
         },
         topBar = {
@@ -202,13 +208,22 @@ fun TransactionsScreen(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 6.dp,
+                        bottom = 96.dp
+                    ),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(groupedTransactions, key = { it.first.toString() }) { (date, transactions) ->
+                    items(
+                        groupedTransactions,
+                        key = { it.first.toString() }) { (date, transactions) ->
                         TransactionDayCard(
                             date = date,
                             transactions = transactions,
+                            currencySymbol = currencySymbol,
+                            currencyFormat = currencyFormat,
                             onTransactionClick = { selectedTransaction = it }
                         )
                     }
@@ -338,8 +353,8 @@ private fun ActiveFilterChips(
     onClearFilter: () -> Unit
 ) {
     val hasFilters = filter.year != null || filter.month != null ||
-        filter.categoryIds.isNotEmpty() || filter.paymentModeIds.isNotEmpty() ||
-        filter.tags.isNotEmpty() || filter.transactionTypes.isNotEmpty()
+            filter.categoryIds.isNotEmpty() || filter.paymentModeIds.isNotEmpty() ||
+            filter.tags.isNotEmpty() || filter.transactionTypes.isNotEmpty()
 
     AnimatedVisibility(
         visible = hasFilters,
@@ -380,6 +395,8 @@ private fun ActiveFilterChips(
 private fun TransactionDayCard(
     date: LocalDate,
     transactions: List<Transaction>,
+    currencySymbol: String,
+    currencyFormat: String,
     onTransactionClick: (Transaction) -> Unit
 ) {
     val netAmount = transactions.sumOf { txn ->
@@ -427,6 +444,8 @@ private fun TransactionDayCard(
                 transactions.forEach { transaction ->
                     TransactionDayRow(
                         transaction = transaction,
+                        currencySymbol = currencySymbol,
+                        currencyFormat = currencyFormat,
                         onClick = { onTransactionClick(transaction) }
                     )
                 }
@@ -438,10 +457,13 @@ private fun TransactionDayCard(
 @Composable
 private fun TransactionDayRow(
     transaction: Transaction,
+    currencySymbol: String,
+    currencyFormat: String,
     onClick: () -> Unit
 ) {
     val title = transaction.note.ifEmpty { transaction.categoryName.ifEmpty { "Uncategorized" } }
-    val subtitle = transaction.paymentModeName.ifEmpty { transaction.categoryName.ifEmpty { "Payment mode" } }
+    val subtitle =
+        transaction.paymentModeName.ifEmpty { transaction.categoryName.ifEmpty { "Payment mode" } }
     val timeLabel = transaction.dateTime.format(
         DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault())
     )
@@ -481,7 +503,12 @@ private fun TransactionDayRow(
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = "₹${fmtAmt(abs(transaction.amount))}",
+                text = "$currencySymbol${
+                    formatAmountForDisplay(
+                        abs(transaction.amount),
+                        currencyFormat
+                    )
+                }",
                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -496,13 +523,16 @@ private fun TransactionDayRow(
     }
 }
 
+@Composable
 private fun dayTotalLabel(amount: Double): String {
+    val currencySymbol = LocalCurrencySymbol.current
+    val currencyFormat = LocalCurrencyFormat.current
     val prefix = when {
         amount > 0 -> "+"
         amount < 0 -> "-"
         else -> ""
     }
-    return prefix + "₹" + fmtAmt(abs(amount))
+    return prefix + currencySymbol + formatAmountForDisplay(abs(amount), currencyFormat)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

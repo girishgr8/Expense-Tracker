@@ -1,6 +1,5 @@
 package com.expensetracker.presentation.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,44 +8,38 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.foundation.layout.offset
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -63,7 +56,7 @@ import com.expensetracker.presentation.theme.CardGradientStart
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
-import java.util.Locale
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 
 // ─── Amount Display ───────────────────────────────────────────────────────────
 
@@ -71,18 +64,15 @@ import java.util.Locale
 // ─── Decimal Format CompositionLocal ─────────────────────────────────────────
 /** Provides the user's chosen decimal format preference throughout the UI tree. */
 val LocalDecimalFormat = compositionLocalOf { "default" }
+val LocalCurrencySymbol = compositionLocalOf { "₹" }
+val LocalCurrencyFormat = compositionLocalOf { "millions" }
 
 // ─── Amount formatting helper ─────────────────────────────────────────────────
 /** Formats an amount without trailing .00 — e.g. 10.0 → "10", 10.5 → "10.50" */
 internal fun fmtAmt(amount: Double, decimalFmt: String = "default"): String {
-    val long = amount.toLong()
-    return when (decimalFmt) {
-        "none" -> "%,.0f".format(amount)
-        "one"  -> "%,.1f".format(amount)
-        "two"  -> "%,.2f".format(amount)
-        else   -> if (amount == long.toDouble()) "%,d".format(long) else "%,.2f".format(amount)
-    }
+    return formatAmountForDisplay(amount, currencyFormat = "millions", decimalFmt = decimalFmt)
 }
+
 @Composable
 fun AmountText(
     amount: Double,
@@ -90,6 +80,8 @@ fun AmountText(
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.titleMedium
 ) {
+    val symbol = LocalCurrencySymbol.current
+    val currencyFormat = LocalCurrencyFormat.current
     val color = when (type) {
         TransactionType.INCOME -> IncomeGreen
         TransactionType.EXPENSE -> ExpenseRed
@@ -101,7 +93,10 @@ fun AmountText(
         TransactionType.TRANSFER -> "↔"
     }
     Text(
-        text = "$prefix₹${fmtAmt(amount)}", color = color, style = style, modifier = modifier
+        text = "$prefix$symbol${formatAmountForDisplay(amount, currencyFormat)}",
+        color = color,
+        style = style,
+        modifier = modifier
     )
 }
 
@@ -249,6 +244,8 @@ fun SectionHeader(
 fun GradientSummaryCard(
     income: Double, expense: Double, balance: Double, label: String, modifier: Modifier = Modifier
 ) {
+    val symbol = LocalCurrencySymbol.current
+    val currencyFormat = LocalCurrencyFormat.current
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -266,7 +263,7 @@ fun GradientSummaryCard(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "₹${fmtAmt(balance)}",
+                text = "$symbol${formatAmountForDisplay(balance, currencyFormat)}",
                 style = MaterialTheme.typography.displaySmall,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
@@ -279,11 +276,21 @@ fun GradientSummaryCard(
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth()) {
                 SummaryPill(
-                    label = "Income", amount = income, color = IncomeGreen, Modifier.weight(1f)
+                    label = "Income",
+                    amount = income,
+                    symbol = symbol,
+                    currencyFormat = currencyFormat,
+                    color = IncomeGreen,
+                    Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(12.dp))
                 SummaryPill(
-                    label = "Expense", amount = expense, color = ExpenseRed, Modifier.weight(1f)
+                    label = "Expense",
+                    amount = expense,
+                    symbol = symbol,
+                    currencyFormat = currencyFormat,
+                    color = ExpenseRed,
+                    Modifier.weight(1f)
                 )
             }
         }
@@ -292,7 +299,12 @@ fun GradientSummaryCard(
 
 @Composable
 private fun SummaryPill(
-    label: String, amount: Double, color: Color, modifier: Modifier = Modifier
+    label: String,
+    amount: Double,
+    symbol: String,
+    currencyFormat: String,
+    color: Color,
+    modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
@@ -317,7 +329,13 @@ private fun SummaryPill(
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "₹${String.format(Locale.getDefault(), "%,.0f", amount)}",
+                text = "$symbol${
+                    formatAmountForDisplay(
+                        amount,
+                        currencyFormat,
+                        decimalFmt = "none"
+                    )
+                }",
                 style = MaterialTheme.typography.titleSmall,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold
@@ -451,67 +469,99 @@ fun AppBottomBar(
         ) {
             // Shared active/inactive colors for all items
             val navItemColors = NavigationBarItemDefaults.colors(
-                selectedIconColor   = MaterialTheme.colorScheme.onSecondaryContainer,
+                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
-                selectedTextColor   = MaterialTheme.colorScheme.onSurface,
+                selectedTextColor = MaterialTheme.colorScheme.onSurface,
                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
-                indicatorColor      = MaterialTheme.colorScheme.surfaceContainer
+                indicatorColor = MaterialTheme.colorScheme.surfaceContainer
             )
 
             // Home
             NavigationBarItem(
                 selected = currentRoute == "dashboard",
-                onClick  = onHome,
-                icon = { Icon(painter = painterResource(id = R.drawable.ic_home), contentDescription = "Home", modifier = Modifier.size(28.dp)) },
-                label    = {
-                    Text("Home",
+                onClick = onHome,
+                icon = {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_home),
+                        contentDescription = "Home",
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        "Home",
                         fontWeight = if (currentRoute == "dashboard") FontWeight.Bold
-                        else FontWeight.Normal)
+                        else FontWeight.Normal
+                    )
                 },
                 colors = navItemColors
             )
             // Analysis
             NavigationBarItem(
                 selected = currentRoute == "analysis",
-                onClick  = onAnalysis,
-                icon     = { Icon(painter = painterResource(id = R.drawable.ic_analysis), "Analysis", modifier = Modifier.size(28.dp)) },
-                label    = {
-                    Text("Analysis",
+                onClick = onAnalysis,
+                icon = {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_analysis),
+                        "Analysis",
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        "Analysis",
                         fontWeight = if (currentRoute == "analysis") FontWeight.Bold
-                        else FontWeight.Normal)
+                        else FontWeight.Normal
+                    )
                 },
                 colors = navItemColors
             )
             // Center slot — invisible placeholder to keep equal spacing
             NavigationBarItem(
                 selected = false,
-                onClick  = {},
-                icon     = { Spacer(Modifier.size(56.dp)) },
-                label    = { Text("") },
-                enabled  = false,
+                onClick = {},
+                icon = { Spacer(Modifier.size(56.dp)) },
+                label = { Text("") },
+                enabled = false,
                 colors = navItemColors
             )
             // Accounts
             NavigationBarItem(
                 selected = currentRoute == "accounts",
-                onClick  = onAccounts,
-                icon     = { Icon(painter = painterResource(id = R.drawable.ic_bank_account), "Accounts", modifier = Modifier.size(28.dp)) },
-                label    = {
-                    Text("Accounts",
+                onClick = onAccounts,
+                icon = {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_bank_account),
+                        "Accounts",
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        "Accounts",
                         fontWeight = if (currentRoute == "accounts") FontWeight.Bold
-                        else FontWeight.Normal)
+                        else FontWeight.Normal
+                    )
                 },
                 colors = navItemColors
             )
             // Settings
             NavigationBarItem(
                 selected = currentRoute == "settings",
-                onClick  = onSettings,
-                icon     = { Icon(painter = painterResource(id = R.drawable.ic_more_horiz), "More", modifier = Modifier.size(28.dp)) },
-                label    = {
-                    Text("More",
+                onClick = onSettings,
+                icon = {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_more_horiz),
+                        "More",
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        "More",
                         fontWeight = if (currentRoute == "settings") FontWeight.Bold
-                        else FontWeight.Normal)
+                        else FontWeight.Normal
+                    )
                 },
                 colors = navItemColors
             )
@@ -519,16 +569,18 @@ fun AppBottomBar(
 
         // FAB centered on top of the bar
         FloatingActionButton(
-            onClick          = onAddTransaction,
-            modifier         = Modifier
+            onClick = onAddTransaction,
+            modifier = Modifier
                 .align(Alignment.TopCenter)
                 .offset(y = (-28).dp),
-            containerColor   = Color.White,
-            contentColor     = Color.Black,
-            shape            = CircleShape
+            containerColor = Color.White,
+            contentColor = Color.Black,
+            shape = CircleShape
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Add Transaction",
-                modifier = Modifier.size(28.dp))
+            Icon(
+                Icons.Default.Add, contentDescription = "Add Transaction",
+                modifier = Modifier.size(28.dp)
+            )
         }
     }
 }
