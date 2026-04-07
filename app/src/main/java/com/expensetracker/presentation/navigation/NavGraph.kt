@@ -100,6 +100,9 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 onNavigateBack   = { navController.popBackStack() },
                 onNavigateToEdit = { id ->
                     navController.navigate(Screen.AddTransaction.createRoute(id))
+                },
+                onNavigateToAdd = {
+                    navController.navigate(Screen.AddTransaction.createRoute())
                 }
             )
         }

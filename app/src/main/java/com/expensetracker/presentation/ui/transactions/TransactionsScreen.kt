@@ -3,6 +3,8 @@ package com.expensetracker.presentation.ui.transactions
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,22 +17,28 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -38,18 +46,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,9 +64,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.PaymentMode
@@ -67,21 +77,41 @@ import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionFilter
 import com.expensetracker.domain.model.TransactionType
+import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.components.LoadingOverlay
-import com.expensetracker.presentation.components.TransactionListItem
+import com.expensetracker.presentation.components.fmtAmt
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Long) -> Unit,
+    onNavigateToAdd: () -> Unit = {},
     viewModel: TransactionsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showFilterSheet by remember { mutableStateOf(false) }
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
+    var sortDescending by rememberSaveable { mutableStateOf(true) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val sortedTransactions by remember(uiState.filteredTransactions, sortDescending) {
+        derivedStateOf {
+            if (sortDescending) {
+                uiState.filteredTransactions.sortedByDescending { it.dateTime }
+            } else {
+                uiState.filteredTransactions.sortedBy { it.dateTime }
+            }
+        }
+    }
+    val groupedTransactions by remember(sortedTransactions) {
+        derivedStateOf { sortedTransactions.groupBy { it.dateTime.toLocalDate() }.toList() }
+    }
 
     LaunchedEffect(uiState.exportSuccess) {
         if (uiState.exportSuccess) {
@@ -91,24 +121,51 @@ fun TransactionsScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNavigateToAdd,
+                containerColor = MaterialTheme.colorScheme.onBackground,
+                contentColor = MaterialTheme.colorScheme.background
+            ) {
+                Text("+", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Light)
+            }
+        },
         topBar = {
-            TopAppBar(
-                title = { Text("Transactions", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showFilterSheet = true }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "Filter")
-                    }
-                    IconButton(onClick = viewModel::exportToCsv) {
-                        Icon(Icons.Default.Upload, contentDescription = "Export CSV")
-                    }
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularActionButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        onClick = onNavigateBack
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        "Transactions",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CircularActionButton(
+                        icon = Icons.Default.Upload,
+                        contentDescription = "Export",
+                        onClick = viewModel::exportToCsv
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    CircularActionButton(
+                        icon = Icons.Default.FilterList,
+                        contentDescription = "Open Filters",
+                        onClick = { showFilterSheet = true }
+                    )
                 }
-            )
+            }
         }
     ) { padding ->
         Column(
@@ -116,14 +173,16 @@ fun TransactionsScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            SearchBar(
+            SearchAndActionRow(
                 query = uiState.filter.searchQuery,
                 onQueryChange = { query ->
                     viewModel.updateFilter(uiState.filter.copy(searchQuery = query))
                 },
+                onFilterClick = { showFilterSheet = true },
+                onSortClick = { sortDescending = !sortDescending },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
             )
 
             ActiveFilterChips(
@@ -133,19 +192,7 @@ fun TransactionsScreen(
                 onClearFilter = { viewModel.updateFilter(TransactionFilter()) }
             )
 
-            val totalExpense = uiState.filteredTransactions
-                .filter { it.type == TransactionType.EXPENSE }
-                .sumOf { it.amount }
-            val totalIncome = uiState.filteredTransactions
-                .filter { it.type == TransactionType.INCOME }
-                .sumOf { it.amount }
-            MiniSummaryRow(
-                count = uiState.filteredTransactions.size,
-                totalExpense = totalExpense,
-                totalIncome = totalIncome
-            )
-
-            if (uiState.filteredTransactions.isEmpty()) {
+            if (sortedTransactions.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     EmptyState(
                         icon = Icons.Default.SearchOff,
@@ -155,62 +202,16 @@ fun TransactionsScreen(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(uiState.filteredTransactions, key = { it.id }) { txn ->
-                        var showDeleteDialog by remember { mutableStateOf(false) }
-                        SwipeToDismissBox(
-                            state = rememberSwipeToDismissBoxState(
-                                confirmValueChange = { state ->
-                                    if (state == SwipeToDismissBoxValue.EndToStart) {
-                                        showDeleteDialog = true
-                                    }
-                                    false
-                                }
-                            ),
-                            backgroundContent = {
-                                Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .padding(end = 16.dp),
-                                    contentAlignment = Alignment.CenterEnd
-                                ) {
-                                    Icon(
-                                        Icons.Default.Delete, null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        ) {
-                            TransactionListItem(
-                                transaction = txn,
-                                onClick = { selectedTransaction = txn }
-                            )
-                        }
-
-                        if (showDeleteDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showDeleteDialog = false },
-                                title = { Text("Delete Transaction") },
-                                text = { Text("Are you sure you want to delete this transaction?") },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        viewModel.deleteTransaction(txn.id)
-                                        showDeleteDialog = false
-                                    }) {
-                                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showDeleteDialog = false }) {
-                                        Text("Cancel")
-                                    }
-                                }
-                            )
-                        }
+                    items(groupedTransactions, key = { it.first.toString() }) { (date, transactions) ->
+                        TransactionDayCard(
+                            date = date,
+                            transactions = transactions,
+                            onTransactionClick = { selectedTransaction = it }
+                        )
                     }
-                    item { Spacer(Modifier.height(16.dp)) }
                 }
             }
         }
@@ -240,6 +241,37 @@ fun TransactionsScreen(
 }
 
 @Composable
+private fun SearchAndActionRow(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onFilterClick: () -> Unit,
+    onSortClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        SearchBar(
+            query = query,
+            onQueryChange = onQueryChange,
+            modifier = Modifier.weight(1f)
+        )
+        CircularActionButton(
+            icon = Icons.Default.FilterList,
+            contentDescription = "Filter",
+            onClick = onFilterClick
+        )
+        CircularActionButton(
+            icon = Icons.AutoMirrored.Filled.Sort,
+            contentDescription = "Sort",
+            onClick = onSortClick
+        )
+    }
+}
+
+@Composable
 private fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
@@ -248,9 +280,7 @@ private fun SearchBar(
     var localQuery by rememberSaveable { mutableStateOf(query) }
 
     LaunchedEffect(query) {
-        if (query != localQuery) {
-            localQuery = query
-        }
+        if (query != localQuery) localQuery = query
     }
 
     OutlinedTextField(
@@ -259,7 +289,7 @@ private fun SearchBar(
             localQuery = it
             onQueryChange(it)
         },
-        placeholder = { Text("Search transactions...") },
+        placeholder = { Text("Search transactions") },
         leadingIcon = { Icon(Icons.Default.Search, null) },
         trailingIcon = if (localQuery.isNotEmpty()) {
             {
@@ -272,10 +302,32 @@ private fun SearchBar(
             }
         } else null,
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(24.dp),
         singleLine = true,
-        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.ContentOrLtr)
+        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.ContentOrLtr),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+        )
     )
+}
+
+@Composable
+private fun CircularActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(36.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+    ) {
+        Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(24.dp))
+    }
 }
 
 @Composable
@@ -286,8 +338,8 @@ private fun ActiveFilterChips(
     onClearFilter: () -> Unit
 ) {
     val hasFilters = filter.year != null || filter.month != null ||
-            filter.categoryIds.isNotEmpty() || filter.paymentModeIds.isNotEmpty() ||
-            filter.tags.isNotEmpty() || filter.transactionTypes.isNotEmpty()
+        filter.categoryIds.isNotEmpty() || filter.paymentModeIds.isNotEmpty() ||
+        filter.tags.isNotEmpty() || filter.transactionTypes.isNotEmpty()
 
     AnimatedVisibility(
         visible = hasFilters,
@@ -312,35 +364,145 @@ private fun ActiveFilterChips(
             filter.month?.let {
                 item { FilterChip(selected = true, onClick = {}, label = { Text("Month: $it") }) }
             }
+            filter.categoryIds.takeIf { it.isNotEmpty() }?.let { ids ->
+                val categoryLabel = categories.filter { it.id in ids }.joinToString { it.name }
+                item { FilterChip(selected = true, onClick = {}, label = { Text(categoryLabel) }) }
+            }
+            filter.paymentModeIds.takeIf { it.isNotEmpty() }?.let { ids ->
+                val paymentLabel = modes.filter { it.id in ids }.joinToString { it.displayLabel }
+                item { FilterChip(selected = true, onClick = {}, label = { Text(paymentLabel) }) }
+            }
         }
     }
 }
 
 @Composable
-private fun MiniSummaryRow(count: Int, totalExpense: Double, totalIncome: Double) {
+private fun TransactionDayCard(
+    date: LocalDate,
+    transactions: List<Transaction>,
+    onTransactionClick: (Transaction) -> Unit
+) {
+    val netAmount = transactions.sumOf { txn ->
+        when (txn.type) {
+            TransactionType.INCOME -> txn.amount
+            TransactionType.EXPENSE -> -txn.amount
+            TransactionType.TRANSFER -> 0.0
+        }
+    }
+    val dateLabel = when (date) {
+        LocalDate.now() -> "Today"
+        LocalDate.now().minusDays(1) -> "Yesterday"
+        else -> date.format(DateTimeFormatter.ofPattern("dd MMMM", Locale.getDefault()))
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = dateLabel,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = dayTotalLabel(netAmount),
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                transactions.forEach { transaction ->
+                    TransactionDayRow(
+                        transaction = transaction,
+                        onClick = { onTransactionClick(transaction) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransactionDayRow(
+    transaction: Transaction,
+    onClick: () -> Unit
+) {
+    val title = transaction.note.ifEmpty { transaction.categoryName.ifEmpty { "Uncategorized" } }
+    val subtitle = transaction.paymentModeName.ifEmpty { transaction.categoryName.ifEmpty { "Payment mode" } }
+    val timeLabel = transaction.dateTime.format(
+        DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault())
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            "$count transactions",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
+        CategoryIconBubble(
+            iconKey = transaction.categoryIcon.ifEmpty { "category" },
+            colorHex = transaction.categoryColorHex.ifEmpty { "#6750A4" },
+            size = 40
         )
-        Text(
-            "+₹${String.format("%,.0f", totalIncome)}",
-            style = MaterialTheme.typography.labelMedium,
-            color = com.expensetracker.presentation.theme.IncomeGreen
-        )
-        Text(
-            "-₹${String.format("%,.0f", totalExpense)}",
-            style = MaterialTheme.typography.labelMedium,
-            color = com.expensetracker.presentation.theme.ExpenseRed
-        )
+        Spacer(Modifier.width(12.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                fontWeight = FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = "₹${fmtAmt(abs(transaction.amount))}",
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = timeLabel,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            )
+        }
     }
+}
+
+private fun dayTotalLabel(amount: Double): String {
+    val prefix = when {
+        amount > 0 -> "+"
+        amount < 0 -> "-"
+        else -> ""
+    }
+    return prefix + "₹" + fmtAmt(abs(amount))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -358,7 +520,7 @@ private fun FilterBottomSheet(
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     )
-    val currentYear = java.time.LocalDate.now().year
+    val currentYear = LocalDate.now().year
     val years = (currentYear downTo currentYear - 5).toList()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -375,7 +537,6 @@ private fun FilterBottomSheet(
             )
             Spacer(Modifier.height(16.dp))
 
-            // Year
             Text("Year", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -401,7 +562,6 @@ private fun FilterBottomSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            // Month
             Text("Month", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -412,7 +572,7 @@ private fun FilterBottomSheet(
                         label = { Text("All") }
                     )
                 }
-                items(months.mapIndexed { i, m -> Pair(i + 1, m) }) { (idx, mon) ->
+                items(months.mapIndexed { i, m -> i + 1 to m }) { (idx, mon) ->
                     FilterChip(
                         selected = localFilter.month == idx,
                         onClick = {
@@ -427,33 +587,30 @@ private fun FilterBottomSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            // Transaction Type
             Text("Type", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // entries replaces deprecated values()
                 TransactionType.entries.forEach { type ->
                     FilterChip(
                         selected = type in localFilter.transactionTypes,
                         onClick = {
-                            localFilter = if (type in localFilter.transactionTypes)
+                            localFilter = if (type in localFilter.transactionTypes) {
                                 localFilter.copy(
                                     transactionTypes = localFilter.transactionTypes - type
                                 )
-                            else localFilter.copy(
-                                transactionTypes = localFilter.transactionTypes + type
-                            )
+                            } else {
+                                localFilter.copy(
+                                    transactionTypes = localFilter.transactionTypes + type
+                                )
+                            }
                         },
-                        label = {
-                            Text(type.name.lowercase().replaceFirstChar { it.uppercase() })
-                        }
+                        label = { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) }
                     )
                 }
             }
 
             Spacer(Modifier.height(12.dp))
 
-            // Category
             Text("Category", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -461,9 +618,11 @@ private fun FilterBottomSheet(
                     FilterChip(
                         selected = cat.id in localFilter.categoryIds,
                         onClick = {
-                            localFilter = if (cat.id in localFilter.categoryIds)
+                            localFilter = if (cat.id in localFilter.categoryIds) {
                                 localFilter.copy(categoryIds = localFilter.categoryIds - cat.id)
-                            else localFilter.copy(categoryIds = localFilter.categoryIds + cat.id)
+                            } else {
+                                localFilter.copy(categoryIds = localFilter.categoryIds + cat.id)
+                            }
                         },
                         label = { Text(cat.name) }
                     )
@@ -472,7 +631,6 @@ private fun FilterBottomSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            // Payment Mode
             Text("Payment Mode", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -480,13 +638,11 @@ private fun FilterBottomSheet(
                     FilterChip(
                         selected = mode.id in localFilter.paymentModeIds,
                         onClick = {
-                            localFilter = if (mode.id in localFilter.paymentModeIds)
-                                localFilter.copy(
-                                    paymentModeIds = localFilter.paymentModeIds - mode.id
-                                )
-                            else localFilter.copy(
-                                paymentModeIds = localFilter.paymentModeIds + mode.id
-                            )
+                            localFilter = if (mode.id in localFilter.paymentModeIds) {
+                                localFilter.copy(paymentModeIds = localFilter.paymentModeIds - mode.id)
+                            } else {
+                                localFilter.copy(paymentModeIds = localFilter.paymentModeIds + mode.id)
+                            }
                         },
                         label = { Text(mode.displayLabel) }
                     )
@@ -504,12 +660,16 @@ private fun FilterBottomSheet(
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Reset") }
+                ) {
+                    Text("Reset")
+                }
                 Button(
                     onClick = { onApply(localFilter); onDismiss() },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Apply Filters") }
+                ) {
+                    Text("Apply Filters")
+                }
             }
             Spacer(Modifier.height(16.dp))
         }
