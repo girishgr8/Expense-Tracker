@@ -11,6 +11,7 @@ import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
 import com.expensetracker.data.local.dao.CreditCardDao
 import com.expensetracker.data.local.dao.PaymentModeDao
+import com.expensetracker.data.local.dao.ScheduledTransactionDao
 import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
 import com.expensetracker.data.local.entity.AttachmentEntity
@@ -20,6 +21,7 @@ import com.expensetracker.data.local.entity.BudgetEntity
 import com.expensetracker.data.local.entity.CategoryEntity
 import com.expensetracker.data.local.entity.CreditCardEntity
 import com.expensetracker.data.local.entity.PaymentModeEntity
+import com.expensetracker.data.local.entity.ScheduledTransactionEntity
 import com.expensetracker.data.local.entity.TagEntity
 import com.expensetracker.data.local.entity.TransactionEntity
 
@@ -33,9 +35,10 @@ import com.expensetracker.data.local.entity.TransactionEntity
         CreditCardEntity::class,
         AttachmentEntity::class,
         BudgetEntity::class,
-        TagEntity::class
+        TagEntity::class,
+        ScheduledTransactionEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,6 +52,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun attachmentDao(): AttachmentDao
     abstract fun budgetDao(): BudgetDao
     abstract fun tagDao(): TagDao
+    abstract fun scheduledTransactionDao(): ScheduledTransactionDao
 
     companion object {
         const val DATABASE_NAME = "expense_tracker_db"

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
 import com.expensetracker.data.repository.BudgetRepository
 import com.expensetracker.data.repository.TransactionRepository
+import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.BudgetProgress
 import com.expensetracker.domain.model.MonthlySummary
 import com.expensetracker.domain.model.Transaction
@@ -35,7 +36,8 @@ data class DashboardUiState(
     val recentTransactions: List<Transaction> = emptyList(),
     val summary: MonthlySummary = MonthlySummary(0.0, 0.0, 0.0, ""),
     val selectedPeriod: SummaryPeriod = SummaryPeriod.THIS_MONTH,
-    val budgetProgress: BudgetProgress? = null,
+    val monthlyBudgetProgress: BudgetProgress? = null,
+    val annualBudgetProgress: BudgetProgress? = null,
     val isLoading: Boolean = false,
     val userName: String = "",
     val userEmail: String = ""
@@ -76,19 +78,31 @@ class DashboardViewModel @Inject constructor(
      * Creates a Flow for BudgetProgress that updates when the budget OR transactions change
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeBudgetProgress(): Flow<BudgetProgress?> {
+    private fun observeBudgetProgress(period: BudgetPeriod): Flow<BudgetProgress?> {
         val now = YearMonth.now()
-        val start = now.atDay(1).atStartOfDay()
-        val end = now.atEndOfMonth().atTime(23, 59, 59)
+        val start = when (period) {
+            BudgetPeriod.MONTHLY -> now.atDay(1).atStartOfDay()
+            BudgetPeriod.YEARLY -> now.atDay(1).withDayOfYear(1).atStartOfDay()
+        }
+        val end = when (period) {
+            BudgetPeriod.MONTHLY -> now.atEndOfMonth().atTime(23, 59, 59)
+            BudgetPeriod.YEARLY -> now.atDay(1).withMonth(12).withDayOfMonth(31).atTime(23, 59, 59)
+        }
 
-        // 1. Use your existing getBudgets(userId) which returns Flow<List<Budget>>
         return budgetRepository.getAllBudgets(userId).flatMapLatest { budgets ->
-            // 2. Find the budget that matches the current month/year
-            val activeBudget = budgets.find { it.month == now.monthValue && it.year == now.year }
+            val activeBudget = when (period) {
+                BudgetPeriod.MONTHLY -> budgets.find {
+                    it.period == BudgetPeriod.MONTHLY &&
+                        it.month == now.monthValue &&
+                        it.year == now.year
+                }
+                BudgetPeriod.YEARLY -> budgets.find {
+                    it.period == BudgetPeriod.YEARLY && it.year == now.year
+                }
+            }
             if (activeBudget == null) {
                 flowOf(null)
             } else {
-                // 3. Chain the expenses flow for the found budget
                 transactionRepository.getExpenseByCategoriesFlow(
                     userId = userId,
                     categoryIds = activeBudget.applicableCategoryIds,
@@ -154,13 +168,15 @@ class DashboardViewModel @Inject constructor(
                         start,
                         end
                     ),
-                    observeBudgetProgress() // Reactive budget flow
-                ) { recent, income, expense, budget ->
+                    observeBudgetProgress(BudgetPeriod.MONTHLY),
+                    observeBudgetProgress(BudgetPeriod.YEARLY)
+                ) { recent, income, expense, monthlyBudget, annualBudget ->
                     DashboardUiState(
                         recentTransactions = recent,
                         summary = MonthlySummary(income, expense, income - expense, label),
                         selectedPeriod = period,
-                        budgetProgress = budget,
+                        monthlyBudgetProgress = monthlyBudget,
+                        annualBudgetProgress = annualBudget,
                         userName = _uiState.value.userName,
                         isLoading = false
                     )

@@ -13,6 +13,7 @@ import com.expensetracker.data.local.entity.BudgetEntity
 import com.expensetracker.data.local.entity.CategoryEntity
 import com.expensetracker.data.local.entity.CreditCardEntity
 import com.expensetracker.data.local.entity.PaymentModeEntity
+import com.expensetracker.data.local.entity.ScheduledTransactionEntity
 import com.expensetracker.data.local.entity.TagEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -215,4 +216,25 @@ interface TagDao {
 
     @Delete
     suspend fun deleteTag(tag: TagEntity)
+}
+
+@Dao
+interface ScheduledTransactionDao {
+    @Query(
+        "SELECT * FROM scheduled_transactions WHERE userId = :userId " +
+            "ORDER BY nextRunAtMillis ASC, id ASC"
+    )
+    fun getAllScheduledTransactions(userId: String): Flow<List<ScheduledTransactionEntity>>
+
+    @Query("SELECT * FROM scheduled_transactions WHERE id = :id")
+    suspend fun getScheduledTransactionById(id: Long): ScheduledTransactionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertScheduledTransaction(schedule: ScheduledTransactionEntity): Long
+
+    @Update
+    suspend fun updateScheduledTransaction(schedule: ScheduledTransactionEntity)
+
+    @Delete
+    suspend fun deleteScheduledTransaction(schedule: ScheduledTransactionEntity)
 }

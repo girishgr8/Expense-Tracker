@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.expensetracker.presentation.ui.accounts.AccountsScreen
+import com.expensetracker.presentation.ui.addtransaction.AddScheduledTransactionScreen
 import com.expensetracker.presentation.ui.addtransaction.AddTransactionScreen
 import com.expensetracker.presentation.ui.analysis.AnalysisScreen
 import com.expensetracker.presentation.ui.auth.AuthScreen
@@ -36,6 +37,7 @@ sealed class Screen(val route: String) {
     object AddTransaction   : Screen("add_transaction?transactionId={transactionId}") {
         fun createRoute(transactionId: Long = -1L) = "add_transaction?transactionId=$transactionId"
     }
+    object AddScheduledTransaction : Screen("add_scheduled_transaction")
     object Categories       : Screen("categories")
     object Accounts         : Screen("accounts")
     object Budget           : Screen("budget")
@@ -85,6 +87,7 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         composable(Screen.Dashboard.route) {
             DashboardScreen(
                 onNavigateToAddTransaction = { navController.navigate(Screen.AddTransaction.createRoute()) },
+                onNavigateToAddScheduledTransaction = { navController.navigate(Screen.AddScheduledTransaction.route) },
                 onNavigateToTransactions   = { navController.navigate(Screen.Transactions.route) },
                 onNavigateToCategories     = { navController.navigate(Screen.Categories.route) },
                 onNavigateToAccounts       = { navController.navigate(Screen.Accounts.route) },
@@ -115,6 +118,14 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         ) {
             AddTransactionScreen(
                 onNavigateBack         = { navController.popBackStack() },
+                onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
+                onNavigateToAccounts   = { navController.navigate(Screen.Accounts.route) }
+            )
+        }
+
+        composable(Screen.AddScheduledTransaction.route) {
+            AddScheduledTransactionScreen(
+                onNavigateBack = { navController.popBackStack() },
                 onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
                 onNavigateToAccounts   = { navController.navigate(Screen.Accounts.route) }
             )

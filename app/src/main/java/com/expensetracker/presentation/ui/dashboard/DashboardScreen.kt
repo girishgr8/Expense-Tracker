@@ -1,5 +1,6 @@
 package com.expensetracker.presentation.ui.dashboard
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,9 +26,12 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,12 +43,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +60,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.domain.model.BudgetProgress
+import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.MonthlySummary
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
@@ -85,6 +94,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
+import kotlin.math.min
 
 // ─── Amount formatting helper ─────────────────────────────────────────────────
 /** Formats an amount without trailing .00 — e.g. 10.0 → "10", 10.5 → "10.50" */
@@ -92,6 +103,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun DashboardScreen(
     onNavigateToAddTransaction: () -> Unit,
+    onNavigateToAddScheduledTransaction: () -> Unit = onNavigateToAddTransaction,
     onNavigateToTransactions: () -> Unit,
     onNavigateToCategories: () -> Unit,
     onNavigateToAccounts: () -> Unit,
@@ -104,6 +116,20 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val currencySymbol = LocalCurrencySymbol.current
     val currencyFormat = LocalCurrencyFormat.current
+    var showMonthlyBudget by remember { mutableStateOf(true) }
+
+    LaunchedEffect(uiState.monthlyBudgetProgress, uiState.annualBudgetProgress) {
+        if (showMonthlyBudget && uiState.monthlyBudgetProgress == null && uiState.annualBudgetProgress != null) {
+            showMonthlyBudget = false
+        } else if (!showMonthlyBudget && uiState.annualBudgetProgress == null && uiState.monthlyBudgetProgress != null) {
+            showMonthlyBudget = true
+        }
+    }
+    val selectedBudgetProgress = if (showMonthlyBudget) {
+        uiState.monthlyBudgetProgress
+    } else {
+        uiState.annualBudgetProgress
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -168,12 +194,15 @@ fun DashboardScreen(
                 ) {
                     Text(
                         "Recent Transactions",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                         fontWeight = FontWeight.Bold
                     )
                     TextButton(
                         onClick = onNavigateToTransactions,
-                        contentPadding = PaddingValues(end = 0.dp)
+                        contentPadding = PaddingValues(top = 0.dp, end = 0.dp),
+                        modifier = Modifier
+                            .background(color = MaterialTheme.colorScheme.surfaceVariant)
+                            .clip(CircleShape)
                     ) {
                         Text(
                             "See all",
@@ -241,17 +270,59 @@ fun DashboardScreen(
                 Spacer(Modifier.height(18.dp))
                 Text(
                     "Budgets",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Spacer(Modifier.height(12.dp))
                 DashboardBudgetSection(
-                    budgetProgress = uiState.budgetProgress,
+                    budgetProgress = selectedBudgetProgress,
+                    showMonthly = showMonthlyBudget,
                     currencySymbol = currencySymbol,
                     currencyFormat = currencyFormat,
+                    onShowMonthly = { showMonthlyBudget = true },
+                    onShowYearly = { showMonthlyBudget = false },
                     onSetBudget = onNavigateToSetBudget,
                     onTapBudget = onNavigateToBudget
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Scheduled Transaction",
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .clickable { onNavigateToAddScheduledTransaction() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "+",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                ScheduledTransactionsCard(
+                    onAddScheduled = onNavigateToAddScheduledTransaction
                 )
             }
         }
@@ -265,8 +336,11 @@ fun DashboardScreen(
 @Composable
 private fun DashboardBudgetSection(
     budgetProgress: BudgetProgress?,
+    showMonthly: Boolean,
     currencySymbol: String,
     currencyFormat: String,
+    onShowMonthly: () -> Unit,
+    onShowYearly: () -> Unit,
     onSetBudget: () -> Unit,
     onTapBudget: () -> Unit
 ) {
@@ -282,6 +356,7 @@ private fun DashboardBudgetSection(
     ) {
         if (budgetProgress == null) {
             // ── No budget yet — empty state matching image 1 ──────────────────
+
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -290,7 +365,11 @@ private fun DashboardBudgetSection(
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 // Monthly / Annual toggle (decorative — just shows state)
-                BudgetPeriodPill(selectedMonthly = true, onMonthly = {}, onYearly = {})
+                BudgetPeriodToggle(
+                    isMonthly = showMonthly,
+                    onMonthly = onShowMonthly,
+                    onYearly = onShowYearly
+                )
 
                 Spacer(Modifier.height(28.dp))
 
@@ -321,7 +400,11 @@ private fun DashboardBudgetSection(
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    "Set a monthly budget to achieve your\nsaving goals.",
+                    if (showMonthly) {
+                        "Set a monthly budget to achieve your\nsaving goals."
+                    } else {
+                        "Set an annual budget to plan your\nyearly spending."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -349,8 +432,12 @@ private fun DashboardBudgetSection(
             // ── Budget exists — progress card ─────────────────────────────────
             BudgetProgressInline(
                 bp = budgetProgress,
+                showMonthly = showMonthly,
                 currencySymbol = currencySymbol,
                 currencyFormat = currencyFormat,
+                onSelectMonthly = onShowMonthly,
+                onSelectYearly = onShowYearly,
+                onEdit = onSetBudget,
                 onTap = onTapBudget
             )
         }
@@ -411,86 +498,344 @@ private fun BudgetPeriodPill(
 }
 
 @Composable
+private fun PeriodPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
+            )
+            .clickable { onClick() }
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.surface
+            else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun BudgetPeriodToggle(
+    isMonthly: Boolean,
+    onMonthly: () -> Unit,
+    onYearly: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(Modifier.padding(4.dp)) {
+            PeriodPill(
+                label = "Monthly",
+                selected = isMonthly,
+                onClick = onMonthly,
+                modifier = Modifier.weight(1f)
+            )
+            PeriodPill(
+                label = "Yearly",
+                selected = !isMonthly,
+                onClick = onYearly,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+
+@Composable
 private fun BudgetProgressInline(
     bp: BudgetProgress,
+    showMonthly: Boolean,
     currencySymbol: String,
     currencyFormat: String,
+    onSelectMonthly: () -> Unit,
+    onSelectYearly: () -> Unit,
+    onEdit: () -> Unit,
     onTap: () -> Unit
 ) {
-    val pct = (bp.percentage / 100f).coerceIn(0f, 1f)
+    val pct = bp.percentage.coerceIn(0f, 100f)
+    val progress = (pct / 100f).coerceIn(0f, 1f)
+    val spent = bp.spent
+    val limit = bp.budget.totalLimit
+    val delta = limit - spent
+    val remaining = abs(delta)
+    val isExceeded = delta < 0
     val barColor = when {
-        bp.percentage >= 90f -> ExpenseRed
-        bp.percentage >= 70f -> Color(0xFFFF9800)
+        pct >= 90f -> Color(0xFFFFC107)
+        pct >= 70f -> Color(0xFFFFC107)
         else -> IncomeGreen
     }
+    val cardTitle = if (bp.budget.period == BudgetPeriod.MONTHLY && bp.budget.month != null) {
+        YearMonth.of(bp.budget.year, bp.budget.month).month.name.lowercase()
+            .replaceFirstChar { it.uppercase() } + " ${bp.budget.year}"
+    } else {
+        bp.budget.year.toString()
+    }
+    val spendHint = buildDashboardBudgetHint(bp, currencySymbol, currencyFormat)
     Column(
         Modifier
             .fillMaxWidth()
             .clickable { onTap() }
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp)
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Monthly / Annual toggle (decorative — just shows state)
+        BudgetPeriodToggle(
+            isMonthly = showMonthly,
+            onMonthly = onSelectMonthly,
+            onYearly = onSelectYearly
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            cardTitle,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            val trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+            val sweepDeg = 180f * progress
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
             ) {
-                Box(
-                    Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.PieChart, null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Column {
-                    Text(
-                        if (bp.budget.period.name == "MONTHLY") "Monthly Budget"
-                        else "Yearly Budget",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        "${bp.percentage.toInt()}% used",
-                        style = MaterialTheme.typography.bodySmall, color = barColor
+                val strokeWidth = 20.dp.toPx()
+                val diameter = min(size.width, size.height * 2f) - strokeWidth
+                val topLeft = Offset(
+                    x = (size.width - diameter) / 2f,
+                    y = size.height - diameter / 2f - strokeWidth / 2f
+                )
+                val arcSize = Size(diameter, diameter)
+                drawArc(
+                    color = trackColor,
+                    startAngle = 180f,
+                    sweepAngle = 180f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+                if (sweepDeg > 0f) {
+                    drawArc(
+                        color = barColor,
+                        startAngle = 180f,
+                        sweepAngle = sweepDeg,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(top = 54.dp)
+            ) {
                 Text(
-                    "$currencySymbol${formatAmountForDisplay(bp.spent, currencyFormat)}",
-                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold
+                    text = if (isExceeded) "EXCEEDED" else "REMAINING",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 2.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                Text(
-                    "of $currencySymbol${
-                        formatAmountForDisplay(
-                            bp.budget.totalLimit,
-                            currencyFormat
-                        )
-                    }",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(Modifier.height(4.dp))
+                AutoResizingAmountText(
+                    text = "$currencySymbol${formatAmountForDisplay(remaining, currencyFormat)}",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = if (isExceeded) ExpenseRed else Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxFontSize = MaterialTheme.typography.headlineLarge.fontSize,
+                    minFontSize = 22.sp
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
-        LinearProgressIndicator(
-            progress = { pct },
+
+        Spacer(Modifier.height(6.dp))
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Column {
+                Text(
+                    "Spent",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "$currencySymbol${formatAmountForDisplay(spent, currencyFormat)}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Limit",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit budget",
+                        modifier = Modifier
+                            .size(14.dp)
+                            .clickable { onEdit() },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    "$currencySymbol${formatAmountForDisplay(limit, currencyFormat)}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        Spacer(Modifier.height(14.dp))
+
+        Text(
+            spendHint,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun ScheduledTransactionsCard(
+    onAddScheduled: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        elevation = CardDefaults.cardElevation(2.dp),
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .clickable { onAddScheduled() }
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = barColor,
-            trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-        )
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Event,
+                        contentDescription = null,
+                        modifier = Modifier.size(34.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .padding(start = 40.dp, top = 36.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF4FC3F7)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color.White
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            Text(
+                "Ready to Plan Ahead?",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "Automate your finances with scheduled transactions. Tap '+' to set up your first one.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+private fun buildDashboardBudgetHint(
+    budgetProgress: BudgetProgress,
+    currencySymbol: String,
+    currencyFormat: String
+): String {
+    val spent = budgetProgress.spent
+    val limit = budgetProgress.budget.totalLimit
+    val delta = limit - spent
+    if (delta < 0) {
+        return "Budget exceeded by $currencySymbol${formatAmountForDisplay(abs(delta), currencyFormat)}."
+    }
+
+    return if (budgetProgress.budget.period == BudgetPeriod.MONTHLY && budgetProgress.budget.month != null) {
+        val today = LocalDate.now()
+        val budgetMonth = YearMonth.of(budgetProgress.budget.year, budgetProgress.budget.month)
+        val daysRemaining = if (
+            budgetMonth.year == today.year &&
+            budgetMonth.monthValue == today.monthValue
+        ) {
+            (budgetMonth.lengthOfMonth() - today.dayOfMonth + 1).coerceAtLeast(1)
+        } else {
+            budgetMonth.lengthOfMonth()
+        }
+        val safePerDay = delta / daysRemaining
+        "You may exceed the limit by month-end, reduce daily spend to $currencySymbol${
+            formatAmountForDisplay(safePerDay, currencyFormat)
+        }."
+    } else {
+        "Remaining budget: $currencySymbol${formatAmountForDisplay(delta, currencyFormat)}."
     }
 }
 

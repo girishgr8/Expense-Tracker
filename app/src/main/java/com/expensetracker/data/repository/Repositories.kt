@@ -12,6 +12,7 @@ import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
 import com.expensetracker.data.local.dao.CreditCardDao
 import com.expensetracker.data.local.dao.PaymentModeDao
+import com.expensetracker.data.local.dao.ScheduledTransactionDao
 import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
 import com.expensetracker.data.local.entity.TransactionEntity
@@ -26,6 +27,7 @@ import com.expensetracker.domain.model.CreditCard
 import com.expensetracker.domain.model.ExportFilter
 import com.expensetracker.domain.model.PaymentMode
 import com.expensetracker.domain.model.PaymentModeType
+import com.expensetracker.domain.model.ScheduledTransaction
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
@@ -153,6 +155,14 @@ interface TagRepository {
     suspend fun searchTags(userId: String, query: String): List<Tag>
     suspend fun insertTag(tag: Tag): Long
     suspend fun deleteTag(tag: Tag)
+}
+
+interface ScheduledTransactionRepository {
+    fun getAllScheduledTransactions(userId: String): Flow<List<ScheduledTransaction>>
+    suspend fun getScheduledTransactionById(id: Long): ScheduledTransaction?
+    suspend fun insertScheduledTransaction(schedule: ScheduledTransaction): Long
+    suspend fun updateScheduledTransaction(schedule: ScheduledTransaction)
+    suspend fun deleteScheduledTransaction(schedule: ScheduledTransaction)
 }
 
 interface ExportRepository {
@@ -688,6 +698,26 @@ class TagRepositoryImpl @Inject constructor(
 
     override suspend fun insertTag(tag: Tag): Long = dao.insertTag(tag.toEntity())
     override suspend fun deleteTag(tag: Tag) = dao.deleteTag(tag.toEntity())
+}
+
+@Singleton
+class ScheduledTransactionRepositoryImpl @Inject constructor(
+    private val dao: ScheduledTransactionDao
+) : ScheduledTransactionRepository {
+    override fun getAllScheduledTransactions(userId: String): Flow<List<ScheduledTransaction>> =
+        dao.getAllScheduledTransactions(userId).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun getScheduledTransactionById(id: Long): ScheduledTransaction? =
+        dao.getScheduledTransactionById(id)?.toDomain()
+
+    override suspend fun insertScheduledTransaction(schedule: ScheduledTransaction): Long =
+        dao.insertScheduledTransaction(schedule.toEntity())
+
+    override suspend fun updateScheduledTransaction(schedule: ScheduledTransaction) =
+        dao.updateScheduledTransaction(schedule.toEntity())
+
+    override suspend fun deleteScheduledTransaction(schedule: ScheduledTransaction) =
+        dao.deleteScheduledTransaction(schedule.toEntity())
 }
 
 @Singleton

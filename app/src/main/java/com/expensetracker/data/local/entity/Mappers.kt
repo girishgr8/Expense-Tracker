@@ -7,6 +7,7 @@ import com.expensetracker.domain.model.Budget
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.CreditCard
 import com.expensetracker.domain.model.PaymentMode
+import com.expensetracker.domain.model.ScheduledTransaction
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.Transaction
 import com.google.gson.Gson
@@ -216,3 +217,48 @@ fun Budget.toEntity(): BudgetEntity = BudgetEntity(
 
 fun TagEntity.toDomain(): Tag = Tag(id = id, name = name, userId = userId)
 fun Tag.toEntity(): TagEntity = TagEntity(id = id, name = name, userId = userId)
+
+fun ScheduledTransactionEntity.toDomain(): ScheduledTransaction = ScheduledTransaction(
+    id = id,
+    type = type,
+    amount = amount,
+    categoryId = categoryId,
+    paymentModeId = paymentModeId,
+    creditCardId = creditCardId,
+    toPaymentModeId = toPaymentModeId,
+    toCreditCardId = toCreditCardId,
+    note = note,
+    dateTime = LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(dateTimeMillis), ZoneId.systemDefault()
+    ),
+    tags = gson.fromJson(tags, Array<String>::class.java)?.toList() ?: emptyList(),
+    frequency = frequency,
+    nextRunAt = LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(nextRunAtMillis), ZoneId.systemDefault()
+    ),
+    lastGeneratedAt = lastGeneratedAtMillis?.let {
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
+    },
+    isActive = isActive,
+    userId = userId
+)
+
+fun ScheduledTransaction.toEntity(): ScheduledTransactionEntity = ScheduledTransactionEntity(
+    id = id,
+    type = type,
+    amount = amount,
+    categoryId = categoryId,
+    paymentModeId = paymentModeId,
+    creditCardId = creditCardId,
+    toPaymentModeId = toPaymentModeId,
+    toCreditCardId = toCreditCardId,
+    note = note,
+    dateTimeMillis = dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    tags = gson.toJson(tags),
+    frequency = frequency,
+    nextRunAtMillis = nextRunAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    lastGeneratedAtMillis = lastGeneratedAt?.atZone(ZoneId.systemDefault())?.toInstant()
+        ?.toEpochMilli(),
+    isActive = isActive,
+    userId = userId
+)

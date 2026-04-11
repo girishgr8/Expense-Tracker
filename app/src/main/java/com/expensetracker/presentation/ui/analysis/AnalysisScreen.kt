@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.AlertDialog
@@ -42,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -60,10 +63,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -81,6 +86,7 @@ import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.presentation.theme.IncomeGreen
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -104,6 +110,7 @@ fun AnalysisScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showDatePicker by remember { mutableStateOf(false) }
+    var showComparePicker by remember { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
@@ -183,7 +190,9 @@ fun AnalysisScreen(
                     sym = uiState.currencySymbol,
                     expense = uiState.totalExpense,
                     income = uiState.totalIncome,
-                    balance = uiState.netBalance
+                    balance = uiState.netBalance,
+                    expenseChangePercent = uiState.expenseChangePercent,
+                    incomeChangePercent = uiState.incomeChangePercent
                 )
             }
 
@@ -197,8 +206,16 @@ fun AnalysisScreen(
             }
             item {
                 TrendCard(
+                    period = uiState.period,
                     points = uiState.dailyPoints,
-                    viewType = uiState.trendsViewType
+                    comparisonPoints = uiState.comparisonPoints,
+                    dayWisePoints = uiState.dayWisePoints,
+                    comparisonDayWisePoints = uiState.comparisonDayWisePoints,
+                    compareEnabled = uiState.compareEnabled,
+                    compareLabel = uiState.comparePeriodLabel,
+                    viewType = uiState.trendsViewType,
+                    onToggleCompare = viewModel::setCompareEnabled,
+                    onPickCompare = { showComparePicker = true }
                 )
             }
 
@@ -251,6 +268,28 @@ fun AnalysisScreen(
                 showDatePicker = false
             }
         )
+    }
+
+    if (showComparePicker) {
+        when (uiState.period) {
+            AnalysisPeriod.MONTH -> MonthCompareDialog(
+                initial = uiState.compareMonth ?: YearMonth.now().minusMonths(1),
+                onDismiss = { showComparePicker = false },
+                onConfirm = {
+                    viewModel.setCompareMonth(it)
+                    showComparePicker = false
+                }
+            )
+            AnalysisPeriod.YEAR -> YearCompareDialog(
+                initialYear = uiState.compareYear ?: LocalDate.now().year - 1,
+                onDismiss = { showComparePicker = false },
+                onConfirm = {
+                    viewModel.setCompareYear(it)
+                    showComparePicker = false
+                }
+            )
+            else -> Unit
+        }
     }
 }
 
@@ -408,7 +447,14 @@ private fun PeriodNavRow(label: String, count: Int, onPrev: () -> Unit, onNext: 
 // ─── Summary Card ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun SummaryCard(sym: String, expense: Double, income: Double, balance: Double) {
+private fun SummaryCard(
+    sym: String,
+    expense: Double,
+    income: Double,
+    balance: Double,
+    expenseChangePercent: Float?,
+    incomeChangePercent: Float?
+) {
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -432,6 +478,12 @@ private fun SummaryCard(sym: String, expense: Double, income: Double, balance: D
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    ChangeIndicator(
+                        changePercent = expenseChangePercent,
+                        positiveColor = ExpenseRed,
+                        negativeColor = IncomeGreen,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                     Text(
@@ -446,6 +498,13 @@ private fun SummaryCard(sym: String, expense: Double, income: Double, balance: D
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
+                    )
+                    ChangeIndicator(
+                        changePercent = incomeChangePercent,
+                        positiveColor = IncomeGreen,
+                        negativeColor = ExpenseRed,
+                        modifier = Modifier.padding(top = 4.dp),
                         textAlign = TextAlign.End
                     )
                 }
@@ -480,6 +539,51 @@ private fun SummaryCard(sym: String, expense: Double, income: Double, balance: D
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ChangeIndicator(
+    changePercent: Float?,
+    positiveColor: Color,
+    negativeColor: Color,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start
+) {
+    if (changePercent == null) {
+        Spacer(Modifier.height(18.dp))
+        return
+    }
+
+    val isNeutral = kotlin.math.abs(changePercent) < 0.05f
+    val isIncrease = changePercent > 0f
+    val color = when {
+        isNeutral -> MaterialTheme.colorScheme.onSurfaceVariant
+        isIncrease -> positiveColor
+        else -> negativeColor
+    }
+    val magnitude = kotlin.math.abs(changePercent)
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (textAlign == TextAlign.End) Arrangement.End else Arrangement.Start
+    ) {
+        if (!isNeutral) {
+            Icon(
+                imageVector = if (isIncrease) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Text(
+            text = "${"%.1f".format(magnitude)}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = color,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = textAlign
+        )
     }
 }
 
@@ -527,8 +631,21 @@ private fun AutoResizingAmountText(
 // ─── Trend Card ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun TrendCard(points: List<DailyPoint>, viewType: TransactionType) {
+private fun TrendCard(
+    period: AnalysisPeriod,
+    points: List<DailyPoint>,
+    comparisonPoints: List<DailyPoint>,
+    dayWisePoints: List<DailyPoint>,
+    comparisonDayWisePoints: List<DailyPoint>,
+    compareEnabled: Boolean,
+    compareLabel: String?,
+    viewType: TransactionType,
+    onToggleCompare: (Boolean) -> Unit,
+    onPickCompare: () -> Unit
+) {
     Spacer(Modifier.height(12.dp))
+    val currentColor = if (viewType == TransactionType.EXPENSE) Color(0xFF5AA2FF) else IncomeGreen
+    val comparisonColor = Color(0xFFD2A83B)
     Card(
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(2.dp),
@@ -553,14 +670,74 @@ private fun TrendCard(points: List<DailyPoint>, viewType: TransactionType) {
                     )
                 }
             } else {
-                val lineColor = if (viewType == TransactionType.EXPENSE) ExpenseRed else IncomeGreen
-                LineChart(
+                Text(
+                    "Total",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(12.dp))
+                ComparisonLineChart(
                     points = points,
-                    lineColor = lineColor,
+                    comparisonPoints = if (compareEnabled) comparisonPoints else emptyList(),
+                    currentColor = currentColor,
+                    comparisonColor = comparisonColor,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .height(240.dp)
                 )
+                if (period == AnalysisPeriod.MONTH) {
+                    Spacer(Modifier.height(22.dp))
+                    Text(
+                        "Day-wise",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    ComparisonBarChart(
+                        points = dayWisePoints,
+                        comparisonPoints = if (compareEnabled) comparisonDayWisePoints else emptyList(),
+                        currentColor = currentColor,
+                        comparisonColor = comparisonColor,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp)
+                    )
+                }
+                if (period == AnalysisPeriod.MONTH || period == AnalysisPeriod.YEAR) {
+                    Spacer(Modifier.height(18.dp))
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                        thickness = 0.5.dp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.clickable { onPickCompare() },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                "Compare with",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                compareLabel ?: if (period == AnalysisPeriod.MONTH) "another month" else "another year",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Switch(
+                            checked = compareEnabled,
+                            onCheckedChange = onToggleCompare
+                        )
+                    }
+                }
             }
         }
     }
@@ -613,10 +790,10 @@ private fun CategoryCard(
                 )
                 Spacer(Modifier.height(12.dp))
                 breakdown.forEach { cs ->
-                    CategoryRow(cs = cs, sym = sym)
+                    CategoryRow(cs = cs, sym = sym, viewType = viewType)
                     if (cs != breakdown.last()) {
                         HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 8.dp),
+                            modifier = Modifier.padding(vertical = 4.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                             thickness = 0.5.dp
                         )
@@ -869,9 +1046,11 @@ private fun StatCell(label: String, value: String, modifier: Modifier = Modifier
 // ─── Line Chart (Canvas) ──────────────────────────────────────────────────────
 
 @Composable
-private fun LineChart(
+private fun ComparisonLineChart(
     points: List<DailyPoint>,
-    lineColor: Color,
+    comparisonPoints: List<DailyPoint>,
+    currentColor: Color,
+    comparisonColor: Color,
     modifier: Modifier = Modifier
 ) {
     val animProgress by animateFloatAsState(
@@ -879,8 +1058,10 @@ private fun LineChart(
         animationSpec = tween(800, easing = EaseOut),
         label = "line_anim"
     )
-    val labelStep = maxOf(1, points.size / 12)
+    val labelStep = maxOf(1, points.size / 6)
+    val maxPointCount = maxOf(points.size, comparisonPoints.size).coerceAtLeast(1)
     val currencyFormat = LocalCurrencyFormat.current
+    val axisColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
 
     Canvas(modifier = modifier) {
         val w = size.width
@@ -891,8 +1072,12 @@ private fun LineChart(
         val chartW = w - padL - 12f
         val chartH = h - padB - padT
 
-        val maxVal = points.maxOfOrNull { it.cumulative }.takeIf { it!! > 0 } ?: 1.0
-        val step = if (points.size > 1) chartW / (points.size - 1) else chartW
+        val maxVal = maxOf(
+            points.maxOfOrNull { it.cumulative } ?: 0.0,
+            comparisonPoints.maxOfOrNull { it.cumulative } ?: 0.0,
+            1.0
+        )
+        val step = if (maxPointCount > 1) chartW / (maxPointCount - 1) else chartW
 
         fun xOf(i: Int) = padL + i * step
         fun yOf(v: Double) = padT + chartH * (1.0 - v / maxVal).toFloat()
@@ -900,7 +1085,13 @@ private fun LineChart(
         val gridColor = Color.Gray.copy(alpha = 0.12f)
         for (g in 0..3) {
             val y = padT + chartH * g / 3f
-            drawLine(gridColor, Offset(padL, y), Offset(w - 12f, y), strokeWidth = 0.8f)
+            drawLine(
+                gridColor,
+                Offset(padL, y),
+                Offset(w - 12f, y),
+                strokeWidth = 0.8f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+            )
             val labelVal = maxVal * (1.0 - g / 3.0)
             drawContext.canvas.nativeCanvas.drawText(
                 formatAxisVal(labelVal, currencyFormat), 0f, y + 5f,
@@ -910,46 +1101,79 @@ private fun LineChart(
             )
         }
 
-        if (points.size >= 2) {
-            val gradPath = Path()
-            gradPath.moveTo(xOf(0), yOf(points[0].cumulative * animProgress))
-            for (i in 1 until points.size) {
+        drawLine(
+            color = axisColor,
+            start = Offset(padL, padT + chartH),
+            end = Offset(padL, padT),
+            strokeWidth = 1.2f
+        )
+        drawLine(
+            color = axisColor,
+            start = Offset(padL, padT + chartH),
+            end = Offset(w - 12f, padT + chartH),
+            strokeWidth = 1.2f
+        )
+
+        fun buildSmoothPath(series: List<DailyPoint>, valueSelector: (DailyPoint) -> Double): Path {
+            val path = Path()
+            if (series.isEmpty()) return path
+            path.moveTo(xOf(0), yOf(valueSelector(series[0]) * animProgress))
+            for (i in 1 until series.size) {
                 val px = xOf(i - 1)
                 val cx = xOf(i)
-                val py = yOf(points[i - 1].cumulative * animProgress)
-                val cy = yOf(points[i].cumulative * animProgress)
-                gradPath.cubicTo((px + cx) / 2f, py, (px + cx) / 2f, cy, cx, cy)
+                val py = yOf(valueSelector(series[i - 1]) * animProgress)
+                val cy = yOf(valueSelector(series[i]) * animProgress)
+                path.cubicTo((px + cx) / 2f, py, (px + cx) / 2f, cy, cx, cy)
             }
-            gradPath.lineTo(xOf(points.size - 1), padT + chartH)
-            gradPath.lineTo(xOf(0), padT + chartH)
-            gradPath.close()
+            return path
+        }
+
+        if (points.isNotEmpty()) {
+            val gradPath = buildSmoothPath(points) { it.cumulative }.apply {
+                lineTo(xOf(points.lastIndex), padT + chartH)
+                lineTo(xOf(0), padT + chartH)
+                close()
+            }
             drawPath(
                 gradPath, brush = Brush.verticalGradient(
-                    listOf(lineColor.copy(alpha = 0.22f), Color.Transparent),
+                    listOf(currentColor.copy(alpha = 0.22f), Color.Transparent),
                     startY = padT, endY = padT + chartH
                 )
             )
-
-            val linePath = Path()
-            linePath.moveTo(xOf(0), yOf(points[0].cumulative * animProgress))
-            for (i in 1 until points.size) {
-                val px = xOf(i - 1)
-                val cx = xOf(i)
-                val py = yOf(points[i - 1].cumulative * animProgress)
-                val cy = yOf(points[i].cumulative * animProgress)
-                linePath.cubicTo((px + cx) / 2f, py, (px + cx) / 2f, cy, cx, cy)
-            }
             drawPath(
-                linePath, color = lineColor,
-                style = Stroke(width = 2.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                buildSmoothPath(points) { it.cumulative },
+                color = currentColor,
+                style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
+            for (i in points.indices) {
+                val cx = xOf(i)
+                val cy = yOf(points[i].cumulative * animProgress)
+                drawCircle(currentColor, 4.5f, Offset(cx, cy))
+                drawCircle(Color(0xFF171B22), 2.4f, Offset(cx, cy))
+            }
         }
 
-        for (i in points.indices) {
-            val cx = xOf(i)
-            val cy = yOf(points[i].cumulative * animProgress)
-            drawCircle(lineColor, 4f, Offset(cx, cy))
-            drawCircle(Color.White, 2f, Offset(cx, cy))
+        if (comparisonPoints.isNotEmpty()) {
+            drawPath(
+                buildSmoothPath(comparisonPoints) { it.cumulative },
+                color = comparisonColor,
+                style = Stroke(
+                    width = 2.5f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))
+                )
+            )
+            for (i in comparisonPoints.indices) {
+                val cx = xOf(i)
+                val cy = yOf(comparisonPoints[i].cumulative * animProgress)
+                drawCircle(
+                    comparisonColor,
+                    4.5f,
+                    Offset(cx, cy),
+                    style = Stroke(width = 2.2f)
+                )
+            }
         }
 
         for (i in points.indices step labelStep) {
@@ -963,12 +1187,243 @@ private fun LineChart(
     }
 }
 
+@Composable
+private fun ComparisonBarChart(
+    points: List<DailyPoint>,
+    comparisonPoints: List<DailyPoint>,
+    currentColor: Color,
+    comparisonColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val currencyFormat = LocalCurrencyFormat.current
+    val currencySymbol = com.expensetracker.presentation.components.LocalCurrencySymbol.current
+    val labelStep = maxOf(1, points.size / 6)
+    val maxPointCount = maxOf(points.size, comparisonPoints.size).coerceAtLeast(1)
+    val currentAvg = if (points.isNotEmpty()) points.map { it.amount }.average() else 0.0
+    val comparisonAvg = if (comparisonPoints.isNotEmpty()) comparisonPoints.map { it.amount }.average() else 0.0
+    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)
+    val axisColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val padL = 52f
+        val padB = 34f
+        val padT = 12f
+        val chartW = w - padL - 12f
+        val chartH = h - padB - padT
+        val maxVal = maxOf(
+            points.maxOfOrNull { it.amount } ?: 0.0,
+            comparisonPoints.maxOfOrNull { it.amount } ?: 0.0,
+            1.0
+        )
+        val step = if (maxPointCount > 1) chartW / (maxPointCount - 1) else chartW
+        val barWidth = if (comparisonPoints.isNotEmpty()) step * 0.24f else step * 0.4f
+
+        fun xOf(i: Int) = padL + i * step
+        fun yOf(v: Double) = padT + chartH * (1.0 - v / maxVal).toFloat()
+
+        for (g in 0..4) {
+            val y = padT + chartH * g / 4f
+            drawLine(
+                gridColor,
+                Offset(padL, y),
+                Offset(w - 12f, y),
+                strokeWidth = 0.8f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 10f))
+            )
+            val labelVal = maxVal * (1.0 - g / 4.0)
+            drawContext.canvas.nativeCanvas.drawText(
+                formatAxisVal(labelVal, currencyFormat),
+                0f,
+                y + 5f,
+                android.graphics.Paint().apply {
+                    color = android.graphics.Color.GRAY
+                    textSize = 20f
+                    isAntiAlias = true
+                }
+            )
+        }
+
+        drawLine(
+            color = axisColor,
+            start = Offset(padL, padT + chartH),
+            end = Offset(w - 12f, padT + chartH),
+            strokeWidth = 1.2f
+        )
+
+        points.forEachIndexed { index, point ->
+            val xCenter = xOf(index)
+            val top = yOf(point.amount)
+            drawRoundRect(
+                color = currentColor.copy(alpha = 0.85f),
+                topLeft = Offset(
+                    xCenter - if (comparisonPoints.isNotEmpty()) barWidth + 3f else barWidth / 2f,
+                    top
+                ),
+                size = Size(barWidth, padT + chartH - top),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f, 8f)
+            )
+        }
+
+        comparisonPoints.forEachIndexed { index, point ->
+            val xCenter = xOf(index)
+            val top = yOf(point.amount)
+            drawRoundRect(
+                color = comparisonColor.copy(alpha = 0.72f),
+                topLeft = Offset(xCenter + 3f, top),
+                size = Size(barWidth, padT + chartH - top),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f, 8f)
+            )
+        }
+
+        fun drawAverageLine(avg: Double, color: Color, labelX: Float, alignRight: Boolean) {
+            if (avg <= 0.0) return
+            val y = yOf(avg)
+            drawLine(
+                color = color.copy(alpha = 0.8f),
+                start = Offset(padL, y),
+                end = Offset(w - 12f, y),
+                strokeWidth = 1.4f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))
+            )
+            drawContext.canvas.nativeCanvas.drawText(
+                "Avg: $currencySymbol${formatAmountForDisplay(avg, currencyFormat)}",
+                labelX,
+                y - 8f,
+                android.graphics.Paint().apply {
+                    this.color = color.toArgb()
+                    textSize = 22f
+                    isAntiAlias = true
+                    textAlign = if (alignRight) android.graphics.Paint.Align.RIGHT else android.graphics.Paint.Align.LEFT
+                }
+            )
+        }
+
+        drawAverageLine(currentAvg, currentColor, padL + 4f, alignRight = false)
+        if (comparisonPoints.isNotEmpty()) {
+            drawAverageLine(comparisonAvg, comparisonColor, w - 18f, alignRight = true)
+        }
+
+        for (i in points.indices step labelStep) {
+            drawContext.canvas.nativeCanvas.drawText(
+                points[i].label,
+                xOf(i) - 10f,
+                h,
+                android.graphics.Paint().apply {
+                    color = android.graphics.Color.GRAY
+                    textSize = 20f
+                    isAntiAlias = true
+                }
+            )
+        }
+    }
+}
+
 private fun formatAxisVal(v: Double, currencyFormat: String): String = when {
     currencyFormat == "none" -> formatAmountForDisplay(v, currencyFormat, decimalFmt = "none")
     currencyFormat == "lakhs" && v >= 1_00_000 -> "${"%.1f".format(v / 1_00_000)}L"
     currencyFormat != "lakhs" && v >= 1_000_000 -> "${"%.1f".format(v / 1_000_000)}M"
     v >= 1_000 -> "${"%.0f".format(v / 1_000)}K"
     else -> formatAmountForDisplay(v, currencyFormat, decimalFmt = "none")
+}
+
+@Composable
+private fun MonthCompareDialog(
+    initial: YearMonth,
+    onDismiss: () -> Unit,
+    onConfirm: (YearMonth) -> Unit
+) {
+    var year by remember(initial) { mutableStateOf(initial.year) }
+    var month by remember(initial) { mutableStateOf(initial.monthValue) }
+    val monthNames = listOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Compare Month") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { year -= 1 }) { Icon(Icons.Default.ChevronLeft, null) }
+                    Text("$year", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { year += 1 }) { Icon(Icons.Default.ChevronRight, null) }
+                }
+                for (row in 0 until 3) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        for (col in 0 until 4) {
+                            val monthIndex = row * 4 + col + 1
+                            val selected = month == monthIndex
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (selected) MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.surfaceContainerHigh
+                                    )
+                                    .clickable { month = monthIndex }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    monthNames[monthIndex - 1],
+                                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(YearMonth.of(year, month)) }) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun YearCompareDialog(
+    initialYear: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var year by remember(initialYear) { mutableStateOf(initialYear) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Compare Year") },
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { year -= 1 }) { Icon(Icons.Default.ChevronLeft, null) }
+                Text("$year", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { year += 1 }) { Icon(Icons.Default.ChevronRight, null) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(year) }) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 // ─── Donut Chart (Canvas) ─────────────────────────────────────────────────────
@@ -1030,7 +1485,7 @@ private fun DonutChart(breakdown: List<CategorySpend>, modifier: Modifier = Modi
 // ─── Category Row ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun CategoryRow(cs: CategorySpend, sym: String) {
+private fun CategoryRow(cs: CategorySpend, sym: String, viewType: TransactionType) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -1040,7 +1495,7 @@ private fun CategoryRow(cs: CategorySpend, sym: String) {
         CategoryIconBubble(
             iconKey = cs.category.icon.ifEmpty { "category" },
             colorHex = cs.colorHex,
-            size = 44
+            size = 40
         )
         Spacer(Modifier.width(12.dp))
         Text(
@@ -1056,15 +1511,41 @@ private fun CategoryRow(cs: CategorySpend, sym: String) {
                 "$sym${fmtAmt(cs.amount)}",
                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold
             )
-            val pctColor = try {
-                Color(cs.colorHex.toColorInt())
-            } catch (e: Exception) {
-                MaterialTheme.colorScheme.primary
+            if (cs.changePercent != null) {
+                val isNeutral = kotlin.math.abs(cs.changePercent) < 0.05f
+                val isIncrease = cs.changePercent > 0f
+                val deltaColor = when {
+                    isNeutral -> MaterialTheme.colorScheme.onSurfaceVariant
+                    viewType == TransactionType.EXPENSE -> if (isIncrease) ExpenseRed else IncomeGreen
+                    viewType == TransactionType.INCOME -> if (isIncrease) IncomeGreen else ExpenseRed
+                    else -> MaterialTheme.colorScheme.primary
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!isNeutral) {
+                        Icon(
+                            imageVector = if (isIncrease) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = deltaColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        "${"%.1f".format(kotlin.math.abs(cs.changePercent))}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = deltaColor
+                    )
+                }
+            } else {
+                val pctColor = try {
+                    Color(cs.colorHex.toColorInt())
+                } catch (e: Exception) {
+                    MaterialTheme.colorScheme.primary
+                }
+                Text(
+                    "${"%.1f".format(cs.percentage)}%",
+                    style = MaterialTheme.typography.labelSmall, color = pctColor
+                )
             }
-            Text(
-                "${"%.1f".format(cs.percentage)}%",
-                style = MaterialTheme.typography.labelSmall, color = pctColor
-            )
         }
     }
 }

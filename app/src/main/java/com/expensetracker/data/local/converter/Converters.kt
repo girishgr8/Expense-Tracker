@@ -3,6 +3,7 @@ package com.expensetracker.data.local.converter
 import androidx.room.TypeConverter
 import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.PaymentModeType
+import com.expensetracker.domain.model.ScheduledFrequency
 import com.expensetracker.domain.model.TransactionType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -18,6 +19,10 @@ class Converters {
 
     @TypeConverter fun fromBudgetPeriod(v: BudgetPeriod): String = v.name
     @TypeConverter fun toBudgetPeriod(v: String): BudgetPeriod = BudgetPeriod.valueOf(v)
+
+    @TypeConverter fun fromScheduledFrequency(v: ScheduledFrequency): String = v.name
+    @TypeConverter fun toScheduledFrequency(v: String): ScheduledFrequency =
+        ScheduledFrequency.valueOf(v)
 
     @TypeConverter fun fromTransactionTypeNullable(v: TransactionType?): String? = v?.name
     @TypeConverter fun toTransactionTypeNullable(v: String?): TransactionType? = v?.let { TransactionType.valueOf(it) }

@@ -8,6 +8,21 @@ enum class TransactionType { EXPENSE, INCOME, TRANSFER }
 
 enum class BudgetPeriod { MONTHLY, YEARLY }
 
+enum class ScheduledFrequency {
+    NONE,
+    DAILY,
+    WEEKLY,
+    MONTHLY,
+    YEARLY;
+    fun displayName(): String = when (this) {
+        NONE -> "Does not repeat"
+        DAILY -> "Every day"
+        WEEKLY -> "Every week"
+        MONTHLY -> "Every month"
+        YEARLY -> "Every year"
+    }
+}
+
 /**
  * Payment mode types that can be linked to a BankAccount, or standalone.
  * CREDIT_CARD is intentionally excluded — credit cards are a first-class
@@ -192,6 +207,25 @@ data class Budget(
 )
 
 data class Tag(val id: Long = 0, val name: String, val userId: String = "")
+
+data class ScheduledTransaction(
+    val id: Long = 0,
+    val type: TransactionType,
+    val amount: Double,
+    val categoryId: Long,
+    val paymentModeId: Long?,
+    val creditCardId: Long? = null,
+    val toPaymentModeId: Long? = null,
+    val toCreditCardId: Long? = null,
+    val note: String = "",
+    val dateTime: LocalDateTime,
+    val tags: List<String> = emptyList(),
+    val frequency: ScheduledFrequency,
+    val nextRunAt: LocalDateTime,
+    val lastGeneratedAt: LocalDateTime? = null,
+    val isActive: Boolean = true,
+    val userId: String = ""
+)
 
 // ─── UI / Summary Models ─────────────────────────────────────────────────────
 

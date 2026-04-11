@@ -12,6 +12,7 @@ import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
 import com.expensetracker.data.local.dao.CreditCardDao
 import com.expensetracker.data.local.dao.PaymentModeDao
+import com.expensetracker.data.local.dao.ScheduledTransactionDao
 import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
 import com.expensetracker.data.repository.AttachmentRepository
@@ -30,6 +31,8 @@ import com.expensetracker.data.repository.ExportRepository
 import com.expensetracker.data.repository.ExportRepositoryImpl
 import com.expensetracker.data.repository.PaymentModeRepository
 import com.expensetracker.data.repository.PaymentModeRepositoryImpl
+import com.expensetracker.data.repository.ScheduledTransactionRepository
+import com.expensetracker.data.repository.ScheduledTransactionRepositoryImpl
 import com.expensetracker.data.repository.TagRepository
 import com.expensetracker.data.repository.TagRepositoryImpl
 import com.expensetracker.data.repository.TransactionRepository
@@ -152,10 +155,45 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `scheduled_transactions` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `type` TEXT NOT NULL,
+                    `amount` REAL NOT NULL,
+                    `categoryId` INTEGER NOT NULL,
+                    `paymentModeId` INTEGER,
+                    `creditCardId` INTEGER,
+                    `toPaymentModeId` INTEGER,
+                    `toCreditCardId` INTEGER,
+                    `note` TEXT NOT NULL,
+                    `dateTimeMillis` INTEGER NOT NULL,
+                    `tags` TEXT NOT NULL,
+                    `frequency` TEXT NOT NULL,
+                    `nextRunAtMillis` INTEGER NOT NULL,
+                    `lastGeneratedAtMillis` INTEGER,
+                    `isActive` INTEGER NOT NULL,
+                    `userId` TEXT NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_scheduled_transactions_userId_nextRunAtMillis` " +
+                    "ON `scheduled_transactions` (`userId`, `nextRunAtMillis`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_scheduled_transactions_isActive_nextRunAtMillis` " +
+                    "ON `scheduled_transactions` (`isActive`, `nextRunAtMillis`)"
+            )
+        }
+    }
+
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
-            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .fallbackToDestructiveMigration()
             .build()
 
@@ -186,6 +224,10 @@ object DatabaseModule {
 
     @Provides
     fun provideTagDao(db: AppDatabase): TagDao = db.tagDao()
+
+    @Provides
+    fun provideScheduledTransactionDao(db: AppDatabase): ScheduledTransactionDao =
+        db.scheduledTransactionDao()
 }
 
 @Module
@@ -243,4 +285,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTagRepository(impl: TagRepositoryImpl): TagRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindScheduledTransactionRepository(
+        impl: ScheduledTransactionRepositoryImpl
+    ): ScheduledTransactionRepository
 }

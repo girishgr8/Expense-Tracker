@@ -17,16 +17,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.toColorLong
 import androidx.compose.ui.platform.LocalView
 import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
-import com.expensetracker.presentation.navigation.AppNavGraph
 import com.expensetracker.presentation.components.LocalCurrencyFormat
 import com.expensetracker.presentation.components.LocalCurrencySymbol
+import com.expensetracker.presentation.navigation.AppNavGraph
 import com.expensetracker.presentation.theme.ExpenseTrackerTheme
 import com.expensetracker.util.LocalHapticManager
 import com.expensetracker.util.rememberHapticManager

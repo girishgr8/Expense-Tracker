@@ -6,6 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.PaymentModeType
+import com.expensetracker.domain.model.ScheduledFrequency
 import com.expensetracker.domain.model.TransactionType
 
 @Entity(
@@ -150,5 +151,31 @@ data class BudgetEntity(
 data class TagEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
+    val userId: String
+)
+
+@Entity(
+    tableName = "scheduled_transactions",
+    indices = [
+        Index(value = ["userId", "nextRunAtMillis"]),
+        Index(value = ["isActive", "nextRunAtMillis"])
+    ]
+)
+data class ScheduledTransactionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val type: TransactionType,
+    val amount: Double,
+    val categoryId: Long,
+    val paymentModeId: Long?,
+    val creditCardId: Long?,
+    val toPaymentModeId: Long?,
+    val toCreditCardId: Long?,
+    val note: String,
+    val dateTimeMillis: Long,
+    val tags: String,
+    val frequency: ScheduledFrequency,
+    val nextRunAtMillis: Long,
+    val lastGeneratedAtMillis: Long?,
+    val isActive: Boolean,
     val userId: String
 )
