@@ -2,7 +2,6 @@ package com.expensetracker.data.repository
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import com.expensetracker.data.export.CsvExporter
 import com.expensetracker.data.export.PdfExporter
 import com.expensetracker.data.local.dao.AttachmentDao

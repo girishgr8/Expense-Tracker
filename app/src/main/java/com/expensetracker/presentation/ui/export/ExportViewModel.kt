@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.MediaStore
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,7 +26,6 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TableChart
@@ -338,7 +335,6 @@ fun ExportFormatBottomSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 🔹 SUBTITLE
             Text(
                 text = "Choose a format to export your transactions.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -348,15 +344,14 @@ fun ExportFormatBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 🔹 OPTIONS
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
 
                 ExportFormatItem(
                     title = ExportFormat.CSV.displayName(),
-                    icon = R.drawable.ic_csv_logo,
+                    icon = R.drawable.ic_csv,
                     modifier = Modifier.weight(1f)
                 ) {
                     onFormatSelected(ExportFormat.CSV)
@@ -364,7 +359,7 @@ fun ExportFormatBottomSheet(
 
                 ExportFormatItem(
                     title = ExportFormat.PDF.displayName(),
-                    icon = R.drawable.ic_pdf_logo,
+                    icon = R.drawable.ic_pdf,
                     modifier = Modifier.weight(1f)
                 ) {
                     onFormatSelected(ExportFormat.PDF)
@@ -382,15 +377,11 @@ fun ExportFormatItem(
 ) {
     Card(
         modifier = modifier
-            .height(110.dp) // ✅ exact height like screenshot
+            .height(100.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp // ✅ subtle shadow (not heavy)
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
 
         Column(
@@ -400,17 +391,17 @@ fun ExportFormatItem(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
-            Image(
+            Icon(
                 painter = painterResource(icon),
                 contentDescription = null,
-                modifier = Modifier.size(26.dp),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp),
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Normal
             )
         }
     }

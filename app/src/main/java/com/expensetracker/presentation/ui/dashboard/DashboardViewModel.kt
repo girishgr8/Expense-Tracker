@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.AuthManager
 import com.expensetracker.data.repository.BudgetRepository
+import com.expensetracker.data.repository.CategoryRepository
+import com.expensetracker.data.repository.CreditCardRepository
+import com.expensetracker.data.repository.PaymentModeRepository
+import com.expensetracker.data.repository.ScheduledTransactionRepository
 import com.expensetracker.data.repository.TransactionRepository
 import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.BudgetProgress
@@ -38,15 +42,32 @@ data class DashboardUiState(
     val selectedPeriod: SummaryPeriod = SummaryPeriod.THIS_MONTH,
     val monthlyBudgetProgress: BudgetProgress? = null,
     val annualBudgetProgress: BudgetProgress? = null,
+    val upcomingScheduledTransactions: List<UpcomingScheduledTransaction> = emptyList(),
     val isLoading: Boolean = false,
     val userName: String = "",
     val userEmail: String = ""
+)
+
+data class UpcomingScheduledTransaction(
+    val id: Long,
+    val title: String,
+    val paymentLabel: String,
+    val amount: Double,
+    val type: TransactionType,
+    val categoryIcon: String,
+    val categoryColorHex: String,
+    val nextRunAt: LocalDateTime,
+    val frequencyLabel: String
 )
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val budgetRepository: BudgetRepository,
+    private val scheduledTransactionRepository: ScheduledTransactionRepository,
+    private val categoryRepository: CategoryRepository,
+    private val paymentModeRepository: PaymentModeRepository,
+    private val creditCardRepository: CreditCardRepository,
     private val authManager: AuthManager
 ) : ViewModel() {
 
@@ -58,6 +79,7 @@ class DashboardViewModel @Inject constructor(
 
     init {
         observeUserInfo()
+        observeUpcomingScheduledTransactions()
         loadDashboard()
     }
 
@@ -139,6 +161,48 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    private fun observeUpcomingScheduledTransactions() {
+        viewModelScope.launch {
+            combine(
+                scheduledTransactionRepository.getAllScheduledTransactions(userId),
+                categoryRepository.getAllCategories(userId),
+                paymentModeRepository.getAllModes(userId),
+                creditCardRepository.getAllCards(userId)
+            ) { schedules, categories, paymentModes, creditCards ->
+                val now = LocalDateTime.now()
+                val end = now.plusWeeks(1)
+                schedules
+                    .filter { it.isActive && !it.nextRunAt.isBefore(now) && !it.nextRunAt.isAfter(end) }
+                    .sortedBy { it.nextRunAt }
+                    .map { schedule ->
+                        val category = categories.find { it.id == schedule.categoryId }
+                        val paymentLabel = when {
+                            schedule.paymentModeId != null ->
+                                paymentModes.find { it.id == schedule.paymentModeId }?.displayLabel.orEmpty()
+                            schedule.creditCardId != null ->
+                                creditCards.find { it.id == schedule.creditCardId }?.displayLabel.orEmpty()
+                            else -> ""
+                        }
+                        UpcomingScheduledTransaction(
+                            id = schedule.id,
+                            title = schedule.note.ifBlank {
+                                category?.name ?: schedule.frequency.displayName()
+                            },
+                            paymentLabel = paymentLabel,
+                            amount = schedule.amount,
+                            type = schedule.type,
+                            categoryIcon = category?.icon ?: "category",
+                            categoryColorHex = category?.colorHex ?: "#6750A4",
+                            nextRunAt = schedule.nextRunAt,
+                            frequencyLabel = schedule.frequency.displayName()
+                        )
+                    }
+            }.collect { upcoming ->
+                _uiState.update { it.copy(upcomingScheduledTransactions = upcoming) }
+            }
+        }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun loadDashboard() {
         viewModelScope.launch {
@@ -177,6 +241,7 @@ class DashboardViewModel @Inject constructor(
                         selectedPeriod = period,
                         monthlyBudgetProgress = monthlyBudget,
                         annualBudgetProgress = annualBudget,
+                        upcomingScheduledTransactions = _uiState.value.upcomingScheduledTransactions,
                         userName = _uiState.value.userName,
                         isLoading = false
                     )

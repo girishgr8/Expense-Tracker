@@ -6,7 +6,7 @@ import com.expensetracker.domain.model.TransactionType
 object DefaultCategories {
     val list: List<Category> = listOf(
         // Expense categories
-        Category(name = "Food & Dining", icon = "restaurant", colorHex = "#FF7043", transactionType = TransactionType.EXPENSE, isDefault = true),
+        Category(name = "Food and Dining", icon = "restaurant", colorHex = "#FF7043", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Groceries", icon = "shopping_cart", colorHex = "#7CB342", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Rent", icon = "home", colorHex = "#1E88E5", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Bills & Utilities", icon = "bolt", colorHex = "#FBC02D", transactionType = TransactionType.EXPENSE, isDefault = true),
@@ -20,7 +20,7 @@ object DefaultCategories {
         Category(name = "Personal Care", icon = "face", colorHex = "#FB8C00", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Subscriptions", icon = "subscriptions", colorHex = "#6D4C41", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Taxes", icon = "monetization_on", colorHex = "#C62828", transactionType = TransactionType.EXPENSE, isDefault = true),
-        Category(name = "Gifts & Donation", icon = "card_gift_card", colorHex = "#EC407A", transactionType = TransactionType.EXPENSE, isDefault = true),
+        Category(name = "Gifts and Donation", icon = "card_gift_card", colorHex = "#EC407A", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Others", icon = "more_horiz", colorHex = "#9E9E9E", transactionType = TransactionType.EXPENSE, isDefault = true),
 
         // Income categories

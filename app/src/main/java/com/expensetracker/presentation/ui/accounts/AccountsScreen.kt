@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
@@ -2033,14 +2032,14 @@ private fun PaymentModeIcon(
         }
         PaymentModeType.DEBIT_CARD -> {
             Image(
-                painter = painterResource(id = R.drawable.ic_payment_card_logo),
+                painter = painterResource(id = R.drawable.ic_payment_card),
                 contentDescription = "Debit Card",
                 modifier = modifier
             )
         }
         PaymentModeType.WALLET -> {
             Image(
-                painter = painterResource(id = R.drawable.ic_wallet_logo),
+                painter = painterResource(id = R.drawable.ic_wallet),
                 contentDescription = "Wallet",
                 modifier = modifier
             )

@@ -1244,19 +1244,19 @@ fun PaymentModeSheetIcon(
 ) {
     when (type) {
         PaymentModeType.UPI -> Image(
-            painter = painterResource(id = R.drawable.ic_upi_logo),
+            painter = painterResource(id = R.drawable.ic_upi),
             contentDescription = "UPI",
             modifier = modifier
         )
 
         PaymentModeType.DEBIT_CARD -> Image(
-            painter = painterResource(id = R.drawable.ic_payment_card_logo),
+            painter = painterResource(id = R.drawable.ic_payment_card),
             contentDescription = "Debit Card",
             modifier = modifier
         )
 
         PaymentModeType.WALLET -> Image(
-            painter = painterResource(id = R.drawable.ic_wallet_logo),
+            painter = painterResource(id = R.drawable.ic_wallet),
             contentDescription = "Wallet",
             modifier = modifier
         )
@@ -1579,7 +1579,7 @@ fun AmountEntryRow(
                 .padding(0.dp)
         ) {
             Image(
-                painter = painterResource(id = R.drawable.ic_calculator_logo),
+                painter = painterResource(id = R.drawable.ic_calculator),
                 contentDescription = "Calculator",
                 modifier = Modifier.size(28.dp),
                 colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))

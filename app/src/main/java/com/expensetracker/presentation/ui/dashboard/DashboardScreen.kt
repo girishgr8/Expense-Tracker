@@ -322,6 +322,9 @@ fun DashboardScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 ScheduledTransactionsCard(
+                    upcomingTransactions = uiState.upcomingScheduledTransactions,
+                    currencySymbol = currencySymbol,
+                    currencyFormat = currencyFormat,
                     onAddScheduled = onNavigateToAddScheduledTransaction
                 )
             }
@@ -735,6 +738,9 @@ private fun BudgetProgressInline(
 
 @Composable
 private fun ScheduledTransactionsCard(
+    upcomingTransactions: List<UpcomingScheduledTransaction>,
+    currencySymbol: String,
+    currencyFormat: String,
     onAddScheduled: () -> Unit
 ) {
     Card(
@@ -751,59 +757,159 @@ private fun ScheduledTransactionsCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
+                .padding(horizontal = if (upcomingTransactions.isEmpty()) 24.dp else 12.dp, vertical = if (upcomingTransactions.isEmpty()) 24.dp else 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Event,
-                        contentDescription = null,
-                        modifier = Modifier.size(34.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+            if (upcomingTransactions.isEmpty()) {
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Event,
+                            contentDescription = null,
+                            modifier = Modifier.size(34.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 40.dp, top = 36.dp)
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF4FC3F7)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                    }
                 }
-                Box(
-                    modifier = Modifier
-                        .padding(start = 40.dp, top = 36.dp)
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF4FC3F7)),
-                    contentAlignment = Alignment.Center
+
+                Spacer(Modifier.height(18.dp))
+
+                Text(
+                    "Ready to Plan Ahead?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    "Automate your finances with scheduled transactions. Tap '+' to set up your first one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Schedule,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = Color.White
-                    )
+                    upcomingTransactions.forEachIndexed { index, scheduled ->
+                        UpcomingScheduledTransactionRow(
+                            scheduled = scheduled,
+                            currencySymbol = currencySymbol,
+                            currencyFormat = currencyFormat
+                        )
+                        if (index < upcomingTransactions.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                thickness = 0.5.dp
+                            )
+                        }
+                    }
                 }
             }
+        }
+    }
+}
 
-            Spacer(Modifier.height(18.dp))
+@Composable
+private fun UpcomingScheduledTransactionRow(
+    scheduled: UpcomingScheduledTransaction,
+    currencySymbol: String,
+    currencyFormat: String
+) {
+    val amountColor = when (scheduled.type) {
+        TransactionType.INCOME -> IncomeGreen
+        TransactionType.EXPENSE -> ExpenseRed
+        TransactionType.TRANSFER -> TransferBlue
+    }
+    val prefix = when (scheduled.type) {
+        TransactionType.INCOME -> "+"
+        TransactionType.EXPENSE -> "-"
+        TransactionType.TRANSFER -> ""
+    }
+    val dateLabel = scheduled.nextRunAt.toLocalDate().let { date ->
+        val today = LocalDate.now()
+        when (date) {
+            today -> "Today"
+            today.plusDays(1) -> "Tomorrow"
+            else -> scheduled.nextRunAt.format(DateTimeFormatter.ofPattern("dd MMM"))
+        }
+    }
+    val timeLabel = scheduled.nextRunAt.format(DateTimeFormatter.ofPattern("hh:mm a"))
 
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 0.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CategoryIconBubble(
+            iconKey = scheduled.categoryIcon,
+            colorHex = scheduled.categoryColorHex,
+            size = 44
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                "Ready to Plan Ahead?",
-                style = MaterialTheme.typography.titleLarge,
+                scheduled.title,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-
-            Spacer(Modifier.height(12.dp))
-
             Text(
-                "Automate your finances with scheduled transactions. Tap '+' to set up your first one.",
-                style = MaterialTheme.typography.bodyMedium,
+                buildString {
+                    append(dateLabel)
+                    append(" • ")
+                    append(timeLabel)
+                    if (scheduled.paymentLabel.isNotBlank()) {
+                        append(" • ")
+                        append(scheduled.paymentLabel)
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                scheduled.frequencyLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
             )
         }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "$prefix$currencySymbol${formatAmountForDisplay(scheduled.amount, currencyFormat)}",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = amountColor,
+            maxLines = 1
+        )
     }
 }
 
