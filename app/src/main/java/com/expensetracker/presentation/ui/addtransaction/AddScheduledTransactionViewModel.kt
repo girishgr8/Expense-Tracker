@@ -18,6 +18,7 @@ import com.expensetracker.domain.model.ScheduledTransaction
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.util.ScheduledTransactionScheduler
+import com.expensetracker.worker.ScheduledTransactionWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +45,7 @@ data class AddScheduledTransactionUiState(
     val tags: List<String> = emptyList(),
     val tagSuggestions: List<Tag> = emptyList(),
     val attachments: List<Attachment> = emptyList(),
+    val reminderMinutes: Long = 0,
     val isLoading: Boolean = false,
     val isSaved: Boolean = false,
     val error: String? = null
@@ -125,6 +127,10 @@ class AddScheduledTransactionViewModel @Inject constructor(
             val suggestions = tagRepository.searchTags(userId, query)
             _uiState.update { it.copy(tagSuggestions = suggestions) }
         }
+    }
+
+    fun setReminderMinutes(days: Long) {
+        _uiState.update { it.copy(reminderMinutes = days) }
     }
 
     private fun saveAttachmentFromUri(uri: Uri): Attachment {
@@ -209,10 +215,13 @@ class AddScheduledTransactionViewModel @Inject constructor(
                     dateTime = state.dateTime,
                     frequency = state.frequency,
                     nextRunAt = state.dateTime,
+                    reminderMinutes = uiState.value.reminderMinutes,
                     userId = userId
                 )
-                val id = scheduledTransactionRepository.insertScheduledTransaction(schedule)
-                ScheduledTransactionScheduler.schedule(context, id, state.dateTime)
+                val savedId = scheduledTransactionRepository.insertScheduledTransaction(schedule)
+                val savedSchedule = schedule.copy(id = savedId)
+                ScheduledTransactionWorker.scheduleReminder(context, savedSchedule)
+                ScheduledTransactionScheduler.schedule(context, savedId, state.dateTime)
                 _uiState.update { it.copy(isSaved = true, isLoading = false) }
             } catch (e: Exception) {
                 _uiState.update {

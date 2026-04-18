@@ -177,5 +177,6 @@ data class ScheduledTransactionEntity(
     val nextRunAtMillis: Long,
     val lastGeneratedAtMillis: Long?,
     val isActive: Boolean,
+    val reminderMinutes: Long = 0,
     val userId: String
 )

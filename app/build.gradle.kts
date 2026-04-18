@@ -20,6 +20,8 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "ANTHROPIC_API_KEY",
+            "\"${properties["ANTHROPIC_API_KEY"]}\"")
     }
 
     buildTypes {
@@ -39,6 +41,7 @@ android {
         compose = true
         buildConfig = true
     }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

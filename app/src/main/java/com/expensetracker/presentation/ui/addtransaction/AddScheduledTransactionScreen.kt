@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -68,6 +69,7 @@ fun AddScheduledTransactionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showFrequencySheet by remember { mutableStateOf(false) }
+    var showReminderSheet by remember { mutableStateOf(false) }
     var showCategorySheet by remember { mutableStateOf(false) }
     var showCalculator by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -141,6 +143,13 @@ fun AddScheduledTransactionScreen(
                 accentColor = accentColor,
                 supporting = frequencySupportingText(uiState.frequency, uiState.dateTime),
                 onClick = { showFrequencySheet = true }
+            )
+
+            // Early Reminder Row
+            EarlyReminderRow(
+                reminderMinutes = uiState.reminderMinutes,
+                accentColor = accentColor,
+                onClick = { showReminderSheet = true }
             )
 
             // Transaction Amount Entry Row
@@ -266,6 +275,17 @@ fun AddScheduledTransactionScreen(
                 showCalculator = false
             },
             onDismiss = { showCalculator = false }
+        )
+    }
+
+    if (showReminderSheet) {
+        EarlyReminderSheet(
+            selected  = uiState.reminderMinutes,
+            onSelect  = { minutes ->
+                viewModel.setReminderMinutes(minutes)
+                showReminderSheet = false
+            },
+            onDismiss = { showReminderSheet = false }
         )
     }
 
@@ -501,4 +521,135 @@ private fun frequencySupportingText(
             )
         )
     } at ${dateTime.format(DateTimeFormatter.ofPattern("hh:mm a"))}"
+}
+
+// ─── Early Reminder Row ───────────────────────────────────────────────────────
+
+@Composable
+private fun EarlyReminderRow(
+    reminderMinutes: Long,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    val label = reminderMinutesLabel(reminderMinutes)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.NotificationsNone, null,
+                tint = accentColor,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Early Reminder",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (reminderMinutes == 0L) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Icon(
+            Icons.Default.ChevronRight, null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun reminderMinutesLabel(minutes: Long): String = when (minutes) {
+    0L    -> "None"
+    5L    -> "5 minutes before"
+    15L   -> "15 minutes before"
+    30L   -> "30 minutes before"
+    60L   -> "1 hour before"
+    360L  -> "6 hours before"
+    720L  -> "12 hours before"
+    else  -> {
+        val days = minutes / (60 * 24)
+        if (days == 1L) "1 day before" else "$days days before"
+    }
+}
+
+// ─── Early Reminder Picker Sheet ─────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EarlyReminderSheet(
+    selected: Long,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Options:
+    //   0        = None
+    //   5/15/30  = minutes before
+    //   60       = 1 hour before
+    //   360      = 6 hours before
+    //   720      = 12 hours before
+    //   N*1440   = N days before (1–14)
+    val options: List<Long> = listOf(0L, 5L, 15L, 30L, 60L, 360L, 720L) +
+            (1..14).map { it * 60L * 24L }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Early Reminder",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, "Close")
+                }
+            }
+            options.forEach { minutes ->
+                val label = reminderMinutesLabel(minutes)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(minutes) }
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
+                    if (minutes == selected) {
+                        Text(
+                            "Selected",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.ChevronRight, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.size(12.dp))
+        }
+    }
 }

@@ -9,10 +9,13 @@ import com.expensetracker.data.repository.AuthManager
 import com.expensetracker.data.repository.CategoryRepository
 import com.expensetracker.data.repository.CreditCardRepository
 import com.expensetracker.data.repository.PaymentModeRepository
+import com.expensetracker.data.repository.TagRepository
 import com.expensetracker.data.repository.TransactionRepository
 import com.expensetracker.data.repository.UserPreferencesRepository
 import com.expensetracker.domain.model.Category
+import com.expensetracker.domain.model.CreditCard
 import com.expensetracker.domain.model.PaymentMode
+import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.util.DriveBackupScheduler
@@ -24,6 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.InputStreamReader
@@ -83,6 +87,7 @@ class SettingsViewModel @Inject constructor(
     private val paymentModeRepository: PaymentModeRepository,
     private val creditCardRepository: CreditCardRepository,
     private val transactionRepository: TransactionRepository,
+    private val tagRepository: TagRepository,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -314,7 +319,8 @@ class SettingsViewModel @Inject constructor(
             val categories = categoryRepository.getAllCategories(userId).first()
             val paymentModes = paymentModeRepository.getAllModes(userId).first()
             val creditCards = creditCardRepository.getAllCards(userId).first()
-            val imported = parseTransactionsFromCsv(uri, userId, categories, paymentModes, creditCards)
+            val tags = tagRepository.getAllTags(userId).first()
+            val imported = parseTransactionsFromCsv(uri, userId, categories, paymentModes, creditCards, tags)
             imported.forEach { transactionRepository.insertTransaction(it) }
             imported.size
         }.onSuccess { count ->
@@ -347,13 +353,16 @@ class SettingsViewModel @Inject constructor(
         userId: String,
         categories: List<Category>,
         paymentModes: List<PaymentMode>,
-        creditCards: List<com.expensetracker.domain.model.CreditCard>
+        creditCards: List<CreditCard>,
+        tags: List<Tag>
     ): List<Transaction> {
         val rows = mutableListOf<Transaction>()
         val formatter = DateTimeFormatterBuilder()
             .parseCaseInsensitive()
             .appendPattern("yyyy-MM-dd H:mm")
             .toFormatter(Locale.getDefault())
+
+        val availableTags = tagRepository.getAllTags(userId)
 
         context.contentResolver.openInputStream(uri)?.use { input ->
             CSVReader(InputStreamReader(input)).use { reader ->
@@ -383,6 +392,12 @@ class SettingsViewModel @Inject constructor(
                         .split(Regex("\\s+"))
                         .map { it.trim().trimStart('#').lowercase() }
                         .filter { it.isNotBlank() }
+
+                    tags.forEach { tag ->
+
+                        Tag(name = tag.trim().lowercase(), userId = userId)
+
+                    }
 
                     rows += Transaction(
                         type = type,

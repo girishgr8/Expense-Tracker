@@ -2,6 +2,7 @@ package com.expensetracker.presentation.ui.addtransaction
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -197,6 +198,7 @@ class AddTransactionViewModel @Inject constructor(
             _uiState.update { it.copy(tags = current + tag.trim().lowercase()) }
             viewModelScope.launch {
                 tagRepository.insertTag(Tag(name = tag.trim().lowercase(), userId = userId))
+                tagRepository.getAllTags(userId).collect { tag -> Log.d("Expense Tracker", "tag=$tag") }
             }
         }
     }

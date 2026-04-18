@@ -15,6 +15,8 @@ import com.expensetracker.data.local.entity.CreditCardEntity
 import com.expensetracker.data.local.entity.PaymentModeEntity
 import com.expensetracker.data.local.entity.ScheduledTransactionEntity
 import com.expensetracker.data.local.entity.TagEntity
+import com.expensetracker.data.local.entity.TransactionEntity
+import com.expensetracker.domain.model.Tag
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -205,6 +207,9 @@ interface BudgetDao {
 
 @Dao
 interface TagDao {
+    @Query("SELECT * FROM tags WHERE userId = :userId ORDER BY name ASC")
+    suspend fun getAllTagsOneShot(userId: String): List<TagEntity>
+
     @Query("SELECT * FROM tags WHERE userId = :userId ORDER BY name ASC")
     fun getAllTags(userId: String): Flow<List<TagEntity>>
 

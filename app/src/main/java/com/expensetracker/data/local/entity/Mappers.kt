@@ -215,7 +215,7 @@ fun Budget.toEntity(): BudgetEntity = BudgetEntity(
 
 // ─── Tag ──────────────────────────────────────────────────────────────────────
 
-fun TagEntity.toDomain(): Tag = Tag(id = id, name = name, userId = userId)
+fun TagEntity.toDomain(name: String, userId: String): Tag = Tag(id = id, name = name, userId = userId)
 fun Tag.toEntity(): TagEntity = TagEntity(id = id, name = name, userId = userId)
 
 fun ScheduledTransactionEntity.toDomain(): ScheduledTransaction = ScheduledTransaction(
@@ -240,6 +240,7 @@ fun ScheduledTransactionEntity.toDomain(): ScheduledTransaction = ScheduledTrans
         LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
     },
     isActive = isActive,
+    reminderMinutes = reminderMinutes,
     userId = userId
 )
 
@@ -260,5 +261,6 @@ fun ScheduledTransaction.toEntity(): ScheduledTransactionEntity = ScheduledTrans
     lastGeneratedAtMillis = lastGeneratedAt?.atZone(ZoneId.systemDefault())?.toInstant()
         ?.toEpochMilli(),
     isActive = isActive,
+    reminderMinutes = reminderMinutes,
     userId = userId
 )

@@ -14,6 +14,8 @@ import com.expensetracker.data.local.dao.PaymentModeDao
 import com.expensetracker.data.local.dao.ScheduledTransactionDao
 import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
+import com.expensetracker.data.local.entity.AttachmentEntity
+import com.expensetracker.data.local.entity.TagEntity
 import com.expensetracker.data.local.entity.TransactionEntity
 import com.expensetracker.data.local.entity.toDomain
 import com.expensetracker.data.local.entity.toEntity
@@ -150,6 +152,7 @@ interface BudgetRepository {
 }
 
 interface TagRepository {
+    suspend fun getAllTagsOneShot(userId: String): List<Tag>
     fun getAllTags(userId: String): Flow<List<Tag>>
     suspend fun searchTags(userId: String, query: String): List<Tag>
     suspend fun insertTag(tag: Tag): Long
@@ -274,7 +277,7 @@ class TransactionRepositoryImpl @Inject constructor(
             attachmentDao.getAttachmentsForTransactions(entities.map { it.id })
                 .groupBy { it.transactionId }
         } else {
-            emptyMap<Long, List<com.expensetracker.data.local.entity.AttachmentEntity>>()
+            emptyMap<Long, List<AttachmentEntity>>()
         }
 
         return entities.map { entity ->
@@ -687,16 +690,40 @@ class BudgetRepositoryImpl @Inject constructor(
 
 @Singleton
 class TagRepositoryImpl @Inject constructor(
-    private val dao: TagDao
+    private val tagDao: TagDao
 ) : TagRepository {
+    private suspend fun enrichTags(
+        entities: List<TagEntity>,
+        userId: String,
+    ): List<Tag> {
+        if (entities.isEmpty()) return emptyList()
+
+        return entities.map { entity ->
+            val name = entity.name
+            val userId = userId
+
+            entity.toDomain(
+                name = name,
+                userId = userId
+            )
+        }
+    }
+
+    override suspend fun getAllTagsOneShot(userId: String): List<Tag> =
+        enrichTags(
+            tagDao.getAllTagsOneShot(userId),
+            userId = userId,
+        )
+
+
     override fun getAllTags(userId: String): Flow<List<Tag>> =
-        dao.getAllTags(userId).map { it.map { e -> e.toDomain() } }
+        tagDao.getAllTags(userId).map { it.map { e -> e.toDomain(e.name, e.userId) } }
 
     override suspend fun searchTags(userId: String, query: String): List<Tag> =
-        dao.searchTags(userId, query).map { it.toDomain() }
+        tagDao.searchTags(userId, query).map { it.toDomain(it.name, it.userId) }
 
-    override suspend fun insertTag(tag: Tag): Long = dao.insertTag(tag.toEntity())
-    override suspend fun deleteTag(tag: Tag) = dao.deleteTag(tag.toEntity())
+    override suspend fun insertTag(tag: Tag): Long = tagDao.insertTag(tag.toEntity())
+    override suspend fun deleteTag(tag: Tag) = tagDao.deleteTag(tag.toEntity())
 }
 
 @Singleton

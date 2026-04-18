@@ -4,10 +4,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,22 +25,31 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -80,6 +92,9 @@ import com.expensetracker.presentation.components.EmptyState
 import com.expensetracker.presentation.components.LoadingOverlay
 import com.expensetracker.presentation.components.LocalCurrencyFormat
 import com.expensetracker.presentation.components.LocalCurrencySymbol
+import com.expensetracker.presentation.theme.ExpenseRed
+import com.expensetracker.presentation.theme.IncomeGreen
+import com.expensetracker.presentation.theme.TransferBlue
 import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -424,6 +439,9 @@ private fun TransactionDayCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                var netAmountColor = MaterialTheme.colorScheme.onSurface
+                if (netAmount < 0) netAmountColor = ExpenseRed
+                else if (netAmount > 0) netAmountColor = IncomeGreen
                 Text(
                     text = dateLabel,
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
@@ -434,20 +452,28 @@ private fun TransactionDayCard(
                     text = dayTotalLabel(netAmount),
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = netAmountColor
                 )
             }
 
             Spacer(Modifier.height(12.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                transactions.forEach { transaction ->
+                transactions.forEachIndexed { index, transaction ->
                     TransactionDayRow(
                         transaction = transaction,
                         currencySymbol = currencySymbol,
                         currencyFormat = currencyFormat,
                         onClick = { onTransactionClick(transaction) }
                     )
+                    if (index < transactions.size - 1) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 0.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                                .copy(alpha = 0.5f),
+                            thickness = 0.5.dp
+                        )
+                    }
                 }
             }
         }
@@ -502,6 +528,11 @@ private fun TransactionDayRow(
         }
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
+            val txnAmtColor = when (transaction.type) {
+                TransactionType.INCOME -> IncomeGreen
+                TransactionType.EXPENSE -> ExpenseRed
+                TransactionType.TRANSFER -> TransferBlue
+            }
             Text(
                 text = "$currencySymbol${
                     formatAmountForDisplay(
@@ -511,7 +542,7 @@ private fun TransactionDayRow(
                 }",
                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = txnAmtColor
             )
             Text(
                 text = timeLabel,
@@ -535,7 +566,7 @@ private fun dayTotalLabel(amount: Double): String {
     return prefix + currencySymbol + formatAmountForDisplay(abs(amount), currencyFormat)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun FilterBottomSheet(
     filter: TransactionFilter,
@@ -546,162 +577,459 @@ private fun FilterBottomSheet(
     onDismiss: () -> Unit
 ) {
     var localFilter by remember { mutableStateOf(filter) }
-    val months = listOf(
+
+    // Combined year+month chips — years full (2026), recent months abbreviated (Apr 26)
+    val currentYear = LocalDate.now().year
+    val currentMonth = LocalDate.now().monthValue
+    val years = (currentYear downTo currentYear - 5).toList()
+    val shortMonthNames = listOf(
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     )
-    val currentYear = LocalDate.now().year
-    val years = (currentYear downTo currentYear - 5).toList()
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // Build combined date chips: last 8 year-month combos + all year-only chips, interleaved
+    // Show years first, then recent year+month combos, matching image 1 layout
+    data class DateChip(val year: Int, val month: Int?, val label: String)
+
+    val yearChips = years.map { DateChip(it, null, "$it") }
+    val monthChips = run {
+        val chips = mutableListOf<DateChip>()
+        var y = currentYear
+        var m = currentMonth
+        repeat(12) {
+            chips += DateChip(
+                y,
+                m,
+                "${shortMonthNames[m - 1]} ${(y % 100).toString().padStart(2, '0')}"
+            )
+            m--; if (m == 0) {
+            m = 12; y--
+        }
+        }
+        chips
+    }
+    val allDateChips = (yearChips + monthChips)
+    val showMoreDate = allDateChips.size > 8
+    var expandDate by remember { mutableStateOf(false) }
+    val visibleDate = if (expandDate) allDateChips else allDateChips.take(8)
+
+    // Category type sub-filter (All / Spending / Income / Transfer)
+    val typeLabels = listOf("All", "Spending", "Income", "Transfer")
+    var catTypeTab by remember { mutableStateOf("All") }
+    val visibleCategories = categories.filter { cat ->
+        when (catTypeTab) {
+            "Spending" -> cat.transactionType == TransactionType.EXPENSE
+            "Income" -> cat.transactionType == TransactionType.INCOME
+            "Transfer" -> cat.transactionType == null  // transfers typically uncategorized
+            else -> true
+        }
+    }
+    val showMoreCat = visibleCategories.size > 8
+    var expandCat by remember { mutableStateOf(false) }
+    val visibleCat = if (expandCat) visibleCategories else visibleCategories.take(8)
+
+    val showMoreMode = modes.size > 7
+    var expandMode by remember { mutableStateOf(false) }
+    val visibleModes = if (expandMode) modes else modes.take(7)
+
+    val showMoreTags = allTags.size > 7
+    var expandTags by remember { mutableStateOf(false) }
+    val visibleTags = if (expandTags) allTags else allTags.take(7)
+
+    // Tags match mode
+    var tagsMatchAny by remember { mutableStateOf(true) }
+    var showTagMatchMenu by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
         ) {
-            Text(
-                "Filter Transactions",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(16.dp))
-
-            Text("Year", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    FilterChip(
-                        selected = localFilter.year == null,
-                        onClick = { localFilter = localFilter.copy(year = null) },
-                        label = { Text("All") }
-                    )
-                }
-                items(years) { year ->
-                    FilterChip(
-                        selected = localFilter.year == year,
-                        onClick = {
-                            localFilter = localFilter.copy(
-                                year = if (localFilter.year == year) null else year
-                            )
-                        },
-                        label = { Text("$year") }
-                    )
-                }
-            }
-
             Spacer(Modifier.height(12.dp))
 
-            Text("Month", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    FilterChip(
-                        selected = localFilter.month == null,
-                        onClick = { localFilter = localFilter.copy(month = null) },
-                        label = { Text("All") }
-                    )
-                }
-                items(months.mapIndexed { i, m -> i + 1 to m }) { (idx, mon) ->
-                    FilterChip(
-                        selected = localFilter.month == idx,
-                        onClick = {
-                            localFilter = localFilter.copy(
-                                month = if (localFilter.month == idx) null else idx
-                            )
-                        },
-                        label = { Text(mon) }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Text("Type", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TransactionType.entries.forEach { type ->
-                    FilterChip(
-                        selected = type in localFilter.transactionTypes,
-                        onClick = {
-                            localFilter = if (type in localFilter.transactionTypes) {
-                                localFilter.copy(
-                                    transactionTypes = localFilter.transactionTypes - type
-                                )
-                            } else {
-                                localFilter.copy(
-                                    transactionTypes = localFilter.transactionTypes + type
-                                )
-                            }
-                        },
-                        label = { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Text("Category", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(categories) { cat ->
-                    FilterChip(
-                        selected = cat.id in localFilter.categoryIds,
-                        onClick = {
-                            localFilter = if (cat.id in localFilter.categoryIds) {
-                                localFilter.copy(categoryIds = localFilter.categoryIds - cat.id)
-                            } else {
-                                localFilter.copy(categoryIds = localFilter.categoryIds + cat.id)
-                            }
-                        },
-                        label = { Text(cat.name) }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Text("Payment Mode", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(modes) { mode ->
-                    FilterChip(
-                        selected = mode.id in localFilter.paymentModeIds,
-                        onClick = {
-                            localFilter = if (mode.id in localFilter.paymentModeIds) {
-                                localFilter.copy(paymentModeIds = localFilter.paymentModeIds - mode.id)
-                            } else {
-                                localFilter.copy(paymentModeIds = localFilter.paymentModeIds + mode.id)
-                            }
-                        },
-                        label = { Text(mode.displayLabel) }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // ── Header row ────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Filter",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                // Reset pill button
                 OutlinedButton(
                     onClick = {
                         localFilter = TransactionFilter()
-                        onApply(TransactionFilter())
-                        onDismiss()
+                        catTypeTab = "All"
                     },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(50),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
                 ) {
-                    Text("Reset")
+                    Icon(Icons.Default.Refresh, null, Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Reset", style = MaterialTheme.typography.labelMedium)
                 }
-                Button(
-                    onClick = { onApply(localFilter); onDismiss() },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
+                Spacer(Modifier.width(8.dp))
+                // Close circle button
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                 ) {
-                    Text("Apply Filters")
+                    Icon(Icons.Default.Close, "Close", Modifier.size(16.dp))
                 }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── Year / Month section ──────────────────────────────────────────
+            SectionHeader(
+                label = "Year/month",
+                trailingLabel = "Date range",
+                onTrailingClick = {}   // date-range mode reserved for future
+            )
+            Spacer(Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                visibleDate.forEach { chip ->
+                    val isSelected = if (chip.month == null)
+                        localFilter.year == chip.year && localFilter.month == null
+                    else
+                        localFilter.year == chip.year && localFilter.month == chip.month
+                    CompactFilterChip(
+                        label = chip.label,
+                        selected = isSelected,
+                        onClick = {
+                            localFilter = if (isSelected)
+                                localFilter.copy(year = null, month = null)
+                            else
+                                localFilter.copy(year = chip.year, month = chip.month)
+                        }
+                    )
+                }
+                if (showMoreDate) {
+                    OverflowChip(expanded = expandDate) { expandDate = !expandDate }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── Category section ──────────────────────────────────────────────
+            SectionHeader(
+                label = "Category",
+                onSelectAll = {
+                    val allIds = visibleCategories.map { it.id }.toSet()
+                    localFilter = if (localFilter.categoryIds.containsAll(allIds))
+                        localFilter.copy(categoryIds = emptyList())
+                    else
+                        localFilter.copy(categoryIds = localFilter.categoryIds + allIds)
+                }
+            )
+            Spacer(Modifier.height(8.dp))
+
+            // Category type sub-tabs (All / Spending / Income / Transfer)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(50)
+                    )
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                typeLabels.forEach { tab ->
+                    val sel = tab == catTypeTab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (sel) MaterialTheme.colorScheme.onSurface
+                                else androidx.compose.ui.graphics.Color.Transparent,
+                                RoundedCornerShape(50)
+                            )
+                            .clickable { catTypeTab = tab }
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            tab,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                            color = if (sel) MaterialTheme.colorScheme.surface
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                visibleCat.forEach { cat ->
+                    CompactFilterChip(
+                        label = cat.name,
+                        selected = cat.id in localFilter.categoryIds,
+                        onClick = {
+                            localFilter = if (cat.id in localFilter.categoryIds)
+                                localFilter.copy(categoryIds = localFilter.categoryIds - cat.id)
+                            else
+                                localFilter.copy(categoryIds = localFilter.categoryIds + cat.id)
+                        }
+                    )
+                }
+                if (showMoreCat) {
+                    OverflowChip(expanded = expandCat) { expandCat = !expandCat }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── Payment mode section ──────────────────────────────────────────
+            SectionHeader(
+                label = "Payment mode",
+                onSelectAll = {
+                    val allIds = modes.map { it.id }.toSet()
+                    localFilter = if (localFilter.paymentModeIds.containsAll(allIds))
+                        localFilter.copy(paymentModeIds = emptyList())
+                    else
+                        localFilter.copy(paymentModeIds = localFilter.paymentModeIds + allIds)
+                }
+            )
+            Spacer(Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                visibleModes.forEach { mode ->
+                    CompactFilterChip(
+                        label = mode.displayLabel,
+                        selected = mode.id in localFilter.paymentModeIds,
+                        onClick = {
+                            localFilter = if (mode.id in localFilter.paymentModeIds)
+                                localFilter.copy(paymentModeIds = localFilter.paymentModeIds - mode.id)
+                            else
+                                localFilter.copy(paymentModeIds = localFilter.paymentModeIds + mode.id)
+                        }
+                    )
+                }
+                if (showMoreMode) {
+                    OverflowChip(expanded = expandMode) { expandMode = !expandMode }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── Tags section ──────────────────────────────────────────────────
+            if (allTags.isNotEmpty()) {
+                SectionHeader(
+                    label = "Tags",
+                    trailingContent = {
+                        // "Includes any ▾" dropdown
+                        Box {
+                            Row(
+                                modifier = Modifier
+                                    .clickable { showTagMatchMenu = true }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    if (tagsMatchAny) "Includes any" else "Includes all",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    null, Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showTagMatchMenu,
+                                onDismissRequest = { showTagMatchMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Includes any") },
+                                    onClick = { tagsMatchAny = true; showTagMatchMenu = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Includes all") },
+                                    onClick = { tagsMatchAny = false; showTagMatchMenu = false }
+                                )
+                            }
+                        }
+                    },
+                    onSelectAll = {
+                        val allTagNames = allTags.map { it.name }.toSet()
+                        localFilter = if (localFilter.tags.containsAll(allTagNames))
+                            localFilter.copy(tags = emptyList())
+                        else
+                            localFilter.copy(tags = localFilter.tags + allTagNames)
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    visibleTags.forEach { tag ->
+                        CompactFilterChip(
+                            label = "# ${tag.name}",
+                            selected = tag.name in localFilter.tags,
+                            onClick = {
+                                localFilter = if (tag.name in localFilter.tags)
+                                    localFilter.copy(tags = localFilter.tags - tag.name)
+                                else
+                                    localFilter.copy(tags = localFilter.tags + tag.name)
+                            }
+                        )
+                    }
+                    if (showMoreTags) {
+                        OverflowChip(expanded = expandTags) { expandTags = !expandTags }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            // ── Apply button ──────────────────────────────────────────────────
+            Button(
+                onClick = { onApply(localFilter); onDismiss() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Apply Filters", fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(16.dp))
         }
+    }
+}
+
+// ── Filter sheet helpers ──────────────────────────────────────────────────────
+
+@Composable
+private fun SectionHeader(
+    label: String,
+    trailingLabel: String? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
+    onTrailingClick: (() -> Unit)? = null,
+    onSelectAll: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f)
+        )
+        if (trailingContent != null) {
+            trailingContent()
+            Spacer(Modifier.width(8.dp))
+        }
+        if (trailingLabel != null) {
+            Text(
+                trailingLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = if (onTrailingClick != null)
+                    Modifier.clickable { onTrailingClick() } else Modifier
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        if (onSelectAll != null) {
+            Row(
+                modifier = Modifier.clickable { onSelectAll() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    Icons.Default.RadioButtonChecked,
+                    null,
+                    Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Select all",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .background(
+                color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else androidx.compose.ui.graphics.Color.Transparent,
+                shape = RoundedCornerShape(50)
+            )
+            .then(
+                if (!selected) Modifier.border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(50)
+                ) else Modifier
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+            else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun OverflowChip(expanded: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(50)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            if (expanded) "‹ less" else "…",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

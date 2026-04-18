@@ -224,6 +224,7 @@ data class ScheduledTransaction(
     val nextRunAt: LocalDateTime,
     val lastGeneratedAt: LocalDateTime? = null,
     val isActive: Boolean = true,
+    val reminderMinutes: Long = 0,
     val userId: String = ""
 )
 

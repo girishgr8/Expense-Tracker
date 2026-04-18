@@ -39,7 +39,7 @@ class TransactionsViewModel @Inject constructor(
     private val tagRepository: TagRepository,
     private val authManager: AuthManager,
     private val csvExporter: CsvExporter,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val userId get() = authManager.userId

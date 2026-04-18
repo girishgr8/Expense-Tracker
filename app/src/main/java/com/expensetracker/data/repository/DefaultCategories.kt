@@ -9,7 +9,7 @@ object DefaultCategories {
         Category(name = "Food and Dining", icon = "restaurant", colorHex = "#FF7043", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Groceries", icon = "shopping_cart", colorHex = "#7CB342", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Rent", icon = "home", colorHex = "#1E88E5", transactionType = TransactionType.EXPENSE, isDefault = true),
-        Category(name = "Bills & Utilities", icon = "bolt", colorHex = "#FBC02D", transactionType = TransactionType.EXPENSE, isDefault = true),
+        Category(name = "Bills and Utilities", icon = "bolt", colorHex = "#FBC02D", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Entertainment", icon = "movie", colorHex = "#D81B60", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Shopping", icon = "shopping_bag", colorHex = "#00ACC1", transactionType = TransactionType.EXPENSE, isDefault = true),
         Category(name = "Medical", icon = "local_hospital", colorHex = "#E53935", transactionType = TransactionType.EXPENSE, isDefault = true),

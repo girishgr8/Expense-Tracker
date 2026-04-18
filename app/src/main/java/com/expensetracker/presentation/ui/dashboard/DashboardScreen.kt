@@ -1,5 +1,6 @@
 package com.expensetracker.presentation.ui.dashboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -40,13 +42,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,10 +61,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,8 +76,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.expensetracker.domain.model.BudgetProgress
 import com.expensetracker.domain.model.BudgetPeriod
+import com.expensetracker.domain.model.BudgetProgress
 import com.expensetracker.domain.model.MonthlySummary
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
@@ -111,6 +114,9 @@ fun DashboardScreen(
     onNavigateToSetBudget: () -> Unit = onNavigateToBudget,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToAnalysis: () -> Unit = {},
+    onNavigateToChat: () -> Unit = {},
+    onNavigateToTags: () -> Unit = {},
+    onNavigateToCalendar: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -177,7 +183,7 @@ fun DashboardScreen(
                 QuickActionsGrid(
                     onTransactions = onNavigateToTransactions,
                     onCategories = onNavigateToCategories,
-                    onAccounts = onNavigateToAccounts,
+                    onAccounts = onNavigateToCalendar,
                     onBudget = onNavigateToBudget
                 )
             }
@@ -197,23 +203,32 @@ fun DashboardScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                         fontWeight = FontWeight.Bold
                     )
-                    TextButton(
+
+                    Surface(
                         onClick = onNavigateToTransactions,
-                        contentPadding = PaddingValues(top = 0.dp, end = 0.dp),
-                        modifier = Modifier
-                            .background(color = MaterialTheme.colorScheme.surfaceVariant)
-                            .clip(CircleShape)
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.15f)
+                        )
                     ) {
-                        Text(
-                            "See all",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Icon(
-                            Icons.Default.ChevronRight, null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "See all",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "Open",
+                                modifier = Modifier.size(16.dp).padding(end = 0.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -331,6 +346,26 @@ fun DashboardScreen(
         }
 
         if (uiState.isLoading) LoadingOverlay(true)
+    }
+    // ── AI Chat FAB (bottom-right, above the bottom navigation bar) ──────────
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 80.dp, end = 16.dp),   // 80dp clears the navigation bar
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        FloatingActionButton(
+            onClick        = onNavigateToChat,
+            shape          = CircleShape,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor   = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier       = Modifier.size(52.dp)
+        ) {
+            Icon(
+                Icons.Default.AutoAwesome, "AI Chat",
+                modifier = Modifier.size(22.dp)
+            )
+        }
     }
 }
 
@@ -757,7 +792,10 @@ private fun ScheduledTransactionsCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = if (upcomingTransactions.isEmpty()) 24.dp else 12.dp, vertical = if (upcomingTransactions.isEmpty()) 24.dp else 12.dp),
+                .padding(
+                    horizontal = if (upcomingTransactions.isEmpty()) 24.dp else 12.dp,
+                    vertical = if (upcomingTransactions.isEmpty()) 24.dp else 12.dp
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (upcomingTransactions.isEmpty()) {
@@ -922,7 +960,12 @@ private fun buildDashboardBudgetHint(
     val limit = budgetProgress.budget.totalLimit
     val delta = limit - spent
     if (delta < 0) {
-        return "Budget exceeded by $currencySymbol${formatAmountForDisplay(abs(delta), currencyFormat)}."
+        return "Budget exceeded by $currencySymbol${
+            formatAmountForDisplay(
+                abs(delta),
+                currencyFormat
+            )
+        }."
     }
 
     return if (budgetProgress.budget.period == BudgetPeriod.MONTHLY && budgetProgress.budget.month != null) {
