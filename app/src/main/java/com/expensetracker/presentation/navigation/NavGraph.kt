@@ -57,7 +57,8 @@ sealed class Screen(val route: String) {
     object CurrencySelection : Screen("currency_selection")
     object Chat : Screen("chat")
     object Tags : Screen("tags")
-    object Calendar : Screen("calendar")
+    object CalendarView : Screen("calendar_view")
+    object DayView : Screen("day_view/{date}")
 }
 
 @Composable
@@ -107,8 +108,7 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToAnalysis = { navController.navigate(Screen.Analysis.route) },
                 onNavigateToChat = { navController.navigate(Screen.Chat.route) },
-                onNavigateToTags = { navController.navigate(Screen.Tags.route) },
-                onNavigateToCalendar = {navController.navigate(Screen.Calendar.route)}
+                onNavigateToTags = { navController.navigate(Screen.Tags.route) }
             )
         }
 
@@ -223,6 +223,10 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                     }
                 },
                 onNavigateToCurrency = { navController.navigate(Screen.CurrencySelection.route) },
+                onNavigateToCalendarView = {navController.navigate(Screen.CalendarView.route)},
+                onNavigateToDayView = { date ->
+                    navController.navigate("day_view/${date}")
+                },
                 onLogout = {
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }
@@ -258,8 +262,6 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         }
 
         composable(Screen.CurrencySelection.route) {
-
-            // Use mainViewModel flows — already eagerly loaded, never stale
             val currencyCode by mainViewModel.currencyCode.collectAsState()
             val currencyFormat by mainViewModel.currencyFormat.collectAsState()
 
@@ -282,15 +284,16 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
             )
         }
 
-        composable(Screen.Calendar.route) {
+        composable(Screen.CalendarView.route) {
             CalendarViewScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onDayClick = { date ->
                     navController.navigate("day_view/${date}")
-            })
+                }
+            )
         }
 
-        composable("day_view/{date}") { backStackEntry ->
+        composable(Screen.DayView.route) { backStackEntry ->
             val date = LocalDate.parse(backStackEntry.arguments?.getString("date"))
             DayViewScreen(
                 initialDate = date,

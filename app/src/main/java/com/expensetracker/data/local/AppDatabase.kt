@@ -38,7 +38,7 @@ import com.expensetracker.data.local.entity.TransactionEntity
         TagEntity::class,
         ScheduledTransactionEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

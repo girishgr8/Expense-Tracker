@@ -215,7 +215,12 @@ fun DashboardScreen(
                         )
                     ) {
                         Row(
-                            modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                            modifier = Modifier.padding(
+                                start = 10.dp,
+                                end = 6.dp,
+                                top = 6.dp,
+                                bottom = 6.dp
+                            ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -226,7 +231,9 @@ fun DashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.ChevronRight,
                                 contentDescription = "Open",
-                                modifier = Modifier.size(16.dp).padding(end = 0.dp)
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .padding(end = 0.dp)
                             )
                         }
                     }
@@ -355,11 +362,11 @@ fun DashboardScreen(
         contentAlignment = Alignment.BottomEnd
     ) {
         FloatingActionButton(
-            onClick        = onNavigateToChat,
-            shape          = CircleShape,
+            onClick = onNavigateToChat,
+            shape = CircleShape,
             containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor   = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier       = Modifier.size(52.dp)
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.size(52.dp)
         ) {
             Icon(
                 Icons.Default.AutoAwesome, "AI Chat",

@@ -96,6 +96,7 @@ interface CategoryRepository {
     suspend fun getCategoryById(id: Long): Category?
     suspend fun insertCategory(category: Category): Long
     suspend fun updateCategory(category: Category)
+    suspend fun updateCategoryOrder(categories: List<Category>)
     suspend fun deleteCategory(category: Category)
     suspend fun seedDefaultCategories(userId: String)
 }
@@ -516,6 +517,9 @@ class CategoryRepositoryImpl @Inject constructor(
 
     override suspend fun updateCategory(category: Category) =
         categoryDao.updateCategory(category.toEntity())
+
+    override suspend fun updateCategoryOrder(categories: List<Category>) =
+        categoryDao.updateCategories(categories.map { it.toEntity() })
 
     override suspend fun deleteCategory(category: Category) =
         categoryDao.deleteCategory(category.toEntity())

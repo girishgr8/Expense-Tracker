@@ -93,6 +93,7 @@ data class Category(
     val colorHex: String,
     val transactionType: TransactionType?,
     val isDefault: Boolean = false,
+    val sortOrder: Int = 0,
     val userId: String = ""
 )
 
@@ -244,6 +245,8 @@ data class BudgetProgress(
         (spent / budget.totalLimit * 100).toFloat() else 0f
 )
 
+enum class TagsMode { INCLUDES_ANY, INCLUDES_ALL, EXCLUDES }
+
 data class TransactionFilter(
     val searchQuery: String = "",
     val year: Int? = null,
@@ -251,6 +254,7 @@ data class TransactionFilter(
     val categoryIds: List<Long> = emptyList(),
     val paymentModeIds: List<Long> = emptyList(),
     val tags: List<String> = emptyList(),
+    val tagsMode: TagsMode = TagsMode.INCLUDES_ANY,
     val transactionTypes: List<TransactionType> = emptyList()
 )
 

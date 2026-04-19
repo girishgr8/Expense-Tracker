@@ -34,5 +34,5 @@ object DefaultCategories {
 
         // Transfer
         Category(name = "Transfer", icon = "swap_horiz", colorHex = "#607D8B", transactionType = TransactionType.TRANSFER, isDefault = true),
-    )
+    ).mapIndexed { index, category -> category.copy(sortOrder = index) }
 }

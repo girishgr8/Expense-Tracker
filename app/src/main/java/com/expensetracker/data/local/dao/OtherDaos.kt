@@ -21,13 +21,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CategoryDao {
-    @Query("SELECT * FROM categories WHERE userId = :userId OR userId = '' ORDER BY name ASC")
+    @Query("SELECT * FROM categories WHERE userId = :userId OR userId = '' ORDER BY sortOrder ASC, name ASC")
     fun getAllCategories(userId: String): Flow<List<CategoryEntity>>
 
-    @Query("SELECT * FROM categories WHERE userId = :userId OR userId = '' ORDER BY name ASC")
+    @Query("SELECT * FROM categories WHERE userId = :userId OR userId = '' ORDER BY sortOrder ASC, name ASC")
     suspend fun getAllCategoriesOneShot(userId: String): List<CategoryEntity>
 
-    @Query("SELECT * FROM categories WHERE (userId = :userId OR userId = '') AND (transactionType IS NULL OR transactionType = :type) ORDER BY name ASC")
+    @Query("SELECT * FROM categories WHERE (userId = :userId OR userId = '') AND (transactionType IS NULL OR transactionType = :type) ORDER BY sortOrder ASC, name ASC")
     fun getCategoriesByType(userId: String, type: String): Flow<List<CategoryEntity>>
 
     @Query("SELECT * FROM categories WHERE id = :id")
@@ -41,6 +41,9 @@ interface CategoryDao {
 
     @Update
     suspend fun updateCategory(category: CategoryEntity)
+
+    @Update
+    suspend fun updateCategories(categories: List<CategoryEntity>)
 
     @Delete
     suspend fun deleteCategory(category: CategoryEntity)

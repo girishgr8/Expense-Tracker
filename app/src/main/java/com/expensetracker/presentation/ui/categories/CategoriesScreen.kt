@@ -3,8 +3,8 @@ package com.expensetracker.presentation.ui.categories
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,14 +24,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.CategoryIconBubble
 import com.expensetracker.presentation.components.EmptyState
 import androidx.core.graphics.toColorInt
+import kotlin.math.roundToInt
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -42,10 +49,12 @@ fun CategoriesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val tabs = TransactionType.entries
+    var showResetOrderDialog by remember { mutableStateOf(false) }
 
-    val filteredCategories = uiState.categories.filter {
-        it.transactionType == uiState.selectedTab || it.transactionType == null
-    }
+    val filteredCategories = uiState.categories
+        .filter { it.transactionType == uiState.selectedTab || it.transactionType == null }
+        .sortedWith(compareBy<Category> { it.sortOrder }.thenBy { it.name })
+    val defaultCategory = uiState.categories.firstOrNull { it.id == uiState.defaultCategoryId }
 
     Scaffold(
         topBar = {
@@ -57,6 +66,9 @@ fun CategoriesScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showResetOrderDialog = true }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset category order")
+                    }
                     IconButton(onClick = { viewModel.showAddDialog() }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Category")
                     }
@@ -83,6 +95,10 @@ fun CategoriesScreen(
                 }
             }
 
+            defaultCategory?.let {
+                DefaultCategoryCard(category = it)
+            }
+
             if (filteredCategories.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     EmptyState(
@@ -92,18 +108,14 @@ fun CategoriesScreen(
                     )
                 }
             } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filteredCategories, key = { it.id }) { category ->
-                        CategoryItem(
-                            category = category,
-                            onEdit   = { viewModel.showAddDialog(category) },
-                            onDelete = { viewModel.deleteCategory(category) }
-                        )
-                    }
-                }
+                ReorderableCategoryList(
+                    categories = filteredCategories,
+                    defaultCategoryId = uiState.defaultCategoryId,
+                    modifier = Modifier.weight(1f),
+                    onOrderChanged = viewModel::updateCategoryOrder,
+                    onEdit = viewModel::showAddDialog,
+                    onDelete = viewModel::deleteCategory
+                )
             }
         }
     }
@@ -117,13 +129,177 @@ fun CategoriesScreen(
             }
         )
     }
+
+    if (showResetOrderDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetOrderDialog = false },
+            title = { Text("Reset categories order?") },
+            text = { Text("Are you sure you want to reset the categories order to alphabetic order?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.resetCategoryOrder()
+                        showResetOrderDialog = false
+                    }
+                ) {
+                    Text("Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetOrderDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 // ─── Category list item ───────────────────────────────────────────────────────
 
 @Composable
+private fun DefaultCategoryCard(category: Category) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Default category",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = category.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReorderableCategoryList(
+    categories: List<Category>,
+    defaultCategoryId: Long,
+    modifier: Modifier = Modifier,
+    onOrderChanged: (List<Category>) -> Unit,
+    onEdit: (Category) -> Unit,
+    onDelete: (Category) -> Unit
+) {
+    val scrollState = rememberScrollState()
+    val orderedCategories = remember { mutableStateListOf<Category>() }
+    val rowHeights = remember { mutableStateMapOf<Long, Int>() }
+    var draggedCategoryId by remember { mutableStateOf<Long?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(categories.map { it.id to it.sortOrder }) {
+        if (draggedCategoryId == null) {
+            orderedCategories.clear()
+            orderedCategories.addAll(categories)
+        }
+    }
+
+    val density = LocalDensity.current
+    val defaultRowHeightPx = with(density) { 76.dp.toPx() }
+    val rowSpacingPx = with(density) { 8.dp.toPx() }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        orderedCategories.forEach { category ->
+            key(category.id) {
+                val isDragging = draggedCategoryId == category.id
+                CategoryItem(
+                    category = category,
+                    isUserDefault = category.id == defaultCategoryId,
+                    modifier = Modifier
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = if (isDragging) dragOffset.roundToInt() else 0
+                            )
+                        }
+                        .onGloballyPositioned { coordinates ->
+                            rowHeights[category.id] = coordinates.size.height
+                        },
+                    dragHandleModifier = Modifier.pointerInput(category.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggedCategoryId = category.id
+                                dragOffset = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffset += dragAmount.y
+
+                                val currentIndex = orderedCategories.indexOfFirst { it.id == category.id }
+                                if (currentIndex != -1) {
+                                    val currentHeight = rowHeights[category.id]?.toFloat() ?: defaultRowHeightPx
+                                    if (dragOffset > currentHeight / 2f && currentIndex < orderedCategories.lastIndex) {
+                                        val next = orderedCategories[currentIndex + 1]
+                                        val nextHeight = rowHeights[next.id]?.toFloat() ?: defaultRowHeightPx
+                                        orderedCategories.removeAt(currentIndex)
+                                        orderedCategories.add(currentIndex + 1, category)
+                                        dragOffset -= nextHeight + rowSpacingPx
+                                    } else if (dragOffset < -currentHeight / 2f && currentIndex > 0) {
+                                        val previous = orderedCategories[currentIndex - 1]
+                                        val previousHeight = rowHeights[previous.id]?.toFloat() ?: defaultRowHeightPx
+                                        orderedCategories.removeAt(currentIndex)
+                                        orderedCategories.add(currentIndex - 1, category)
+                                        dragOffset += previousHeight + rowSpacingPx
+                                    }
+                                }
+                            },
+                            onDragEnd = {
+                                val finalOrder = orderedCategories.toList()
+                                draggedCategoryId = null
+                                dragOffset = 0f
+                                onOrderChanged(finalOrder)
+                            },
+                            onDragCancel = {
+                                draggedCategoryId = null
+                                dragOffset = 0f
+                                orderedCategories.clear()
+                                orderedCategories.addAll(categories)
+                            }
+                        )
+                    },
+                    onEdit = { onEdit(category) },
+                    onDelete = { onDelete(category) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun CategoryItem(
     category: Category,
+    isUserDefault: Boolean,
+    modifier: Modifier = Modifier,
+    dragHandleModifier: Modifier = Modifier,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -131,7 +307,7 @@ private fun CategoryItem(
 
     Card(
         shape     = RoundedCornerShape(12.dp),
-        modifier  = Modifier.fillMaxWidth(),
+        modifier  = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -161,13 +337,23 @@ private fun CategoryItem(
                 )
             }
 
-            if (category.isDefault) {
+            if (isUserDefault) {
                 AssistChip(
                     onClick  = {},
                     label    = { Text("Default", style = MaterialTheme.typography.labelSmall) },
                     modifier = Modifier.height(28.dp)
                 )
-            } else {
+                Spacer(Modifier.width(8.dp))
+            }
+
+            Icon(
+                Icons.Default.Menu,
+                contentDescription = "Drag to reorder",
+                modifier = dragHandleModifier.size(36.dp).padding(7.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (!category.isDefault) {
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, null, Modifier.size(18.dp))
                 }

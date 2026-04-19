@@ -73,6 +73,7 @@ fun CategoryEntity.toDomain(): Category = Category(
     colorHex = colorHex,
     transactionType = transactionType,
     isDefault = isDefault,
+    sortOrder = sortOrder,
     userId = userId
 )
 
@@ -83,6 +84,7 @@ fun Category.toEntity(): CategoryEntity = CategoryEntity(
     colorHex = colorHex,
     transactionType = transactionType,
     isDefault = isDefault,
+    sortOrder = sortOrder,
     userId = userId
 )
 

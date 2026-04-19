@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.expensetracker.data.repository.*
 import com.expensetracker.domain.model.*
+import com.expensetracker.domain.model.TagsMode
 import com.expensetracker.util.CsvExporter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -125,8 +126,16 @@ class TransactionsViewModel @Inject constructor(
             val matchesAccount = filter.paymentModeIds.isEmpty() ||
                     txn.paymentModeId in filter.paymentModeIds
 
-            val matchesTags = filter.tags.isEmpty() ||
-                    filter.tags.any { ft -> txn.tags.any { it.contains(ft, ignoreCase = true) } }
+            val matchesTags = when {
+                filter.tags.isEmpty() -> true
+                filter.tagsMode == TagsMode.INCLUDES_ANY ->
+                    filter.tags.any { ft -> txn.tags.any { it.equals(ft, ignoreCase = true) } }
+                filter.tagsMode == TagsMode.INCLUDES_ALL ->
+                    filter.tags.all { ft -> txn.tags.any { it.equals(ft, ignoreCase = true) } }
+                filter.tagsMode == TagsMode.EXCLUDES ->
+                    filter.tags.none { ft -> txn.tags.any { it.equals(ft, ignoreCase = true) } }
+                else -> true
+            }
 
             val matchesType = filter.transactionTypes.isEmpty() ||
                     txn.type in filter.transactionTypes

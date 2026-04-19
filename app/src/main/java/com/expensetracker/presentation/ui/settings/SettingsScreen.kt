@@ -29,7 +29,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CalendarViewDay
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -43,6 +45,7 @@ import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -80,6 +83,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -91,7 +95,80 @@ import com.expensetracker.presentation.ui.export.ExportSuccessBottomSheet
 import com.expensetracker.presentation.ui.export.ExportViewModel
 import com.expensetracker.util.HapticManager
 import com.expensetracker.util.LocalHapticManager
+import java.time.LocalDate
 import java.util.Locale
+
+// ─── Quick Actions ────────────────────────────────────────────────────────────
+
+@Composable
+private fun QuickActionsGrid(
+    onDayView: (LocalDate) -> Unit,
+    onCalendarView: () -> Unit,
+    onCustomView: () -> Unit,
+) {
+    val actions = listOf(
+        QuickAction(
+            Icons.Default.CalendarViewDay, "Day",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        ) { onDayView(LocalDate.now()) },
+        QuickAction(
+            Icons.Default.CalendarMonth, "Calendar",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer, onCalendarView
+        ),
+        QuickAction(
+            Icons.Default.Tune, "Custom",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer, onCustomView
+        ),
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        actions.forEach { action ->
+            QuickActionTile(action = action, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+private data class QuickAction(
+    val icon: ImageVector,
+    val label: String,
+    val containerColor: Color,
+    val contentColor: Color,
+    val onClick: () -> Unit
+)
+
+@Composable
+private fun QuickActionTile(action: QuickAction, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(action.containerColor)
+            .clickable { action.onClick() }
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            action.icon, contentDescription = action.label,
+            tint = action.contentColor,
+            modifier = Modifier.size(24.dp)
+        )
+        Text(
+            action.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = action.contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,6 +179,8 @@ fun SettingsScreen(
     onNavigateToAccounts: () -> Unit = {},
     onNavigateToAddTransaction: () -> Unit = {},
     onNavigateToCurrency: () -> Unit = {},
+    onNavigateToCalendarView: () -> Unit = {},
+    onNavigateToDayView: (LocalDate) -> Unit = {},
     onLogout: () -> Unit,
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     exportViewModel: ExportViewModel = hiltViewModel()
@@ -173,41 +252,32 @@ fun SettingsScreen(
             })
     }
 
-    if (exportViewModel.isExporting) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(0.5f)),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-            AppBottomBar(
-                currentRoute = "settings",
-                onHome = onNavigateToHome,
-                onAnalysis = onNavigateToAnalysis,
-                onAccounts = onNavigateToAccounts,
-                onSettings = {},
-                onAddTransaction = onNavigateToAddTransaction
-            )
-        }, topBar = {
-            TopAppBar(title = { Text("Settings", fontWeight = FontWeight.Bold) }, navigationIcon = {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            })
-        }) { padding ->
+                AppBottomBar(
+                    currentRoute = "settings",
+                    onHome = onNavigateToHome,
+                    onAnalysis = onNavigateToAnalysis,
+                    onAccounts = onNavigateToAccounts,
+                    onSettings = {},
+                    onAddTransaction = onNavigateToAddTransaction
+                )
+            }, topBar = {
+                TopAppBar(
+                    title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    })
+            }) { padding ->
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // User Profile Card
@@ -262,6 +332,17 @@ fun SettingsScreen(
                             }
                         }
                     }
+                }
+
+                // Views Section
+                item { SettingsSectionHeader("Views") }
+
+                item {
+                    QuickActionsGrid(
+                        onDayView = onNavigateToDayView,
+                        onCalendarView = onNavigateToCalendarView,
+                        onCustomView = onNavigateToCalendarView
+                    )
                 }
 
                 // Appearance Section
@@ -602,10 +683,20 @@ fun SettingsScreen(
 
                 item { Spacer(Modifier.height(32.dp)) }
             }
+        }
+        if (exportResult.isSuccess && exportResult.uri != null) {
+            ExportSuccessBottomSheet(
+                uri = exportResult.uri!!, onDismiss = { exportViewModel.resetExportState() })
+        }
 
-            if (exportResult.isSuccess && exportResult.uri != null) {
-                ExportSuccessBottomSheet(
-                    uri = exportResult.uri!!, onDismiss = { exportViewModel.resetExportState() })
+        if (exportViewModel.isExporting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
             }
         }
     }

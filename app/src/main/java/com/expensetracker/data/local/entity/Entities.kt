@@ -1,5 +1,6 @@
 package com.expensetracker.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -41,6 +42,7 @@ data class CategoryEntity(
     val colorHex: String,
     val transactionType: TransactionType?,
     val isDefault: Boolean,
+    @ColumnInfo(defaultValue = "0") val sortOrder: Int = 0,
     val userId: String
 )
 

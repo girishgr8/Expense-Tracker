@@ -35,7 +35,6 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -93,6 +92,8 @@ import com.expensetracker.presentation.components.LoadingOverlay
 import com.expensetracker.presentation.components.LocalCurrencyFormat
 import com.expensetracker.presentation.components.LocalCurrencySymbol
 import com.expensetracker.presentation.theme.ExpenseRed
+import com.expensetracker.domain.model.TagsMode
+import androidx.compose.material.icons.filled.CheckCircle
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
 import com.expensetracker.util.FormatUtils.formatAmountForDisplay
@@ -587,28 +588,23 @@ private fun FilterBottomSheet(
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     )
 
-    // Build combined date chips: last 8 year-month combos + all year-only chips, interleaved
-    // Show years first, then recent year+month combos, matching image 1 layout
+    // Date chips: 3 year chips (current → current-2) + 24 month chips back from current month
+    // Ordered: years first, then months newest→oldest
     data class DateChip(val year: Int, val month: Int?, val label: String)
 
-    val yearChips = years.map { DateChip(it, null, "$it") }
+    val yearChips = (currentYear downTo currentYear - 2).map { DateChip(it, null, "$it") }
     val monthChips = run {
         val chips = mutableListOf<DateChip>()
-        var y = currentYear
-        var m = currentMonth
-        repeat(12) {
-            chips += DateChip(
-                y,
-                m,
-                "${shortMonthNames[m - 1]} ${(y % 100).toString().padStart(2, '0')}"
-            )
-            m--; if (m == 0) {
-            m = 12; y--
-        }
+        var y = currentYear; var m = currentMonth
+        // 24 months back = covers ~2 full years of month chips
+        repeat(24) {
+            chips += DateChip(y, m,
+                "${shortMonthNames[m - 1]} ${(y % 100).toString().padStart(2, '0')}")
+            m--; if (m == 0) { m = 12; y-- }
         }
         chips
     }
-    val allDateChips = (yearChips + monthChips)
+    val allDateChips = yearChips + monthChips
     val showMoreDate = allDateChips.size > 8
     var expandDate by remember { mutableStateOf(false) }
     val visibleDate = if (expandDate) allDateChips else allDateChips.take(8)
@@ -636,9 +632,11 @@ private fun FilterBottomSheet(
     var expandTags by remember { mutableStateOf(false) }
     val visibleTags = if (expandTags) allTags else allTags.take(7)
 
-    // Tags match mode
-    var tagsMatchAny by remember { mutableStateOf(true) }
+    // Tags match mode — synced from existing filter value
+    var tagsMode by remember { mutableStateOf(localFilter.tagsMode) }
     var showTagMatchMenu by remember { mutableStateOf(false) }
+    // Keep legacy tagsMatchAny alias for brevity
+    val tagsMatchAny = tagsMode == TagsMode.INCLUDES_ANY
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -705,10 +703,16 @@ private fun FilterBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 visibleDate.forEach { chip ->
-                    val isSelected = if (chip.month == null)
-                        localFilter.year == chip.year && localFilter.month == null
-                    else
+                    // A year chip is "selected" if explicitly chosen, OR if it is the
+                    // current year and no date filter has been applied yet (default highlight)
+                    val isSelected = if (chip.month == null) {
+                        if (localFilter.year == null)
+                            chip.year == currentYear   // default: current year highlighted
+                        else
+                            localFilter.year == chip.year && localFilter.month == null
+                    } else {
                         localFilter.year == chip.year && localFilter.month == chip.month
+                    }
                     CompactFilterChip(
                         label = chip.label,
                         selected = isSelected,
@@ -730,9 +734,11 @@ private fun FilterBottomSheet(
             // ── Category section ──────────────────────────────────────────────
             SectionHeader(
                 label = "Category",
+                isAllSelected = visibleCategories.isNotEmpty() &&
+                        localFilter.categoryIds.containsAll(visibleCategories.map { it.id }),
                 onSelectAll = {
                     val allIds = visibleCategories.map { it.id }.toSet()
-                    localFilter = if (localFilter.categoryIds.containsAll(allIds))
+                    localFilter = if (localFilter.categoryIds.containsAll(allIds.toList()))
                         localFilter.copy(categoryIds = emptyList())
                     else
                         localFilter.copy(categoryIds = localFilter.categoryIds + allIds)
@@ -782,10 +788,18 @@ private fun FilterBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 visibleCat.forEach { cat ->
-                    CompactFilterChip(
-                        label = cat.name,
+                    // Color by category transaction type
+                    val catAccent = when (cat.transactionType) {
+                        TransactionType.EXPENSE  -> ExpenseRed
+                        TransactionType.INCOME   -> IncomeGreen
+                        TransactionType.TRANSFER -> TransferBlue
+                        null                     -> TransferBlue
+                    }
+                    CategoryFilterChip(
+                        label    = cat.name,
                         selected = cat.id in localFilter.categoryIds,
-                        onClick = {
+                        accent   = catAccent,
+                        onClick  = {
                             localFilter = if (cat.id in localFilter.categoryIds)
                                 localFilter.copy(categoryIds = localFilter.categoryIds - cat.id)
                             else
@@ -803,9 +817,11 @@ private fun FilterBottomSheet(
             // ── Payment mode section ──────────────────────────────────────────
             SectionHeader(
                 label = "Payment mode",
+                isAllSelected = modes.isNotEmpty() &&
+                        localFilter.paymentModeIds.containsAll(modes.map { it.id }),
                 onSelectAll = {
                     val allIds = modes.map { it.id }.toSet()
-                    localFilter = if (localFilter.paymentModeIds.containsAll(allIds))
+                    localFilter = if (localFilter.paymentModeIds.containsAll(allIds.toList()))
                         localFilter.copy(paymentModeIds = emptyList())
                     else
                         localFilter.copy(paymentModeIds = localFilter.paymentModeIds + allIds)
@@ -839,8 +855,9 @@ private fun FilterBottomSheet(
             if (allTags.isNotEmpty()) {
                 SectionHeader(
                     label = "Tags",
+                    isAllSelected = localFilter.tags.containsAll(allTags.map { it.name }),
                     trailingContent = {
-                        // "Includes any ▾" dropdown
+                        // Mode dropdown with 3 options matching screenshot
                         Box {
                             Row(
                                 modifier = Modifier
@@ -850,7 +867,11 @@ private fun FilterBottomSheet(
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
-                                    if (tagsMatchAny) "Includes any" else "Includes all",
+                                    when (tagsMode) {
+                                        TagsMode.INCLUDES_ANY -> "Includes any"
+                                        TagsMode.INCLUDES_ALL -> "Includes all"
+                                        TagsMode.EXCLUDES     -> "Excludes"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -865,12 +886,52 @@ private fun FilterBottomSheet(
                                 onDismissRequest = { showTagMatchMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Includes any") },
-                                    onClick = { tagsMatchAny = true; showTagMatchMenu = false }
+                                    text = {
+                                        Column {
+                                            Text("Includes any",
+                                                style = MaterialTheme.typography.bodyMedium)
+                                            Text("Shows txns having any selected tags",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    },
+                                    onClick = {
+                                        tagsMode = TagsMode.INCLUDES_ANY
+                                        localFilter = localFilter.copy(tagsMode = TagsMode.INCLUDES_ANY)
+                                        showTagMatchMenu = false
+                                    }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Includes all") },
-                                    onClick = { tagsMatchAny = false; showTagMatchMenu = false }
+                                    text = {
+                                        Column {
+                                            Text("Includes all",
+                                                style = MaterialTheme.typography.bodyMedium)
+                                            Text("Shows txns having all the selected tags",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    },
+                                    onClick = {
+                                        tagsMode = TagsMode.INCLUDES_ALL
+                                        localFilter = localFilter.copy(tagsMode = TagsMode.INCLUDES_ALL)
+                                        showTagMatchMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text("Excludes",
+                                                style = MaterialTheme.typography.bodyMedium)
+                                            Text("Shows txns not having the selected tags",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    },
+                                    onClick = {
+                                        tagsMode = TagsMode.EXCLUDES
+                                        localFilter = localFilter.copy(tagsMode = TagsMode.EXCLUDES)
+                                        showTagMatchMenu = false
+                                    }
                                 )
                             }
                         }
@@ -889,10 +950,10 @@ private fun FilterBottomSheet(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     visibleTags.forEach { tag ->
-                        CompactFilterChip(
-                            label = "# ${tag.name}",
+                        TagFilterChip(
+                            name     = tag.name,
                             selected = tag.name in localFilter.tags,
-                            onClick = {
+                            onClick  = {
                                 localFilter = if (tag.name in localFilter.tags)
                                     localFilter.copy(tags = localFilter.tags - tag.name)
                                 else
@@ -930,7 +991,8 @@ private fun SectionHeader(
     trailingLabel: String? = null,
     trailingContent: @Composable (() -> Unit)? = null,
     onTrailingClick: (() -> Unit)? = null,
-    onSelectAll: (() -> Unit)? = null
+    onSelectAll: (() -> Unit)? = null,
+    isAllSelected: Boolean = false    // drives the filled/empty circle icon
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -962,16 +1024,21 @@ private fun SectionHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Empty circle when nothing selected, filled check when all selected
                 Icon(
-                    Icons.Default.RadioButtonChecked,
+                    if (isAllSelected) Icons.Default.CheckCircle
+                    else Icons.Default.RadioButtonUnchecked,
                     null,
-                    Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    Modifier.size(16.dp),
+                    tint = if (isAllSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     "Select all",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isAllSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (isAllSelected) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
         }
@@ -1010,6 +1077,77 @@ private fun CompactFilterChip(
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+// ── Category chip: colored border/text based on category type ────────────────
+@Composable
+private fun CategoryFilterChip(
+    label:    String,
+    selected: Boolean,
+    accent:   androidx.compose.ui.graphics.Color,
+    onClick:  () -> Unit
+) {
+    val borderColor = accent.copy(alpha = if (selected) 1f else 0.55f)
+    val bgColor     = if (selected) accent.copy(alpha = 0.18f)
+    else androidx.compose.ui.graphics.Color.Transparent
+    val textColor   = if (selected) accent else accent.copy(alpha = 0.85f)
+    Box(
+        modifier = Modifier
+            .background(bgColor, RoundedCornerShape(50))
+            .border(1.dp, borderColor, RoundedCornerShape(50))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            style      = MaterialTheme.typography.bodySmall,
+            color      = textColor,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines   = 1,
+            overflow   = TextOverflow.Ellipsis
+        )
+    }
+}
+
+// ── Tag chip: outlined pill, teal # prefix, exactly matching screenshot ───────
+@Composable
+private fun TagFilterChip(
+    name:     String,
+    selected: Boolean,
+    onClick:  () -> Unit
+) {
+    // Teal color for the # symbol (matching screenshot)
+    val hashColor = androidx.compose.ui.graphics.Color(0xFF26C6DA)
+    val bgColor   = if (selected) MaterialTheme.colorScheme.surfaceVariant
+    else androidx.compose.ui.graphics.Color.Transparent
+    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (selected) 0.8f else 0.4f)
+
+    Row(
+        modifier = Modifier
+            .background(bgColor, RoundedCornerShape(50))
+            .border(1.dp, borderColor, RoundedCornerShape(50))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            "#",
+            style      = MaterialTheme.typography.bodySmall,
+            color      = hashColor,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            name,
+            style      = MaterialTheme.typography.bodySmall,
+            color      = if (selected) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines   = 1,
+            overflow   = TextOverflow.Ellipsis
         )
     }
 }

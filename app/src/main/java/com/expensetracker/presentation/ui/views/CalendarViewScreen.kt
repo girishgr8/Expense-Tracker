@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,18 +40,19 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.expensetracker.presentation.components.LocalCurrencyFormat
 import com.expensetracker.presentation.components.LocalCurrencySymbol
-import com.expensetracker.util.FormatUtils.smartFormat
+import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 // ── Amount pill colors — exactly matching the screenshot ──────────────────────
-private val ExpensePillBg = Color(0xFF5C2626)   // dark red/maroon pill
-private val ExpensePillText = Color(0xFFFFCDD2)  // light pink text
-private val IncomePillBg = Color(0xFF1B4D3E)   // dark green pill
-private val IncomePillText = Color(0xFFA5D6A7)  // light green text
+private val ExpensePillBg = Color(0xFFA26363)   // dark red/maroon pill
+private val ExpensePillText = Color(0xFFFFE9EB)  // light pink text
+private val IncomePillBg = Color(0xFF588574)   // dark green pill
+private val IncomePillText = Color(0xFFC7FFC9)  // light green text
 
 @Composable
 fun CalendarViewScreen(
@@ -94,7 +95,7 @@ fun CalendarViewScreen(
             Spacer(Modifier.width(4.dp))
             Text(
                 "Calendar View",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmall.copy(fontSize = 20.sp),
                 fontWeight = FontWeight.Bold
             )
         }
@@ -113,7 +114,7 @@ fun CalendarViewScreen(
                 onNext = viewModel::nextMonth
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(32.dp))
 
             // ── Day-of-week header row ─────────────────────────────────────────
             DayOfWeekHeader()
@@ -126,9 +127,8 @@ fun CalendarViewScreen(
                 dayDataMap = uiState.dayDataMap,
                 currencySymbol = currencySymbol,
                 currencyFormat = currencyFormat,
-                onDayClick     = onDayClick
+                onDayClick = onDayClick
             )
-
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -203,7 +203,7 @@ private fun DayOfWeekHeader() {
                 lbl,
                 modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium
             )
@@ -248,8 +248,12 @@ private fun CalendarGrid(
                     val dayNum = cellIndex - startOffset + 1
 
                     if (dayNum !in 1..daysInMonth) {
-                        // Empty cell
-                        Box(modifier = Modifier.weight(1f))
+                        // Empty cell — same height as real cells
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = CELL_HEIGHT.dp)
+                        )
                     } else {
                         val date = yearMonth.atDay(dayNum)
                         val dayData = dayDataMap[date]
@@ -269,6 +273,14 @@ private fun CalendarGrid(
 }
 
 // ─── Individual day cell ──────────────────────────────────────────────────────
+//
+// Fixed-height design:
+//   • Every cell is exactly CELL_HEIGHT dp tall — no wrapping, no expansion.
+//   • Day number row: fixed 28dp, centred.
+//   • Up to 2 pill rows each 18dp, always rendered (empty space when no data).
+//   • This guarantees all cells in the same row are identical height.
+
+private const val CELL_HEIGHT = 80  // dp — enough for day num + 2 pills
 
 @Composable
 private fun DayCell(
@@ -279,64 +291,54 @@ private fun DayCell(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
-    // Thin divider lines between cells — matching the screenshot
     Box(
         modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)
-            )
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.12f))
             .clickable { onClick() }
             .padding(1.dp)
+            .background(MaterialTheme.colorScheme.background)
+            .defaultMinSize(minHeight = CELL_HEIGHT.dp)
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(horizontal = 2.dp, vertical = 6.dp)
-                .wrapContentHeight()
+                .padding(horizontal = 3.dp, vertical = 5.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            // Day number — fixed 28dp zone, centred
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(26.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Day number — large, top of cell
                 Text(
                     text = dayNum.toString(),
-                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Normal,
                     color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    fontSize = 18.sp
                 )
-
-                // Amount pills — shown only when there are transactions
-                if (dayData != null) {
-                    // Income pill (green) — shown if income > 0
-                    if (dayData.totalIncome > 0) {
-                        AmountPill(
-                            amount = dayData.totalIncome,
-                            currencySymbol = currencySymbol,
-                            currencyFormat = currencyFormat,
-                            bgColor = IncomePillBg,
-                            textColor = IncomePillText
-                        )
-                    }
-                    // Expense pill (red) — shown if expense > 0
-                    if (dayData.totalExpense > 0) {
-                        AmountPill(
-                            amount = dayData.totalExpense,
-                            currencySymbol = currencySymbol,
-                            currencyFormat = currencyFormat,
-                            bgColor = ExpensePillBg,
-                            textColor = ExpensePillText
-                        )
-                    }
-                } else {
-                    // Placeholder to keep cell height uniform when no data
-                    Spacer(Modifier.height(22.dp))
-                }
             }
+
+            // Income pill — always renders as 18dp slot (transparent when no income)
+            // Income pill slot — transparent with no text when income = 0
+            AmountPill(
+                amount = dayData?.totalIncome ?: 0.0,
+                currencySymbol = currencySymbol,
+                visible = (dayData?.totalIncome ?: 0.0) > 0,
+                bgColor = IncomePillBg,
+                textColor = IncomePillText
+            )
+
+            // Expense pill slot — transparent with no text when expense = 0
+            AmountPill(
+                amount = dayData?.totalExpense ?: 0.0,
+                currencySymbol = currencySymbol,
+                visible = (dayData?.totalExpense ?: 0.0) > 0,
+                bgColor = ExpensePillBg,
+                textColor = ExpensePillText
+            )
         }
     }
 }
@@ -347,29 +349,36 @@ private fun DayCell(
 private fun AmountPill(
     amount: Double,
     currencySymbol: String,
-    currencyFormat: String,
+    visible: Boolean,
     bgColor: Color,
     textColor: Color
 ) {
-    // Use smartFormat for compact display matching the screenshot style
-    val formatted = amount.smartFormat("default")
-    val text = "$currencySymbol$formatted"
+    val rounded = amount.roundToInt().toDouble()
+    val currencyFormat = LocalCurrencyFormat.current
+    val text = if (visible)
+        "$currencySymbol${formatAmountForDisplay(rounded, currencyFormat)}"
+    else ""
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .height(18.dp)
             .clip(RoundedCornerShape(4.dp))
-            .background(bgColor)
-            .padding(horizontal = 2.dp, vertical = 2.dp)
+            .background(if (visible) bgColor else Color.Transparent),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = textColor,
-            fontWeight = FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontSize = 8.sp
-        )
+        if (visible) {
+            Text(
+                text = text,
+                color = textColor,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 9.sp,
+                lineHeight = 9.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
