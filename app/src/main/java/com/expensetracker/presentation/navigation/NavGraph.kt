@@ -222,6 +222,13 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                         popUpTo(Screen.Dashboard.route) { inclusive = false }
                     }
                 },
+                onNavigateToTransactions = { navController.navigate(Screen.Transactions.route) },
+                onNavigateToScheduledTransactions = {
+                    navController.navigate(Screen.ScheduledTransactions.route)
+                },
+                onNavigateToBudgets = { navController.navigate(Screen.Budget.route) },
+                onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
+                onNavigateToTags = { navController.navigate(Screen.Tags.route) },
                 onNavigateToCurrency = { navController.navigate(Screen.CurrencySelection.route) },
                 onNavigateToCalendarView = {navController.navigate(Screen.CalendarView.route)},
                 onNavigateToDayView = { date ->

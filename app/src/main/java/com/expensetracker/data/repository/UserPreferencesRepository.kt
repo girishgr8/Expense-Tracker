@@ -26,6 +26,7 @@ class UserPreferencesRepository @Inject constructor(
 ) {
     private object Keys {
         val CURRENCY_SYMBOL = stringPreferencesKey("currency_symbol")
+        val USER_DISPLAY_NAME = stringPreferencesKey("user_display_name")
         val CURRENCY_CODE = stringPreferencesKey("currency_code")
         val CURRENCY_FORMAT = stringPreferencesKey("currency_format")   // "millions" | "lakhs" | "none"
         val USE_DYNAMIC_COLOR = booleanPreferencesKey("use_dynamic_color")
@@ -47,6 +48,10 @@ class UserPreferencesRepository @Inject constructor(
     val currencySymbol: Flow<String> = context.dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { it[Keys.CURRENCY_SYMBOL] ?: "₹" }
+
+    val userDisplayName: Flow<String> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.USER_DISPLAY_NAME] ?: "" }
 
     val currencyCode: Flow<String> = context.dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
@@ -110,6 +115,10 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setCurrencySymbol(symbol: String) {
         context.dataStore.edit { it[Keys.CURRENCY_SYMBOL] = symbol }
+    }
+
+    suspend fun setUserDisplayName(name: String) {
+        context.dataStore.edit { it[Keys.USER_DISPLAY_NAME] = name }
     }
 
     suspend fun setCurrencyCode(code: String) {

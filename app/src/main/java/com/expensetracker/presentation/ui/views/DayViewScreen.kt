@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -81,8 +80,6 @@ fun DayViewScreen(
     val currencySymbol = LocalCurrencySymbol.current
     val currencyFormat = LocalCurrencyFormat.current
 
-    val sym = currencySymbol
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
@@ -107,7 +104,7 @@ fun DayViewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                    .padding(horizontal = 8.dp, vertical = 0.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onNavigateBack) {
@@ -169,7 +166,7 @@ fun DayViewScreen(
                 // ── Summary card ──────────────────────────────────────────────
                 item {
                     DaySummaryCard(
-                        sym     = sym,
+                        sym = currencySymbol,
                         expense = uiState.totalExpense,
                         income  = uiState.totalIncome
                     )
@@ -189,7 +186,7 @@ fun DayViewScreen(
                                 uiState.transactions.forEachIndexed { idx, txn ->
                                     DayTransactionRow(
                                         txn            = txn,
-                                        sym            = sym,
+                                        sym = currencySymbol,
                                         currencyFormat = currencyFormat,
                                         onClick        = { onNavigateToEditTransaction(txn.id) }
                                     )

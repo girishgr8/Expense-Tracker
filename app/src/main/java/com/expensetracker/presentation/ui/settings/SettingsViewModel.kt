@@ -117,13 +117,23 @@ class SettingsViewModel @Inject constructor(
 
     private fun loadUserInfo() {
         viewModelScope.launch {
-            authManager.currentUser.collect { user ->
+            combine(
+                authManager.currentUser,
+                userPreferencesRepository.userDisplayName
+            ) { user, appDisplayName ->
+                user to appDisplayName
+            }.collect { (user, appDisplayName) ->
+                val googleDisplayName = user?.displayName.orEmpty()
+                val displayName = appDisplayName.ifBlank { googleDisplayName }
                 _uiState.update {
                     it.copy(
-                        userName = user?.displayName ?: "",
+                        userName = displayName,
                         userEmail = user?.email ?: "",
                         userPhotoUrl = user?.photoUrl?.toString() ?: ""
                     )
+                }
+                if (appDisplayName.isBlank() && googleDisplayName.isNotBlank()) {
+                    userPreferencesRepository.setUserDisplayName(googleDisplayName)
                 }
             }
         }
@@ -290,6 +300,13 @@ class SettingsViewModel @Inject constructor(
 
     fun triggerBackupNow() = viewModelScope.launch {
         driveBackupScheduler.triggerImmediateBackup()
+    }
+
+    fun updateUserName(name: String) = viewModelScope.launch {
+        val trimmedName = name.trim()
+        if (trimmedName.isBlank()) return@launch
+        userPreferencesRepository.setUserDisplayName(trimmedName)
+        _uiState.update { it.copy(userName = trimmedName) }
     }
 
     fun setDefaultCategoryId(id: Long) = viewModelScope.launch {

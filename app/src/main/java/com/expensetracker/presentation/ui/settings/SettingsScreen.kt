@@ -3,7 +3,9 @@ package com.expensetracker.presentation.ui.settings
 import android.app.TimePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,14 +41,18 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ModeEdit
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,6 +65,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -85,6 +92,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.expensetracker.domain.model.ExportFormat
@@ -145,6 +153,282 @@ private data class QuickAction(
 )
 
 @Composable
+private fun UserProfileCard(
+    userName: String,
+    userEmail: String,
+    userPhotoUrl: String,
+    lastBackupDisplay: String,
+    onBackupNow: () -> Unit,
+    onNameChange: (String) -> Unit
+) {
+    var showEditNameDialog by remember { mutableStateOf(false) }
+    var editedName by remember(userName) { mutableStateOf(userName) }
+    val displayName = userName.ifBlank { "User" }
+    val initial = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+    val backupText = if (lastBackupDisplay == "Never") {
+        "Last backup: Never"
+    } else {
+        "Last backup: Automatic G-Drive backup on $lastBackupDisplay."
+    }
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 15.dp, end = 15.dp, top = 10.dp, bottom = 5.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (userPhotoUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = userPhotoUrl,
+                        contentDescription = "Profile photo",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF039BE5)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            initial,
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(16.dp))
+
+                Column(Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            displayName,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 19.sp),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable {
+                                    editedName = displayName
+                                    showEditNameDialog = true
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Default.ModeEdit,
+                                contentDescription = "Edit name",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        userEmail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Light,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(Modifier.width(14.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Security,
+                        contentDescription = "Account security",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 10.dp, bottom = 8.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    backupText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                    fontWeight = FontWeight.Light
+                )
+                Spacer(Modifier.width(16.dp))
+                TextButton(onClick = onBackupNow) {
+                    Text(
+                        "Backup now",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+
+    if (showEditNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditNameDialog = false },
+            title = { Text("Edit name") },
+            text = {
+                OutlinedTextField(
+                    value = editedName,
+                    onValueChange = { editedName = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = editedName.isNotBlank(),
+                    onClick = {
+                        onNameChange(editedName)
+                        showEditNameDialog = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditNameDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+private data class SettingsShortcut(
+    val icon: ImageVector,
+    val title: String,
+    val iconColor: Color,
+    val onClick: () -> Unit
+)
+
+@Composable
+private fun SettingsShortcutGrid(
+    onTransactions: () -> Unit,
+    onScheduledTransactions: () -> Unit,
+    onBudgets: () -> Unit,
+    onCategories: () -> Unit,
+    onTags: () -> Unit,
+    onDebts: () -> Unit
+) {
+    val shortcuts = listOf(
+        SettingsShortcut(Icons.Default.CalendarViewDay, "Transactions", Color(0xFF2196F3), onTransactions),
+        SettingsShortcut(Icons.Default.CalendarMonth, "Scheduled Txns", Color(0xFF00BCD4), onScheduledTransactions),
+        SettingsShortcut(Icons.Default.Wallet, "Budgets", Color(0xFFFF4081), onBudgets),
+        SettingsShortcut(Icons.Default.Category, "Categories", Color(0xFF00E676), onCategories),
+        SettingsShortcut(Icons.Default.Numbers, "Tags", Color(0xFF4DD0E1), onTags),
+        SettingsShortcut(Icons.Default.Sync, "Debts", Color(0xFFFFB300), onDebts)
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        shortcuts.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowItems.forEach { shortcut ->
+                    SettingsShortcutCard(
+                        shortcut = shortcut,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowItems.size == 1) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsShortcutCard(
+    shortcut: SettingsShortcut,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(60.dp)
+            .clickable { shortcut.onClick() },
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = shortcut.icon,
+                contentDescription = shortcut.title,
+                tint = shortcut.iconColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = shortcut.title,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
 private fun QuickActionTile(action: QuickAction, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
@@ -178,6 +462,12 @@ fun SettingsScreen(
     onNavigateToAnalysis: () -> Unit = {},
     onNavigateToAccounts: () -> Unit = {},
     onNavigateToAddTransaction: () -> Unit = {},
+    onNavigateToTransactions: () -> Unit = {},
+    onNavigateToScheduledTransactions: () -> Unit = {},
+    onNavigateToBudgets: () -> Unit = {},
+    onNavigateToCategories: () -> Unit = {},
+    onNavigateToTags: () -> Unit = {},
+    onNavigateToDebts: () -> Unit = {},
     onNavigateToCurrency: () -> Unit = {},
     onNavigateToCalendarView: () -> Unit = {},
     onNavigateToDayView: (LocalDate) -> Unit = {},
@@ -282,56 +572,26 @@ fun SettingsScreen(
             ) {
                 // User Profile Card
                 item {
-                    Card(
-                        shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (uiState.userPhotoUrl.isNotEmpty()) {
-                                AsyncImage(
-                                    model = uiState.userPhotoUrl,
-                                    contentDescription = "Profile photo",
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(CircleShape)
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        uiState.userName.firstOrNull()?.toString() ?: "U",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    uiState.userName,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    uiState.userEmail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                    }
+                    UserProfileCard(
+                        userName = uiState.userName,
+                        userEmail = uiState.userEmail,
+                        userPhotoUrl = uiState.userPhotoUrl,
+                        lastBackupDisplay = uiState.lastBackupDisplay,
+                        onBackupNow = settingsViewModel::triggerBackupNow,
+                        onNameChange = settingsViewModel::updateUserName
+                    )
+                }
+
+                item {
+                    Spacer(Modifier.height(6.dp))
+                    SettingsShortcutGrid(
+                        onTransactions = onNavigateToTransactions,
+                        onScheduledTransactions = onNavigateToScheduledTransactions,
+                        onBudgets = onNavigateToBudgets,
+                        onCategories = onNavigateToCategories,
+                        onTags = onNavigateToTags,
+                        onDebts = onNavigateToDebts
+                    )
                 }
 
                 // Views Section
@@ -735,9 +995,15 @@ private fun SettingsSectionHeader(title: String) {
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
-        shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+        ),
+        colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth(), content = content)
     }
