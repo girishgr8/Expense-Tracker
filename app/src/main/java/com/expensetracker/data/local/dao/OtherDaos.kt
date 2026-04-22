@@ -12,11 +12,14 @@ import com.expensetracker.data.local.entity.BankAccountEntity
 import com.expensetracker.data.local.entity.BudgetEntity
 import com.expensetracker.data.local.entity.CategoryEntity
 import com.expensetracker.data.local.entity.CreditCardEntity
+import com.expensetracker.data.local.entity.DebtEntity
+import com.expensetracker.data.local.entity.InvestmentSnapshotEntity
 import com.expensetracker.data.local.entity.PaymentModeEntity
+import com.expensetracker.data.local.entity.SavingsSnapshotEntity
 import com.expensetracker.data.local.entity.ScheduledTransactionEntity
 import com.expensetracker.data.local.entity.TagEntity
-import com.expensetracker.data.local.entity.TransactionEntity
-import com.expensetracker.domain.model.Tag
+import com.expensetracker.domain.model.DebtType
+import com.expensetracker.domain.model.InvestmentType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -245,4 +248,118 @@ interface ScheduledTransactionDao {
 
     @Delete
     suspend fun deleteScheduledTransaction(schedule: ScheduledTransactionEntity)
+}
+
+@Dao
+interface DebtDao {
+    @Query("SELECT * FROM debts WHERE userId = :userId ORDER BY createdAtMillis DESC")
+    fun getAllDebts(userId: String): Flow<List<DebtEntity>>
+
+    @Query("SELECT * FROM debts WHERE userId = :userId AND type = :type ORDER BY createdAtMillis DESC")
+    fun getDebtsByType(userId: String, type: DebtType): Flow<List<DebtEntity>>
+
+    @Query("SELECT * FROM debts WHERE id = :id")
+    suspend fun getDebtById(id: Long): DebtEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDebt(debt: DebtEntity): Long
+
+    @Update
+    suspend fun updateDebt(debt: DebtEntity)
+
+    @Delete
+    suspend fun deleteDebt(debt: DebtEntity)
+}
+
+@Dao
+interface SavingsSnapshotDao {
+
+    /**
+     * Latest snapshot per institution.
+     * Uses MAX(id) as tiebreaker when two snapshots share the same timestamp,
+     * guaranteeing exactly ONE row per institutionName — no duplicate keys.
+     */
+    @Query("""
+        SELECT * FROM savings_snapshots
+        WHERE userId = :userId
+          AND id = (
+              SELECT MAX(s2.id) FROM savings_snapshots s2
+              WHERE s2.institutionName = savings_snapshots.institutionName
+                AND s2.userId = :userId
+          )
+        ORDER BY institutionName ASC
+    """)
+    fun getLatestSnapshotsPerInstitution(userId: String): Flow<List<SavingsSnapshotEntity>>
+
+    /** Full history for one institution, newest first */
+    @Query("""
+        SELECT * FROM savings_snapshots
+        WHERE userId = :userId AND institutionName = :institutionName
+        ORDER BY recordedOnMillis DESC
+    """)
+    fun getHistoryForInstitution(
+        userId: String,
+        institutionName: String
+    ): Flow<List<SavingsSnapshotEntity>>
+
+    /** All snapshots for the user, newest first — used for history graphs */
+    @Query("SELECT * FROM savings_snapshots WHERE userId = :userId ORDER BY recordedOnMillis DESC")
+    fun getAllSnapshots(userId: String): Flow<List<SavingsSnapshotEntity>>
+
+    /** INSERT only — never update */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSnapshot(snapshot: SavingsSnapshotEntity): Long
+
+    /** Delete all snapshots for an institution (soft-delete / cleanup) */
+    @Query("DELETE FROM savings_snapshots WHERE userId = :userId AND institutionName = :institutionName")
+    suspend fun deleteForInstitution(userId: String, institutionName: String)
+}
+
+@Dao
+interface InvestmentSnapshotDao {
+
+    /**
+     * Latest snapshot per (type, subName).
+     * MAX(id) as tiebreaker — guaranteed exactly ONE row per position,
+     * preventing duplicate LazyColumn keys.
+     */
+    @Query("""
+        SELECT * FROM investment_snapshots
+        WHERE userId = :userId
+          AND id = (
+              SELECT MAX(i2.id) FROM investment_snapshots i2
+              WHERE i2.type = investment_snapshots.type
+                AND i2.subName = investment_snapshots.subName
+                AND i2.userId = :userId
+          )
+        ORDER BY type ASC, subName ASC
+    """)
+    fun getLatestSnapshotsPerPosition(userId: String): Flow<List<InvestmentSnapshotEntity>>
+
+    /** Full history for one position, newest first */
+    @Query("""
+        SELECT * FROM investment_snapshots
+        WHERE userId = :userId AND type = :type AND subName = :subName
+        ORDER BY recordedOnMillis DESC
+    """)
+    fun getHistoryForPosition(
+        userId: String,
+        type:    InvestmentType,
+        subName: String
+    ): Flow<List<InvestmentSnapshotEntity>>
+
+    /** All snapshots newest first */
+    @Query("SELECT * FROM investment_snapshots WHERE userId = :userId ORDER BY recordedOnMillis DESC")
+    fun getAllSnapshots(userId: String): Flow<List<InvestmentSnapshotEntity>>
+
+    /** INSERT only — never update */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSnapshot(snapshot: InvestmentSnapshotEntity): Long
+
+    /** Delete all snapshots for a position */
+    @Query("""
+        DELETE FROM investment_snapshots
+        WHERE userId = :userId AND type = :type AND subName = :subName
+    """)
+    suspend fun deleteForPosition(userId: String, type: InvestmentType, subName: String)
 }

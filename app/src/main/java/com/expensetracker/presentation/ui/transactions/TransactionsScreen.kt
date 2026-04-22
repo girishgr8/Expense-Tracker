@@ -79,7 +79,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.PaymentMode
 import com.expensetracker.domain.model.Tag

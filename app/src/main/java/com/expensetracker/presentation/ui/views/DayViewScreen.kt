@@ -52,7 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.CategoryIconBubble
@@ -68,15 +68,15 @@ import java.util.Locale
 
 @Composable
 fun DayViewScreen(
-    initialDate:             LocalDate,
-    onNavigateBack:          () -> Unit,
+    initialDate: LocalDate,
+    onNavigateBack: () -> Unit,
     onNavigateToAddTransaction: () -> Unit = {},
     onNavigateToEditTransaction: (Long) -> Unit = {},
     viewModel: DayViewModel = hiltViewModel()
 ) {
     LaunchedEffect(initialDate) { viewModel.loadDay(initialDate) }
 
-    val uiState        by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val currencySymbol = LocalCurrencySymbol.current
     val currencyFormat = LocalCurrencyFormat.current
 
@@ -84,11 +84,11 @@ fun DayViewScreen(
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
             FloatingActionButton(
-                onClick        = onNavigateToAddTransaction,
-                shape          = CircleShape,
+                onClick = onNavigateToAddTransaction,
+                shape = CircleShape,
                 containerColor = Color.White,
-                contentColor   = Color.Black,
-                modifier       = Modifier.size(56.dp)
+                contentColor = Color.Black,
+                modifier = Modifier.size(56.dp)
             ) {
                 Icon(Icons.Default.Add, "Add transaction", Modifier.size(28.dp))
             }
@@ -124,9 +124,9 @@ fun DayViewScreen(
                 Spacer(Modifier.width(4.dp))
                 Text(
                     "Day View",
-                    style      = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    modifier   = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f)
                 )
                 // + button top-right (circles)
                 IconButton(onClick = onNavigateToAddTransaction) {
@@ -146,20 +146,20 @@ fun DayViewScreen(
             }
 
             LazyColumn(
-                modifier       = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start  = 16.dp, end = 16.dp,
-                    top    = 4.dp,  bottom = 96.dp
+                    start = 16.dp, end = 16.dp,
+                    top = 4.dp, bottom = 96.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // ── Day navigation pill ───────────────────────────────────────
                 item {
                     DayNavigationHeader(
-                        date      = uiState.date,
-                        txnCount  = uiState.transactions.size,
-                        onPrev    = viewModel::previousDay,
-                        onNext    = viewModel::nextDay
+                        date = uiState.date,
+                        txnCount = uiState.transactions.size,
+                        onPrev = viewModel::previousDay,
+                        onNext = viewModel::nextDay
                     )
                 }
 
@@ -168,7 +168,7 @@ fun DayViewScreen(
                     DaySummaryCard(
                         sym = currencySymbol,
                         expense = uiState.totalExpense,
-                        income  = uiState.totalIncome
+                        income = uiState.totalIncome
                     )
                 }
 
@@ -176,7 +176,7 @@ fun DayViewScreen(
                 if (uiState.transactions.isNotEmpty()) {
                     item {
                         Card(
-                            shape  = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer
                             ),
@@ -185,16 +185,16 @@ fun DayViewScreen(
                             Column(Modifier.padding(vertical = 8.dp)) {
                                 uiState.transactions.forEachIndexed { idx, txn ->
                                     DayTransactionRow(
-                                        txn            = txn,
+                                        txn = txn,
                                         sym = currencySymbol,
                                         currencyFormat = currencyFormat,
-                                        onClick        = { onNavigateToEditTransaction(txn.id) }
+                                        onClick = { onNavigateToEditTransaction(txn.id) }
                                     )
                                     if (idx < uiState.transactions.lastIndex) {
                                         HorizontalDivider(
-                                            modifier  = Modifier.padding(horizontal = 16.dp),
+                                            modifier = Modifier.padding(horizontal = 16.dp),
                                             thickness = 0.5.dp,
-                                            color     = MaterialTheme.colorScheme.outlineVariant
+                                            color = MaterialTheme.colorScheme.outlineVariant
                                                 .copy(alpha = 0.3f)
                                         )
                                     }
@@ -227,10 +227,10 @@ fun DayViewScreen(
 
 @Composable
 private fun DayNavigationHeader(
-    date:      LocalDate,
-    txnCount:  Int,
-    onPrev:    () -> Unit,
-    onNext:    () -> Unit
+    date: LocalDate,
+    txnCount: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit
 ) {
     val fmt = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy", Locale.getDefault())
     Box(
@@ -242,7 +242,7 @@ private fun DayNavigationHeader(
     ) {
         Row(
             Modifier.fillMaxWidth(),
-            verticalAlignment   = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = onPrev) {
@@ -254,15 +254,15 @@ private fun DayNavigationHeader(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     date.format(fmt),
-                    style      = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 if (txnCount > 0) {
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "$txnCount TRANSACTIONS",
-                        style         = MaterialTheme.typography.labelSmall,
-                        color         = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         letterSpacing = 1.2.sp
                     )
                 }
@@ -281,14 +281,14 @@ private fun DayNavigationHeader(
 
 @Composable
 private fun DaySummaryCard(
-    sym:     String,
+    sym: String,
     expense: Double,
-    income:  Double
+    income: Double
 ) {
     val balance = income - expense
 
     Card(
-        shape  = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(
@@ -310,17 +310,17 @@ private fun DaySummaryCard(
                     Column(Modifier.weight(1f)) {
                         Text(
                             "SPENDING",
-                            style         = MaterialTheme.typography.labelSmall,
-                            color         = ExpenseRed,
-                            fontWeight    = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ExpenseRed,
+                            fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "$sym${expense.smartFormat("default")}",
-                            style      = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.ExtraBold,
-                            color      = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Column(
@@ -329,19 +329,19 @@ private fun DaySummaryCard(
                     ) {
                         Text(
                             "INCOME",
-                            style         = MaterialTheme.typography.labelSmall,
-                            color         = IncomeGreen,
-                            fontWeight    = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = IncomeGreen,
+                            fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "$sym${income.smartFormat("default")}",
-                            style      = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.ExtraBold,
-                            color      = MaterialTheme.colorScheme.onSurface,
-                            textAlign  = TextAlign.End,
-                            modifier   = Modifier.fillMaxWidth()
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -369,9 +369,9 @@ private fun DaySummaryCard(
                             "${if (balance >= 0) "" else "-"}$sym${
                                 kotlin.math.abs(balance).smartFormat("default")
                             }",
-                            style      = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color      = if (balance >= 0) IncomeGreen else ExpenseRed
+                            color = if (balance >= 0) IncomeGreen else ExpenseRed
                         )
                     }
                 }
@@ -384,17 +384,17 @@ private fun DaySummaryCard(
 
 @Composable
 private fun DayTransactionRow(
-    txn:            Transaction,
-    sym:            String,
+    txn: Transaction,
+    sym: String,
     currencyFormat: String,
-    onClick:        () -> Unit
+    onClick: () -> Unit
 ) {
-    val title    = txn.note.ifEmpty { txn.categoryName.ifEmpty { "Uncategorized" } }
-    val timeFmt  = DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault())
-    val timeStr  = txn.dateTime.format(timeFmt)
+    val title = txn.note.ifEmpty { txn.categoryName.ifEmpty { "Uncategorized" } }
+    val timeFmt = DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault())
+    val timeStr = txn.dateTime.format(timeFmt)
     val amtColor = when (txn.type) {
-        TransactionType.INCOME   -> IncomeGreen
-        TransactionType.EXPENSE  -> ExpenseRed
+        TransactionType.INCOME -> IncomeGreen
+        TransactionType.EXPENSE -> ExpenseRed
         TransactionType.TRANSFER -> TransferBlue
     }
 
@@ -406,9 +406,9 @@ private fun DayTransactionRow(
     ) {
         // Category icon bubble (44dp to match screenshot)
         CategoryIconBubble(
-            iconKey  = txn.categoryIcon.ifEmpty { "category" },
+            iconKey = txn.categoryIcon.ifEmpty { "category" },
             colorHex = txn.categoryColorHex.ifEmpty { "#6750A4" },
-            size     = 44
+            size = 44
         )
 
         Spacer(Modifier.width(12.dp))
@@ -416,16 +416,16 @@ private fun DayTransactionRow(
         // Title + payment mode with small icon
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text       = title,
-                style      = MaterialTheme.typography.titleMedium,
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                maxLines   = 1,
-                overflow   = TextOverflow.Ellipsis,
-                fontSize   = 15.sp
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 15.sp
             )
             Spacer(Modifier.height(2.dp))
             Row(
-                verticalAlignment     = Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Small payment-mode icon matching the screenshot
@@ -437,9 +437,9 @@ private fun DayTransactionRow(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
                 Text(
-                    text     = txn.paymentModeName.ifEmpty { "—" },
-                    style    = MaterialTheme.typography.bodySmall,
-                    color    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    text = txn.paymentModeName.ifEmpty { "—" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -451,14 +451,14 @@ private fun DayTransactionRow(
         // Amount + time right-aligned
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text       = "$sym${kotlin.math.abs(txn.amount).smartFormat("default")}",
-                style      = MaterialTheme.typography.titleMedium,
+                text = "$sym${kotlin.math.abs(txn.amount).smartFormat("default")}",
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color      = amtColor,
-                fontSize   = 15.sp
+                color = amtColor,
+                fontSize = 15.sp
             )
             Text(
-                text  = timeStr,
+                text = timeStr,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
@@ -469,14 +469,15 @@ private fun DayTransactionRow(
 // ─── Payment mode icon heuristic (matches AccountsScreen + screenshot) ────────
 
 private fun paymentModeIcon(modeName: String): ImageVector = when {
-    modeName.contains("UPI",     ignoreCase = true) ||
-            modeName.contains("GPay",    ignoreCase = true) ||
+    modeName.contains("UPI", ignoreCase = true) ||
+            modeName.contains("GPay", ignoreCase = true) ||
             modeName.contains("PhonePe", ignoreCase = true) ||
-            modeName.contains("Paytm",   ignoreCase = true) -> Icons.Default.PhoneAndroid
-    modeName.contains("Cash",    ignoreCase = true) -> Icons.Default.Payments
-    modeName.contains("Credit",  ignoreCase = true) -> Icons.Default.CreditCard
-    modeName.contains("Debit",   ignoreCase = true) -> Icons.Default.CreditCard
-    modeName.contains("Net",     ignoreCase = true) -> Icons.Default.Language
-    modeName.contains("Cheque",  ignoreCase = true) -> Icons.Default.EditNote
-    else                                             -> Icons.Default.AccountBalance
+            modeName.contains("Paytm", ignoreCase = true) -> Icons.Default.PhoneAndroid
+
+    modeName.contains("Cash", ignoreCase = true) -> Icons.Default.Payments
+    modeName.contains("Credit", ignoreCase = true) -> Icons.Default.CreditCard
+    modeName.contains("Debit", ignoreCase = true) -> Icons.Default.CreditCard
+    modeName.contains("Net", ignoreCase = true) -> Icons.Default.Language
+    modeName.contains("Cheque", ignoreCase = true) -> Icons.Default.EditNote
+    else -> Icons.Default.AccountBalance
 }

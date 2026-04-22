@@ -14,6 +14,9 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.expensetracker.domain.model.DebtType
+import com.expensetracker.presentation.ui.wealth.WealthViewModel
+import com.expensetracker.domain.model.InvestmentType
 import com.expensetracker.presentation.ui.MainViewModel
 import com.expensetracker.presentation.ui.accounts.AccountsScreen
 import com.expensetracker.presentation.ui.addtransaction.AddScheduledTransactionScreen
@@ -22,17 +25,22 @@ import com.expensetracker.presentation.ui.analysis.AnalysisScreen
 import com.expensetracker.presentation.ui.auth.AuthScreen
 import com.expensetracker.presentation.ui.budget.AddBudgetScreen
 import com.expensetracker.presentation.ui.budget.BudgetScreen
-import com.expensetracker.presentation.ui.views.CalendarViewScreen
 import com.expensetracker.presentation.ui.categories.CategoriesScreen
 import com.expensetracker.presentation.ui.chat.FinancialChatScreen
 import com.expensetracker.presentation.ui.dashboard.DashboardScreen
+import com.expensetracker.presentation.ui.debt.AddDebtScreen
+import com.expensetracker.presentation.ui.debt.DebtsScreen
 import com.expensetracker.presentation.ui.settings.CurrencySelectionScreen
 import com.expensetracker.presentation.ui.settings.SettingsScreen
 import com.expensetracker.presentation.ui.settings.SettingsViewModel
 import com.expensetracker.presentation.ui.tags.TagsScreen
 import com.expensetracker.presentation.ui.transactions.ScheduledTransactionsScreen
 import com.expensetracker.presentation.ui.transactions.TransactionsScreen
+import com.expensetracker.presentation.ui.views.CalendarViewScreen
 import com.expensetracker.presentation.ui.views.DayViewScreen
+import com.expensetracker.presentation.ui.wealth.AddInvestmentScreen
+import com.expensetracker.presentation.ui.wealth.AddSavingsScreen
+import com.expensetracker.presentation.ui.wealth.WealthScreen
 import java.time.LocalDate
 
 sealed class Screen(val route: String) {
@@ -59,6 +67,38 @@ sealed class Screen(val route: String) {
     object Tags : Screen("tags")
     object CalendarView : Screen("calendar_view")
     object DayView : Screen("day_view/{date}")
+    object Debt : Screen("debts")
+    object AddDebt : Screen("add_debt/{debtType}")
+    object Wealth : Screen("wealth")
+    object AddSavings : Screen("add_savings") {
+        /**
+         * Edit route — encodes all current field values as path segments so the
+         * edit screen receives them without needing a ViewModel lookup in NavGraph.
+         */
+        fun editRoute(
+            institutionName: String,
+            savingsBalance:  String,
+            fdBalance:       String,
+            rdBalance:       String
+        ): String {
+            val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
+            return "add_savings_edit/${enc(institutionName)}/${enc(savingsBalance)}/${enc(fdBalance)}/${enc(rdBalance)}"
+        }
+    }
+    object AddInvestment : Screen("add_investment") {
+        /**
+         * Edit route — encodes all current field values as path segments.
+         */
+        fun editRoute(
+            type:           String,
+            subName:        String,
+            investedAmount: String,
+            currentAmount:  String
+        ): String {
+            val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
+            return "add_investment_edit/${enc(type)}/${enc(subName)}/${enc(investedAmount)}/${enc(currentAmount)}"
+        }
+    }
 }
 
 @Composable
@@ -102,7 +142,7 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 onNavigateToAddScheduledTransaction = { navController.navigate(Screen.AddScheduledTransaction.route) },
                 onNavigateToTransactions = { navController.navigate(Screen.Transactions.route) },
                 onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
-                onNavigateToAccounts = { navController.navigate(Screen.Accounts.route) },
+                onNavigateToAccounts = { navController.navigate(Screen.Wealth.route) },
                 onNavigateToBudget = { navController.navigate(Screen.Budget.route) },
                 onNavigateToSetBudget = { navController.navigate(Screen.AddBudget.createRoute()) },
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
@@ -226,11 +266,14 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 onNavigateToScheduledTransactions = {
                     navController.navigate(Screen.ScheduledTransactions.route)
                 },
+                onNavigateToDebts = {
+                    navController.navigate(Screen.Debt.route)
+                },
                 onNavigateToBudgets = { navController.navigate(Screen.Budget.route) },
                 onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
                 onNavigateToTags = { navController.navigate(Screen.Tags.route) },
                 onNavigateToCurrency = { navController.navigate(Screen.CurrencySelection.route) },
-                onNavigateToCalendarView = {navController.navigate(Screen.CalendarView.route)},
+                onNavigateToCalendarView = { navController.navigate(Screen.CalendarView.route) },
                 onNavigateToDayView = { date ->
                     navController.navigate("day_view/${date}")
                 },
@@ -306,7 +349,139 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 initialDate = date,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToAddTransaction = { navController.navigate(Screen.AddTransaction.createRoute()) },
-                onNavigateToEditTransaction = { id -> navController.navigate(Screen.AddTransaction.createRoute(id)) }
+                onNavigateToEditTransaction = { id ->
+                    navController.navigate(
+                        Screen.AddTransaction.createRoute(
+                            id
+                        )
+                    )
+                }
+            )
+        }
+
+        composable(Screen.Debt.route) {
+            DebtsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAddLending = { navController.navigate("add_debt/LENDING") },
+                onAddBorrowing = { navController.navigate("add_debt/BORROWING") }
+            )
+        }
+
+        composable(Screen.AddDebt.route) { backStackEntry ->
+            val type = DebtType.valueOf(
+                backStackEntry.arguments?.getString("debtType") ?: "LENDING"
+            )
+            AddDebtScreen(
+                debtType = type,
+                onNavigateBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Wealth.route) {
+            WealthScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAddSavings    = { navController.navigate(Screen.AddSavings.route) },
+                onAddInvestment = { navController.navigate(Screen.AddInvestment.route) },
+                onEditSavings   = { row ->
+                    navController.navigate(
+                        Screen.AddSavings.editRoute(
+                            institutionName = row.institutionName,
+                            savingsBalance  = row.savingsBalance.toString(),
+                            fdBalance       = row.fdBalance.toString(),
+                            rdBalance       = row.rdBalance.toString()
+                        )
+                    )
+                },
+                onEditInvestment = { row ->
+                    navController.navigate(
+                        Screen.AddInvestment.editRoute(
+                            type           = row.type.name,
+                            subName        = row.subName,
+                            investedAmount = row.invested.toString(),
+                            currentAmount  = row.current.toString()
+                        )
+                    )
+                }
+            )
+        }
+
+        // Add Savings — no existing data (add mode)
+        composable(Screen.AddSavings.route) {
+            AddSavingsScreen(
+                existing       = null,
+                onNavigateBack = { navController.popBackStack() },
+                onSaved        = { navController.popBackStack() }
+            )
+        }
+
+        // Edit Savings — all field values passed as encoded path segments (no VM lookup)
+        composable(
+            route = "add_savings_edit/{institutionName}/{savingsBalance}/{fdBalance}/{rdBalance}",
+            arguments = listOf(
+                navArgument("institutionName") { type = NavType.StringType },
+                navArgument("savingsBalance")  { type = NavType.StringType },
+                navArgument("fdBalance")       { type = NavType.StringType },
+                navArgument("rdBalance")       { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val dec = { key: String ->
+                java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString(key) ?: "", "UTF-8"
+                )
+            }
+            val preFilledRow = com.expensetracker.domain.model.SavingsRow(
+                institutionName  = dec("institutionName"),
+                savingsBalance   = dec("savingsBalance").toDoubleOrNull() ?: 0.0,
+                fdBalance        = dec("fdBalance").toDoubleOrNull() ?: 0.0,
+                rdBalance        = dec("rdBalance").toDoubleOrNull() ?: 0.0,
+                total            = 0.0,   // not needed for form pre-fill
+                recordedOn       = java.time.LocalDate.now(),
+                latestSnapshotId = 0L
+            )
+            AddSavingsScreen(
+                existing       = preFilledRow,
+                onNavigateBack = { navController.popBackStack() },
+                onSaved        = { navController.popBackStack() }
+            )
+        }
+        // Add Investment — no existing data (add mode)
+        composable(Screen.AddInvestment.route) {
+            AddInvestmentScreen(
+                existing       = null,
+                onNavigateBack = { navController.popBackStack() },
+                onSaved        = { navController.popBackStack() }
+            )
+        }
+
+        // Edit Investment — all field values passed as encoded path segments (no VM lookup)
+        composable(
+            route = "add_investment_edit/{invType}/{subName}/{investedAmount}/{currentAmount}",
+            arguments = listOf(
+                navArgument("invType")        { type = NavType.StringType },
+                navArgument("subName")        { type = NavType.StringType },
+                navArgument("investedAmount") { type = NavType.StringType },
+                navArgument("currentAmount")  { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val dec = { key: String ->
+                java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString(key) ?: "", "UTF-8"
+                )
+            }
+            val type = com.expensetracker.domain.model.InvestmentType.valueOf(dec("invType"))
+            val preFilledRow = com.expensetracker.domain.model.InvestmentRow(
+                type             = type,
+                subName          = dec("subName"),
+                invested         = dec("investedAmount").toDoubleOrNull() ?: 0.0,
+                current          = dec("currentAmount").toDoubleOrNull() ?: 0.0,
+                recordedOn       = java.time.LocalDate.now(),
+                latestSnapshotId = 0L
+            )
+            AddInvestmentScreen(
+                existing       = preFilledRow,
+                onNavigateBack = { navController.popBackStack() },
+                onSaved        = { navController.popBackStack() }
             )
         }
     }

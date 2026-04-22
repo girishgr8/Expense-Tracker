@@ -1,5 +1,6 @@
 package com.expensetracker.domain.model
 
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 // ─── Enums ─────────────────────────────────────────────────────────────────
@@ -97,7 +98,7 @@ data class Category(
     val userId: String = ""
 )
 
-/** A bank account — name, balance and colour only. Payment behaviour lives in PaymentMode. */
+/** A bank account — name, balance and color only. Payment behavior lives in PaymentMode. */
 data class BankAccount(
     val id: Long = 0,
     val name: String,
@@ -269,3 +270,159 @@ data class YearMonthTuple(
     val year: String,
     val month: String
 )
+
+enum class DebtType {
+    LENDING,    // You lent money to someone (they owe you)
+    BORROWING;  // You borrowed money from someone (you owe them)
+
+    fun displayName() = when (this) {
+        LENDING   -> "Lending"
+        BORROWING -> "Borrowing"
+    }
+}
+
+data class Debt(
+    val id: Long = 0,
+    val type: DebtType,
+    val personName: String,
+    val amount: Double,
+    val paidAmount: Double = 0.0,
+    val dueDate: LocalDate? = null,
+    val note: String = "",
+    val createdAt: LocalDateTime,
+    val isSettled: Boolean = false,
+    val userId: String = ""
+) {
+    val remainingAmount: Double get() = (amount - paidAmount).coerceAtLeast(0.0)
+    val isOverdue: Boolean get() = dueDate != null
+            && !isSettled
+            && dueDate.isBefore(LocalDate.now())
+}
+
+// ─── Investment type enum ─────────────────────────────────────────────────────
+
+enum class InvestmentType {
+    INDIAN_EQUITY,
+    INDIAN_MUTUAL_FUND,
+    US_EQUITY,
+    US_MUTUAL_FUND,
+    PPF,
+    EPF,
+    STOCKS,     // employee compensation stocks (RSU/ESOP)
+    NPS,
+    BITCOIN,
+    GOLD,
+    SILVER;
+
+    fun displayName(): String = when (this) {
+        INDIAN_EQUITY       -> "Indian Equity"
+        INDIAN_MUTUAL_FUND  -> "Indian Mutual Fund"
+        US_EQUITY           -> "US Equity"
+        US_MUTUAL_FUND      -> "US Mutual Fund"
+        PPF                 -> "Public Provident Fund (PPF)"
+        EPF                 -> "Employee Provident Fund (EPF)"
+        STOCKS              -> "Stocks (Compensation)"
+        NPS                 -> "National Pension Scheme (NPS)"
+        BITCOIN             -> "Bitcoin"
+        GOLD                -> "Gold"
+        SILVER              -> "Silver"
+    }
+
+    fun shortName(): String = when (this) {
+        INDIAN_EQUITY      -> "Indian Equity"
+        INDIAN_MUTUAL_FUND -> "Mutual Funds"
+        US_EQUITY          -> "US Equity"
+        US_MUTUAL_FUND     -> "US Mutual Fund"
+        PPF                -> "PPF"
+        EPF                -> "EPF"
+        STOCKS             -> "Stocks"
+        NPS                -> "NPS"
+        BITCOIN            -> "Bitcoin"
+        GOLD               -> "Gold"
+        SILVER             -> "Silver"
+    }
+
+    /** Whether a "broker/institution name" field is needed */
+    fun requiresBrokerName(): Boolean = this in setOf(INDIAN_EQUITY, US_EQUITY, INDIAN_MUTUAL_FUND, US_MUTUAL_FUND)
+
+    /** Whether a "company/stock name" field is needed */
+    fun requiresCompanyName(): Boolean = this == STOCKS
+}
+
+// ─── Savings snapshot ─────────────────────────────────────────────────────────
+
+/**
+ * One snapshot of a savings account at a point in time.
+ * Every save creates a NEW row — history is preserved.
+ */
+data class SavingsSnapshot(
+    val id:              Long      = 0,
+    val institutionName: String,
+    val savingsBalance:  Double    = 0.0,
+    val fdBalance:       Double    = 0.0,
+    val rdBalance:       Double    = 0.0,
+    val recordedOn:      LocalDate,
+    val userId:          String    = ""
+) {
+    val total: Double get() = savingsBalance + fdBalance + rdBalance
+}
+
+// ─── Investment snapshot ──────────────────────────────────────────────────────
+
+/**
+ * One snapshot of an investment position at a point in time.
+ * Every save creates a NEW row — history is preserved.
+ */
+data class InvestmentSnapshot(
+    val id:              Long           = 0,
+    val type:            InvestmentType,
+    val subName:         String         = "",  // broker name (equity) or company (stocks)
+    val investedAmount:  Double,
+    val currentAmount:   Double,
+    val recordedOn:      LocalDate,
+    val userId:          String         = ""
+) {
+    val gain:        Double  get() = currentAmount - investedAmount
+    val gainPercent: Double  get() = if (investedAmount > 0)
+        (gain / investedAmount) * 100.0 else 0.0
+    val isGain:      Boolean get() = currentAmount >= investedAmount
+}
+
+// ─── Aggregated net-worth view model ─────────────────────────────────────────
+
+data class NetWorthSummary(
+    // Savings
+    val savingsRows:      List<SavingsRow>      = emptyList(),
+    val totalSavings:     Double                = 0.0,
+    // Investments
+    val investmentRows:   List<InvestmentRow>   = emptyList(),
+    val totalInvested:    Double                = 0.0,
+    val totalCurrentInv:  Double                = 0.0,
+    // Net worth
+    val netWorthWithoutGains: Double            = 0.0,   // savings + invested capital
+    val netWorthWithGains:    Double            = 0.0    // savings + current investment value
+)
+
+data class SavingsRow(
+    val institutionName: String,
+    val savingsBalance:  Double,
+    val fdBalance:       Double,
+    val rdBalance:       Double,
+    val total:           Double,
+    val recordedOn:      LocalDate,
+    /** Most-recent snapshot id — used for editing */
+    val latestSnapshotId: Long
+)
+
+data class InvestmentRow(
+    val type:            InvestmentType,
+    val subName:         String,
+    val invested:        Double,
+    val current:         Double,
+    val recordedOn:      LocalDate,
+    val latestSnapshotId: Long
+) {
+    val gain:        Double  get() = current - invested
+    val gainPercent: Double  get() = if (invested > 0) (gain / invested) * 100.0 else 0.0
+    val isGain:      Boolean get() = current >= invested
+}

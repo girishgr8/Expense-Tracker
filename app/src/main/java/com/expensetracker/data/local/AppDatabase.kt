@@ -10,7 +10,10 @@ import com.expensetracker.data.local.dao.BankAccountDao
 import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
 import com.expensetracker.data.local.dao.CreditCardDao
+import com.expensetracker.data.local.dao.DebtDao
+import com.expensetracker.data.local.dao.InvestmentSnapshotDao
 import com.expensetracker.data.local.dao.PaymentModeDao
+import com.expensetracker.data.local.dao.SavingsSnapshotDao
 import com.expensetracker.data.local.dao.ScheduledTransactionDao
 import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
@@ -20,7 +23,10 @@ import com.expensetracker.data.local.entity.BankAccountEntity
 import com.expensetracker.data.local.entity.BudgetEntity
 import com.expensetracker.data.local.entity.CategoryEntity
 import com.expensetracker.data.local.entity.CreditCardEntity
+import com.expensetracker.data.local.entity.DebtEntity
+import com.expensetracker.data.local.entity.InvestmentSnapshotEntity
 import com.expensetracker.data.local.entity.PaymentModeEntity
+import com.expensetracker.data.local.entity.SavingsSnapshotEntity
 import com.expensetracker.data.local.entity.ScheduledTransactionEntity
 import com.expensetracker.data.local.entity.TagEntity
 import com.expensetracker.data.local.entity.TransactionEntity
@@ -36,9 +42,12 @@ import com.expensetracker.data.local.entity.TransactionEntity
         AttachmentEntity::class,
         BudgetEntity::class,
         TagEntity::class,
-        ScheduledTransactionEntity::class
+        ScheduledTransactionEntity::class,
+        DebtEntity::class,
+        SavingsSnapshotEntity::class,
+        InvestmentSnapshotEntity::class,
     ],
-    version = 11,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -53,6 +62,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
     abstract fun tagDao(): TagDao
     abstract fun scheduledTransactionDao(): ScheduledTransactionDao
+    abstract fun debtDao(): DebtDao
+    abstract fun savingsSnapshotDao(): SavingsSnapshotDao
+    abstract fun investmentSnapshotDao(): InvestmentSnapshotDao
 
     companion object {
         const val DATABASE_NAME = "expense_tracker_db"

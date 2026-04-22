@@ -10,11 +10,13 @@ import com.expensetracker.data.local.dao.BankAccountDao
 import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
 import com.expensetracker.data.local.dao.CreditCardDao
+import com.expensetracker.data.local.dao.DebtDao
+import com.expensetracker.data.local.dao.InvestmentSnapshotDao
 import com.expensetracker.data.local.dao.PaymentModeDao
+import com.expensetracker.data.local.dao.SavingsSnapshotDao
 import com.expensetracker.data.local.dao.ScheduledTransactionDao
 import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
-import com.expensetracker.data.local.entity.AttachmentEntity
 import com.expensetracker.data.local.entity.TagEntity
 import com.expensetracker.data.local.entity.TransactionEntity
 import com.expensetracker.data.local.entity.toDomain
@@ -25,14 +27,23 @@ import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.Budget
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.CreditCard
+import com.expensetracker.domain.model.Debt
+import com.expensetracker.domain.model.DebtType
 import com.expensetracker.domain.model.ExportFilter
+import com.expensetracker.domain.model.InvestmentRow
+import com.expensetracker.domain.model.InvestmentSnapshot
+import com.expensetracker.domain.model.InvestmentType
+import com.expensetracker.domain.model.NetWorthSummary
 import com.expensetracker.domain.model.PaymentMode
 import com.expensetracker.domain.model.PaymentModeType
+import com.expensetracker.domain.model.SavingsRow
+import com.expensetracker.domain.model.SavingsSnapshot
 import com.expensetracker.domain.model.ScheduledTransaction
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.Transaction
 import com.expensetracker.domain.model.TransactionType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
@@ -111,8 +122,16 @@ interface BankAccountRepository {
 
 interface BalanceAdjustmentRepository {
     fun getAdjustmentsForAccount(bankAccountId: Long, userId: String): Flow<List<BalanceAdjustment>>
-    fun getAdjustmentsForCreditCard(creditCardId: Long, userId: String): Flow<List<BalanceAdjustment>>
-    fun getAdjustmentsForPaymentMode(paymentModeId: Long, userId: String): Flow<List<BalanceAdjustment>>
+    fun getAdjustmentsForCreditCard(
+        creditCardId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustment>>
+
+    fun getAdjustmentsForPaymentMode(
+        paymentModeId: Long,
+        userId: String
+    ): Flow<List<BalanceAdjustment>>
+
     fun getAllAdjustments(userId: String): Flow<List<BalanceAdjustment>>
     suspend fun insertAdjustment(adjustment: BalanceAdjustment): Long
 }
@@ -177,6 +196,30 @@ interface ExportRepository {
         filter: ExportFilter,
         isPdf: Boolean
     ): Uri?
+}
+
+interface DebtRepository {
+    fun getAllDebts(userId: String): Flow<List<Debt>>
+    fun getDebtsByType(userId: String, type: DebtType): Flow<List<Debt>>
+    suspend fun getDebtById(id: Long): Debt?
+    suspend fun insertDebt(debt: Debt): Long
+    suspend fun updateDebt(debt: Debt)
+    suspend fun deleteDebt(debt: Debt)
+}
+
+interface WealthRepository {
+    fun getNetWorthSummary(userId: String): Flow<NetWorthSummary>
+    fun getSavingsHistory(userId: String, institution: String): Flow<List<SavingsSnapshot>>
+    fun getInvestmentHistory(
+        userId: String,
+        type: InvestmentType,
+        subName: String
+    ): Flow<List<InvestmentSnapshot>>
+
+    suspend fun saveSavingsSnapshot(snapshot: SavingsSnapshot): Long
+    suspend fun saveInvestmentSnapshot(snapshot: InvestmentSnapshot): Long
+    suspend fun deleteSavingsInstitution(userId: String, institution: String)
+    suspend fun deleteInvestmentPosition(userId: String, type: InvestmentType, subName: String)
 }
 
 // ─── Implementations ──────────────────────────────────────────────────────────
@@ -278,7 +321,7 @@ class TransactionRepositoryImpl @Inject constructor(
             attachmentDao.getAttachmentsForTransactions(entities.map { it.id })
                 .groupBy { it.transactionId }
         } else {
-            emptyMap<Long, List<AttachmentEntity>>()
+            emptyMap()
         }
 
         return entities.map { entity ->
@@ -289,9 +332,11 @@ class TransactionRepositoryImpl @Inject constructor(
                     val bankName = mode?.bankAccountId?.let { bankAccountsById[it]?.name } ?: ""
                     mode?.toDomain(bankName)?.displayLabel ?: ""
                 }
+
                 entity.creditCardId != null -> {
                     creditCardsById[entity.creditCardId]?.toDomain()?.displayLabel ?: ""
                 }
+
                 else -> ""
             }
             val toLabel = when {
@@ -300,9 +345,11 @@ class TransactionRepositoryImpl @Inject constructor(
                     val bankName = mode?.bankAccountId?.let { bankAccountsById[it]?.name } ?: ""
                     mode?.toDomain(bankName)?.displayLabel ?: ""
                 }
+
                 entity.toCreditCardId != null -> {
                     creditCardsById[entity.toCreditCardId]?.toDomain()?.displayLabel ?: ""
                 }
+
                 else -> ""
             }
 
@@ -696,7 +743,7 @@ class BudgetRepositoryImpl @Inject constructor(
 class TagRepositoryImpl @Inject constructor(
     private val tagDao: TagDao
 ) : TagRepository {
-    private suspend fun enrichTags(
+    private fun enrichTags(
         entities: List<TagEntity>,
         userId: String,
     ): List<Tag> {
@@ -794,10 +841,6 @@ class ExportRepositoryImpl @Inject constructor(
         return uri
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // FILTER LOGIC (CLEAN + CENTRALIZED)
-    // ─────────────────────────────────────────────────────────────
-
     private fun applyFilter(
         transactions: List<Transaction>,
         filter: ExportFilter
@@ -821,4 +864,111 @@ class ExportRepositoryImpl @Inject constructor(
             }
         }
     }
+}
+
+@Singleton
+class DebtRepositoryImpl @Inject constructor(
+    private val dao: DebtDao
+) : DebtRepository {
+
+    override fun getAllDebts(userId: String): Flow<List<Debt>> =
+        dao.getAllDebts(userId).map { list -> list.map { it.toDomain() } }
+
+    override fun getDebtsByType(userId: String, type: DebtType): Flow<List<Debt>> =
+        dao.getDebtsByType(userId, type).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun getDebtById(id: Long): Debt? =
+        dao.getDebtById(id)?.toDomain()
+
+    override suspend fun insertDebt(debt: Debt): Long =
+        dao.insertDebt(debt.toEntity())
+
+    override suspend fun updateDebt(debt: Debt) =
+        dao.updateDebt(debt.toEntity())
+
+    override suspend fun deleteDebt(debt: Debt) =
+        dao.deleteDebt(debt.toEntity())
+}
+
+@Singleton
+class WealthRepositoryImpl @Inject constructor(
+    private val savingsDao: SavingsSnapshotDao,
+    private val investmentDao: InvestmentSnapshotDao
+) : WealthRepository {
+
+    override fun getNetWorthSummary(userId: String): Flow<NetWorthSummary> =
+        combine(
+            savingsDao.getLatestSnapshotsPerInstitution(userId),
+            investmentDao.getLatestSnapshotsPerPosition(userId)
+        ) { savingsEntities, investmentEntities ->
+
+            val savingsSnapshots = savingsEntities.map { it.toDomain() }
+            val investmentSnapshots = investmentEntities.map { it.toDomain() }
+
+            val savingsRows = savingsSnapshots.map { s ->
+                SavingsRow(
+                    institutionName = s.institutionName,
+                    savingsBalance = s.savingsBalance,
+                    fdBalance = s.fdBalance,
+                    rdBalance = s.rdBalance,
+                    total = s.total,
+                    recordedOn = s.recordedOn,
+                    latestSnapshotId = s.id
+                )
+            }
+
+            val investmentRows = investmentSnapshots.map { inv ->
+                InvestmentRow(
+                    type = inv.type,
+                    subName = inv.subName,
+                    invested = inv.investedAmount,
+                    current = inv.currentAmount,
+                    recordedOn = inv.recordedOn,
+                    latestSnapshotId = inv.id
+                )
+            }
+
+            val totalSavings = savingsRows.sumOf { it.total }
+            val totalInvested = investmentRows.sumOf { it.invested }
+            val totalCurrentInv = investmentRows.sumOf { it.current }
+
+            NetWorthSummary(
+                savingsRows = savingsRows,
+                totalSavings = totalSavings,
+                investmentRows = investmentRows,
+                totalInvested = totalInvested,
+                totalCurrentInv = totalCurrentInv,
+                netWorthWithoutGains = totalSavings + totalInvested,
+                netWorthWithGains = totalSavings + totalCurrentInv
+            )
+        }
+
+    override fun getSavingsHistory(
+        userId: String,
+        institution: String
+    ): Flow<List<SavingsSnapshot>> =
+        savingsDao.getHistoryForInstitution(userId, institution)
+            .map { it.map { e -> e.toDomain() } }
+
+    override fun getInvestmentHistory(
+        userId: String, type: InvestmentType, subName: String
+    ): Flow<List<InvestmentSnapshot>> =
+        investmentDao.getHistoryForPosition(userId, type, subName)
+            .map { it.map { e -> e.toDomain() } }
+
+    override suspend fun saveSavingsSnapshot(snapshot: SavingsSnapshot): Long =
+        savingsDao.insertSnapshot(snapshot.toEntity())
+
+    override suspend fun saveInvestmentSnapshot(snapshot: InvestmentSnapshot): Long =
+        investmentDao.insertSnapshot(snapshot.toEntity())
+
+    override suspend fun deleteSavingsInstitution(userId: String, institution: String) =
+        savingsDao.deleteForInstitution(userId, institution)
+
+    override suspend fun deleteInvestmentPosition(
+        userId: String,
+        type: InvestmentType,
+        subName: String
+    ) =
+        investmentDao.deleteForPosition(userId, type, subName)
 }

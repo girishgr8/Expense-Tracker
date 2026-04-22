@@ -1,18 +1,11 @@
 package com.expensetracker.presentation.ui.analysis
 
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import kotlin.math.abs
-import kotlin.math.roundToInt
-import java.util.Locale
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -89,7 +82,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.expensetracker.domain.model.TransactionType
 import com.expensetracker.presentation.components.AppBottomBar
 import com.expensetracker.presentation.components.CategoryIconBubble
@@ -648,13 +641,13 @@ private fun AutoResizingAmountText(
 
 @Composable
 private fun ChartLegend(
-    currentLabel:    String,
+    currentLabel: String,
     comparisonLabel: String?,
-    currentColor:    Color,
+    currentColor: Color,
     comparisonColor: Color
 ) {
     Row(
-        verticalAlignment     = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         LegendDot(color = currentColor, label = currentLabel)
@@ -670,33 +663,33 @@ private fun ChartLegend(
 
 @Composable
 private fun LegendDot(
-    color:  Color,
-    label:  String,
+    color: Color,
+    label: String,
     dashed: Boolean = false
 ) {
     Row(
-        verticalAlignment     = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         // Solid or dashed line swatch — 20×3dp, matches chart line style
         Canvas(Modifier.size(width = 20.dp, height = 3.dp)) {
             drawLine(
-                color       = color,
-                start       = Offset(0f, size.height / 2f),
-                end         = Offset(size.width, size.height / 2f),
+                color = color,
+                start = Offset(0f, size.height / 2f),
+                end = Offset(size.width, size.height / 2f),
                 strokeWidth = size.height,
-                cap         = StrokeCap.Round,
-                pathEffect  = if (dashed)
+                cap = StrokeCap.Round,
+                pathEffect = if (dashed)
                     PathEffect.dashPathEffect(floatArrayOf(6f, 5f))
                 else null
             )
         }
         Text(
             label,
-            style     = MaterialTheme.typography.labelSmall,
-            color     = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines  = 1,
-            overflow  = TextOverflow.Ellipsis
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -755,9 +748,9 @@ private fun TrendCard(
                 // Legend — only shown when comparison is active
                 if (compareEnabled && compareLabel != null) {
                     ChartLegend(
-                        currentLabel    = periodLabel,
+                        currentLabel = periodLabel,
                         comparisonLabel = compareLabel,
-                        currentColor    = currentColor,
+                        currentColor = currentColor,
                         comparisonColor = comparisonColor
                     )
                 }
@@ -1214,11 +1207,16 @@ private fun ComparisonLineChart(
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.TopStart
             ) {
-                val tooltipDp = (tooltipFraction * 1f)  // layout handled by offset below
+                (tooltipFraction * 1f)  // layout handled by offset below
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(start = maxOf(0.dp, ((tooltipFraction * (totalW - padL * 2)) / totalW * 100).dp - 24.dp))
+                        .padding(
+                            start = maxOf(
+                                0.dp,
+                                ((tooltipFraction * (totalW - padL * 2)) / totalW * 100).dp - 24.dp
+                            )
+                        )
                         .background(
                             MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.92f),
                             RoundedCornerShape(8.dp)
@@ -1456,7 +1454,7 @@ private fun ComparisonBarChart(
         if (selectedIdx >= 0 && selectedIdx < points.size) {
             val pt = points[selectedIdx]
             val cpt = comparisonPoints.getOrNull(selectedIdx)
-            val frac = ((padLState + selectedIdx * stepState) / 1f).coerceIn(0f, 1f)
+            ((padLState + selectedIdx * stepState) / 1f).coerceIn(0f, 1f)
 
             Box(
                 modifier = Modifier
@@ -1838,9 +1836,11 @@ private fun CategoryRow(cs: CategorySpend, sym: String, viewType: TransactionTyp
         MaterialTheme.colorScheme.primary
     }
 
-    Column(Modifier
-        .fillMaxWidth()
-        .padding(vertical = 6.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically

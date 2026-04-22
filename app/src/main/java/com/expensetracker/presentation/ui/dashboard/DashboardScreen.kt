@@ -75,7 +75,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.BudgetProgress
 import com.expensetracker.domain.model.MonthlySummary
@@ -183,7 +183,7 @@ fun DashboardScreen(
                 QuickActionsGrid(
                     onTransactions = onNavigateToTransactions,
                     onCategories = onNavigateToCategories,
-                    onAccounts = onNavigateToCalendar,
+                    onAccounts = onNavigateToAccounts,
                     onBudget = onNavigateToBudget
                 )
             }

@@ -6,6 +6,8 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.expensetracker.domain.model.BudgetPeriod
+import com.expensetracker.domain.model.DebtType
+import com.expensetracker.domain.model.InvestmentType
 import com.expensetracker.domain.model.PaymentModeType
 import com.expensetracker.domain.model.ScheduledFrequency
 import com.expensetracker.domain.model.TransactionType
@@ -46,7 +48,7 @@ data class CategoryEntity(
     val userId: String
 )
 
-/** Top-level bank account — only name, balance, colour. */
+/** Top-level bank account — only name, balance, color. */
 @Entity(tableName = "bank_accounts")
 data class BankAccountEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -180,5 +182,62 @@ data class ScheduledTransactionEntity(
     val lastGeneratedAtMillis: Long?,
     val isActive: Boolean,
     val reminderMinutes: Long = 0,
+    val userId: String
+)
+
+/**
+ * Persisted debt record — tracks money lent to or borrowed from a person.
+ *
+ * @param type         LENDING (you gave money) or BORROWING (you received money)
+ * @param personName   Name of the counterparty
+ * @param amount       Original principal amount
+ * @param paidAmount   Amount repaid so far (0 until first payment)
+ * @param dueDateMillis Optional repayment due date (epoch millis); null = "Not set"
+ * @param note         Optional free-form notes
+ * @param createdAtMillis When the debt was recorded
+ * @param isSettled    True once fully repaid/written off
+ */
+@Entity(tableName = "debts")
+data class DebtEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val type: DebtType,
+    val personName: String,
+    val amount: Double,
+    val paidAmount: Double = 0.0,
+    val dueDateMillis: Long? = null,
+    val note: String = "",
+    val createdAtMillis: Long,
+    val isSettled: Boolean = false,
+    val userId: String
+)
+
+/**
+ * Immutable savings snapshot — each save is a new INSERT, never an UPDATE.
+ * This preserves the full history of balance changes.
+ */
+@Entity(tableName = "savings_snapshots")
+data class SavingsSnapshotEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val institutionName: String,
+    val savingsBalance:  Double,
+    val fdBalance:       Double,
+    val rdBalance:       Double,
+    val recordedOnMillis: Long,   // epoch millis of LocalDate.atStartOfDay()
+    val userId: String
+)
+
+/**
+ * Immutable investment snapshot — each save is a new INSERT, never an UPDATE.
+ * History is preserved; the latest record per (type, subName) is the current position.
+ */
+@Entity(tableName = "investment_snapshots")
+data class InvestmentSnapshotEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val type: InvestmentType,
+    val subName:         String,    // broker name (equity), company (stocks), or ""
+    val investedAmount:  Double,
+    val currentAmount:   Double,
+    val recordedOnMillis: Long,
     val userId: String
 )

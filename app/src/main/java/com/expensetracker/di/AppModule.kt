@@ -11,7 +11,10 @@ import com.expensetracker.data.local.dao.BankAccountDao
 import com.expensetracker.data.local.dao.BudgetDao
 import com.expensetracker.data.local.dao.CategoryDao
 import com.expensetracker.data.local.dao.CreditCardDao
+import com.expensetracker.data.local.dao.DebtDao
+import com.expensetracker.data.local.dao.InvestmentSnapshotDao
 import com.expensetracker.data.local.dao.PaymentModeDao
+import com.expensetracker.data.local.dao.SavingsSnapshotDao
 import com.expensetracker.data.local.dao.ScheduledTransactionDao
 import com.expensetracker.data.local.dao.TagDao
 import com.expensetracker.data.local.dao.TransactionDao
@@ -27,6 +30,8 @@ import com.expensetracker.data.repository.CategoryRepository
 import com.expensetracker.data.repository.CategoryRepositoryImpl
 import com.expensetracker.data.repository.CreditCardRepository
 import com.expensetracker.data.repository.CreditCardRepositoryImpl
+import com.expensetracker.data.repository.DebtRepository
+import com.expensetracker.data.repository.DebtRepositoryImpl
 import com.expensetracker.data.repository.ExportRepository
 import com.expensetracker.data.repository.ExportRepositoryImpl
 import com.expensetracker.data.repository.PaymentModeRepository
@@ -38,6 +43,8 @@ import com.expensetracker.data.repository.TagRepositoryImpl
 import com.expensetracker.data.repository.TransactionRepository
 import com.expensetracker.data.repository.TransactionRepositoryImpl
 import com.expensetracker.data.repository.UserPreferencesRepository
+import com.expensetracker.data.repository.WealthRepository
+import com.expensetracker.data.repository.WealthRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -117,19 +124,19 @@ object DatabaseModule {
             db.execSQL("ALTER TABLE `balance_adjustments_new` RENAME TO `balance_adjustments`")
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_bankAccountId` " +
-                    "ON `balance_adjustments` (`bankAccountId`)"
+                        "ON `balance_adjustments` (`bankAccountId`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_userId` " +
-                    "ON `balance_adjustments` (`userId`)"
+                        "ON `balance_adjustments` (`userId`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_creditCardId` " +
-                    "ON `balance_adjustments` (`creditCardId`)"
+                        "ON `balance_adjustments` (`creditCardId`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_balance_adjustments_paymentModeId` " +
-                    "ON `balance_adjustments` (`paymentModeId`)"
+                        "ON `balance_adjustments` (`paymentModeId`)"
             )
         }
     }
@@ -138,19 +145,19 @@ object DatabaseModule {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_transactions_userId_dateTimeMillis` " +
-                    "ON `transactions` (`userId`, `dateTimeMillis`)"
+                        "ON `transactions` (`userId`, `dateTimeMillis`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_transactions_userId_type_dateTimeMillis` " +
-                    "ON `transactions` (`userId`, `type`, `dateTimeMillis`)"
+                        "ON `transactions` (`userId`, `type`, `dateTimeMillis`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_transactions_userId_categoryId_dateTimeMillis` " +
-                    "ON `transactions` (`userId`, `categoryId`, `dateTimeMillis`)"
+                        "ON `transactions` (`userId`, `categoryId`, `dateTimeMillis`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_transactions_userId_paymentModeId_dateTimeMillis` " +
-                    "ON `transactions` (`userId`, `paymentModeId`, `dateTimeMillis`)"
+                        "ON `transactions` (`userId`, `paymentModeId`, `dateTimeMillis`)"
             )
         }
     }
@@ -181,11 +188,11 @@ object DatabaseModule {
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_scheduled_transactions_userId_nextRunAtMillis` " +
-                    "ON `scheduled_transactions` (`userId`, `nextRunAtMillis`)"
+                        "ON `scheduled_transactions` (`userId`, `nextRunAtMillis`)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_scheduled_transactions_isActive_nextRunAtMillis` " +
-                    "ON `scheduled_transactions` (`isActive`, `nextRunAtMillis`)"
+                        "ON `scheduled_transactions` (`isActive`, `nextRunAtMillis`)"
             )
         }
     }
@@ -216,7 +223,57 @@ object DatabaseModule {
         }
     }
 
-    @Provides @Singleton
+    private val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                    CREATE TABLE IF NOT EXISTS debts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    type TEXT NOT NULL,
+                    personName TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    paidAmount REAL NOT NULL DEFAULT 0,
+                    dueDateMillis INTEGER,
+                    note TEXT NOT NULL DEFAULT '',
+                    createdAtMillis INTEGER NOT NULL,
+                    isSettled INTEGER NOT NULL DEFAULT 0,
+                    userId TEXT NOT NULL)
+                """
+            )
+        }
+    }
+
+    private val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                    CREATE TABLE IF NOT EXISTS savings_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    institutionName TEXT NOT NULL,
+                    savingsBalance REAL NOT NULL DEFAULT 0,
+                    fdBalance REAL NOT NULL DEFAULT 0,
+                    rdBalance REAL NOT NULL DEFAULT 0,
+                    recordedOnMillis INTEGER NOT NULL,
+                    userId TEXT NOT NULL)
+                """
+            )
+            db.execSQL(
+                """
+                    CREATE TABLE IF NOT EXISTS investment_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    type TEXT NOT NULL,
+                    subName TEXT NOT NULL DEFAULT '',
+                    investedAmount REAL NOT NULL,
+                    currentAmount REAL NOT NULL,
+                    recordedOnMillis INTEGER NOT NULL,
+                    userId TEXT NOT NULL)
+                """
+            )
+        }
+    }
+
+    @Provides
+    @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
             .addMigrations(
@@ -227,7 +284,9 @@ object DatabaseModule {
                 MIGRATION_7_8,
                 MIGRATION_8_9,
                 MIGRATION_9_10,
-                MIGRATION_10_11
+                MIGRATION_10_11,
+                MIGRATION_11_12,
+                MIGRATION_12_13
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -263,6 +322,18 @@ object DatabaseModule {
     @Provides
     fun provideScheduledTransactionDao(db: AppDatabase): ScheduledTransactionDao =
         db.scheduledTransactionDao()
+
+    @Provides
+    fun provideDebtDao(db: AppDatabase): DebtDao =
+        db.debtDao()
+
+    @Provides
+    fun provideSavingsSnapshotDao(db: AppDatabase): SavingsSnapshotDao =
+        db.savingsSnapshotDao()
+
+    @Provides
+    fun provideInvestmentSnapshotDao(db: AppDatabase): InvestmentSnapshotDao =
+        db.investmentSnapshotDao()
 }
 
 @Module
@@ -326,4 +397,12 @@ abstract class RepositoryModule {
     abstract fun bindScheduledTransactionRepository(
         impl: ScheduledTransactionRepositoryImpl
     ): ScheduledTransactionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDebtRepository(impl: DebtRepositoryImpl): DebtRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWealthRepository(impl: WealthRepositoryImpl): WealthRepository
 }

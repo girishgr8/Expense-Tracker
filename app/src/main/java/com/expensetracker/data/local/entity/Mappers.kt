@@ -6,7 +6,10 @@ import com.expensetracker.domain.model.BankAccount
 import com.expensetracker.domain.model.Budget
 import com.expensetracker.domain.model.Category
 import com.expensetracker.domain.model.CreditCard
+import com.expensetracker.domain.model.Debt
+import com.expensetracker.domain.model.InvestmentSnapshot
 import com.expensetracker.domain.model.PaymentMode
+import com.expensetracker.domain.model.SavingsSnapshot
 import com.expensetracker.domain.model.ScheduledTransaction
 import com.expensetracker.domain.model.Tag
 import com.expensetracker.domain.model.Transaction
@@ -220,6 +223,8 @@ fun Budget.toEntity(): BudgetEntity = BudgetEntity(
 fun TagEntity.toDomain(name: String, userId: String): Tag = Tag(id = id, name = name, userId = userId)
 fun Tag.toEntity(): TagEntity = TagEntity(id = id, name = name, userId = userId)
 
+// ─── Scheduled Transaction ────────────────────────────────────────────────────
+
 fun ScheduledTransactionEntity.toDomain(): ScheduledTransaction = ScheduledTransaction(
     id = id,
     type = type,
@@ -265,4 +270,78 @@ fun ScheduledTransaction.toEntity(): ScheduledTransactionEntity = ScheduledTrans
     isActive = isActive,
     reminderMinutes = reminderMinutes,
     userId = userId
+)
+
+// ─── Debt ────────────────────────────────────────────────────────────────────
+
+fun DebtEntity.toDomain(): Debt = Debt(
+    id           = id,
+    type         = type,
+    personName   = personName,
+    amount       = amount,
+    paidAmount   = paidAmount,
+    dueDate      = dueDateMillis?.let {
+        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+    },
+    note         = note,
+    createdAt    = LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(createdAtMillis), ZoneId.systemDefault()
+    ),
+    isSettled    = isSettled,
+    userId       = userId
+)
+
+fun Debt.toEntity(): DebtEntity = DebtEntity(
+    id             = id,
+    type           = type,
+    personName     = personName,
+    amount         = amount,
+    paidAmount     = paidAmount,
+    dueDateMillis  = dueDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
+    note           = note,
+    createdAtMillis = createdAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    isSettled      = isSettled,
+    userId         = userId
+)
+
+fun SavingsSnapshotEntity.toDomain(): SavingsSnapshot = SavingsSnapshot(
+    id = id,
+    institutionName = institutionName,
+    savingsBalance = savingsBalance,
+    fdBalance = fdBalance,
+    rdBalance = rdBalance,
+    recordedOn = Instant.ofEpochMilli(recordedOnMillis)
+        .atZone(ZoneId.systemDefault()).toLocalDate(),
+    userId = userId
+)
+
+fun SavingsSnapshot.toEntity(): SavingsSnapshotEntity = SavingsSnapshotEntity(
+    id               = id,
+    institutionName  = institutionName,
+    savingsBalance   = savingsBalance,
+    fdBalance        = fdBalance,
+    rdBalance        = rdBalance,
+    recordedOnMillis = recordedOn.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    userId           = userId
+)
+
+fun InvestmentSnapshotEntity.toDomain(): InvestmentSnapshot = InvestmentSnapshot(
+    id             = id,
+    type           = type,
+    subName        = subName,
+    investedAmount = investedAmount,
+    currentAmount  = currentAmount,
+    recordedOn     = Instant.ofEpochMilli(recordedOnMillis)
+        .atZone(ZoneId.systemDefault()).toLocalDate(),
+    userId         = userId
+)
+
+fun InvestmentSnapshot.toEntity(): InvestmentSnapshotEntity = InvestmentSnapshotEntity(
+    id               = id,
+    type             = type,
+    subName          = subName,
+    investedAmount   = investedAmount,
+    currentAmount    = currentAmount,
+    recordedOnMillis = recordedOn.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    userId           = userId
 )
