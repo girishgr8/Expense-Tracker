@@ -46,10 +46,12 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -123,6 +125,7 @@ fun DashboardScreen(
     val currencySymbol = LocalCurrencySymbol.current
     val currencyFormat = LocalCurrencyFormat.current
     var showMonthlyBudget by remember { mutableStateOf(true) }
+    var showDeleteInvestmentSnapshotsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.monthlyBudgetProgress, uiState.annualBudgetProgress) {
         if (showMonthlyBudget && uiState.monthlyBudgetProgress == null && uiState.annualBudgetProgress != null) {
@@ -163,6 +166,23 @@ fun DashboardScreen(
                     onSearch = onNavigateToTransactions,
                     onAvatar = { onNavigateToSettings() }
                 )
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { showDeleteInvestmentSnapshotsDialog = true }) {
+                        Text(
+                            text = "Delete investment snapshots",
+                            color = ExpenseRed,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
 
             // ── Cash Flow Card ────────────────────────────────────────────────
@@ -354,6 +374,30 @@ fun DashboardScreen(
 
         if (uiState.isLoading) LoadingOverlay(true)
     }
+
+    if (showDeleteInvestmentSnapshotsDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteInvestmentSnapshotsDialog = false },
+            title = { Text("Delete investment snapshots?") },
+            text = { Text("This will permanently delete all investment snapshot data.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteAllInvestmentSnapshots()
+                        showDeleteInvestmentSnapshotsDialog = false
+                    }
+                ) {
+                    Text("Delete", color = ExpenseRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteInvestmentSnapshotsDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // ── AI Chat FAB (bottom-right, above the bottom navigation bar) ──────────
     Box(
         modifier = Modifier

@@ -210,16 +210,14 @@ interface DebtRepository {
 interface WealthRepository {
     fun getNetWorthSummary(userId: String): Flow<NetWorthSummary>
     fun getSavingsHistory(userId: String, institution: String): Flow<List<SavingsSnapshot>>
-    fun getInvestmentHistory(
-        userId: String,
-        type: InvestmentType,
-        subName: String
-    ): Flow<List<InvestmentSnapshot>>
-
+    fun getInvestmentHistory(userId: String, type: InvestmentType, subName: String): Flow<List<InvestmentSnapshot>>
     suspend fun saveSavingsSnapshot(snapshot: SavingsSnapshot): Long
     suspend fun saveInvestmentSnapshot(snapshot: InvestmentSnapshot): Long
+    suspend fun deleteSavingsForDay(userId: String, institution: String, dayStart: Long, dayEnd: Long)
+    suspend fun deleteInvestmentForDay(userId: String, type: InvestmentType, subName: String, dayStart: Long, dayEnd: Long)
     suspend fun deleteSavingsInstitution(userId: String, institution: String)
     suspend fun deleteInvestmentPosition(userId: String, type: InvestmentType, subName: String)
+    suspend fun deleteAllInvestmentSnapshots(userId: String)
 }
 
 // ─── Implementations ──────────────────────────────────────────────────────────
@@ -892,7 +890,7 @@ class DebtRepositoryImpl @Inject constructor(
 
 @Singleton
 class WealthRepositoryImpl @Inject constructor(
-    private val savingsDao: SavingsSnapshotDao,
+    private val savingsDao:    SavingsSnapshotDao,
     private val investmentDao: InvestmentSnapshotDao
 ) : WealthRepository {
 
@@ -902,59 +900,54 @@ class WealthRepositoryImpl @Inject constructor(
             investmentDao.getLatestSnapshotsPerPosition(userId)
         ) { savingsEntities, investmentEntities ->
 
-            val savingsSnapshots = savingsEntities.map { it.toDomain() }
+            val savingsSnapshots    = savingsEntities.map    { it.toDomain() }
             val investmentSnapshots = investmentEntities.map { it.toDomain() }
 
             val savingsRows = savingsSnapshots.map { s ->
                 SavingsRow(
-                    institutionName = s.institutionName,
-                    savingsBalance = s.savingsBalance,
-                    fdBalance = s.fdBalance,
-                    rdBalance = s.rdBalance,
-                    total = s.total,
-                    recordedOn = s.recordedOn,
+                    institutionName  = s.institutionName,
+                    savingsBalance   = s.savingsBalance,
+                    fdBalance        = s.fdBalance,
+                    rdBalance        = s.rdBalance,
+                    total            = s.total,
+                    recordedOn       = s.recordedOn,
                     latestSnapshotId = s.id
                 )
             }
 
             val investmentRows = investmentSnapshots.map { inv ->
                 InvestmentRow(
-                    type = inv.type,
-                    subName = inv.subName,
-                    invested = inv.investedAmount,
-                    current = inv.currentAmount,
-                    recordedOn = inv.recordedOn,
+                    type             = inv.type,
+                    subName          = inv.subName,
+                    invested         = inv.investedAmount,
+                    current          = inv.currentAmount,
+                    recordedOn       = inv.recordedOn,
                     latestSnapshotId = inv.id
                 )
             }
 
-            val totalSavings = savingsRows.sumOf { it.total }
-            val totalInvested = investmentRows.sumOf { it.invested }
+            val totalSavings    = savingsRows.sumOf { it.total }
+            val totalInvested   = investmentRows.sumOf { it.invested }
             val totalCurrentInv = investmentRows.sumOf { it.current }
 
             NetWorthSummary(
-                savingsRows = savingsRows,
-                totalSavings = totalSavings,
-                investmentRows = investmentRows,
-                totalInvested = totalInvested,
-                totalCurrentInv = totalCurrentInv,
-                netWorthWithoutGains = totalSavings + totalInvested,
-                netWorthWithGains = totalSavings + totalCurrentInv
+                savingsRows           = savingsRows,
+                totalSavings          = totalSavings,
+                investmentRows        = investmentRows,
+                totalInvested         = totalInvested,
+                totalCurrentInv       = totalCurrentInv,
+                netWorthWithoutGains  = totalSavings + totalInvested,
+                netWorthWithGains     = totalSavings + totalCurrentInv
             )
         }
 
-    override fun getSavingsHistory(
-        userId: String,
-        institution: String
-    ): Flow<List<SavingsSnapshot>> =
-        savingsDao.getHistoryForInstitution(userId, institution)
-            .map { it.map { e -> e.toDomain() } }
+    override fun getSavingsHistory(userId: String, institution: String): Flow<List<SavingsSnapshot>> =
+        savingsDao.getHistoryForInstitution(userId, institution).map { it.map { e -> e.toDomain() } }
 
     override fun getInvestmentHistory(
         userId: String, type: InvestmentType, subName: String
     ): Flow<List<InvestmentSnapshot>> =
-        investmentDao.getHistoryForPosition(userId, type, subName)
-            .map { it.map { e -> e.toDomain() } }
+        investmentDao.getHistoryForPosition(userId, type, subName).map { it.map { e -> e.toDomain() } }
 
     override suspend fun saveSavingsSnapshot(snapshot: SavingsSnapshot): Long =
         savingsDao.insertSnapshot(snapshot.toEntity())
@@ -965,10 +958,17 @@ class WealthRepositoryImpl @Inject constructor(
     override suspend fun deleteSavingsInstitution(userId: String, institution: String) =
         savingsDao.deleteForInstitution(userId, institution)
 
-    override suspend fun deleteInvestmentPosition(
-        userId: String,
-        type: InvestmentType,
-        subName: String
-    ) =
+    override suspend fun deleteInvestmentPosition(userId: String, type: InvestmentType, subName: String) =
         investmentDao.deleteForPosition(userId, type, subName)
+
+    override suspend fun deleteSavingsForDay(
+        userId: String, institution: String, dayStart: Long, dayEnd: Long
+    ) = savingsDao.deleteSnapshotsForDay(userId, institution, dayStart, dayEnd)
+
+    override suspend fun deleteInvestmentForDay(
+        userId: String, type: InvestmentType, subName: String, dayStart: Long, dayEnd: Long
+    ) = investmentDao.deleteSnapshotsForDay(userId, type, subName, dayStart, dayEnd)
+
+    override suspend fun deleteAllInvestmentSnapshots(userId: String) =
+        investmentDao.deleteAllForUser(userId)
 }

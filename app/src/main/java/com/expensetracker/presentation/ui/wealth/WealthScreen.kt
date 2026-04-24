@@ -94,6 +94,8 @@ fun WealthScreen(
     onNavigateBack: () -> Unit,
     onAddSavings: () -> Unit,
     onAddInvestment: () -> Unit,
+    onViewSavingsHistory: (SavingsRow) -> Unit,
+    onViewInvestmentHistory: (InvestmentRow) -> Unit,
     onEditSavings: (SavingsRow) -> Unit,
     onEditInvestment: (InvestmentRow) -> Unit,
     viewModel: WealthViewModel = hiltViewModel()
@@ -136,9 +138,11 @@ fun WealthScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             LazyColumn(
                 contentPadding = PaddingValues(bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -170,6 +174,7 @@ fun WealthScreen(
                             row = row,
                             sym = sym,
                             fmt = fmt,
+                            onView = { onViewSavingsHistory(row) },
                             onEdit = { onEditSavings(row) },
                             onDelete = { viewModel.deleteSavings(row.institutionName) }
                         )
@@ -201,6 +206,7 @@ fun WealthScreen(
                             row = row,
                             sym = sym,
                             fmt = fmt,
+                            onView = { onViewInvestmentHistory(row) },
                             onEdit = { onEditInvestment(row) },
                             onDelete = { viewModel.deleteInvestment(row.type, row.subName) }
                         )
@@ -278,7 +284,7 @@ private fun NetWorthHeroCard(sym: String, fmt: String, summary: NetWorthSummary)
         (gain / summary.netWorthWithoutGains) * 100.0 else 0.0
     val isGain = gain >= 0
     val gainColor = if (isGain) WealthGreen else WealthRed
-    DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.getDefault())
+    val dateFmt = DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.getDefault())
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -428,6 +434,7 @@ private fun SavingsCard(
     row: SavingsRow,
     sym: String,
     fmt: String,
+    onView: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -521,7 +528,8 @@ private fun SavingsCard(
                 )
                 Spacer(Modifier.height(12.dp))
                 // Action buttons
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallActionButton("View", WealthGreen, Modifier.weight(1f), onView)
                     SmallActionButton("Edit", WealthBlue, Modifier.weight(1f), onEdit)
                     SmallActionButton("Delete", WealthRed, Modifier.weight(1f), onDelete)
                 }
@@ -561,6 +569,7 @@ private fun InvestmentCard(
     row: InvestmentRow,
     sym: String,
     fmt: String,
+    onView: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -666,7 +675,8 @@ private fun InvestmentCard(
                 )
                 WealthDetailRow("Last Updated", row.recordedOn.format(dateFmt))
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallActionButton("View", WealthGreen, Modifier.weight(1f), onView)
                     SmallActionButton("Edit", WealthGold, Modifier.weight(1f), onEdit)
                     SmallActionButton("Delete", WealthRed, Modifier.weight(1f), onDelete)
                 }
@@ -1128,9 +1138,11 @@ private fun DonutChart(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Box(Modifier
-                        .size(8.dp)
-                        .background(seg.color, CircleShape))
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(seg.color, CircleShape)
+                    )
                     Text(
                         seg.label,
                         style = MaterialTheme.typography.labelSmall,
@@ -1238,9 +1250,11 @@ private fun SavingsBreakdownRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(Modifier
-                        .size(10.dp)
-                        .background(color, CircleShape))
+                    Box(
+                        Modifier
+                            .size(10.dp)
+                            .background(color, CircleShape)
+                    )
                     Text(
                         institution, style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
@@ -1321,9 +1335,11 @@ private fun InvestmentBreakdownRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Box(Modifier
-                        .size(10.dp)
-                        .background(color, CircleShape))
+                    Box(
+                        Modifier
+                            .size(10.dp)
+                            .background(color, CircleShape)
+                    )
                     Column(Modifier.weight(1f)) {
                         Text(
                             label, style = MaterialTheme.typography.titleSmall,

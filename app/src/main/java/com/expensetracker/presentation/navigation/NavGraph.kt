@@ -8,14 +8,14 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.expensetracker.domain.model.DebtType
-import com.expensetracker.presentation.ui.wealth.WealthViewModel
+import com.expensetracker.domain.model.InvestmentRow
 import com.expensetracker.domain.model.InvestmentType
 import com.expensetracker.presentation.ui.MainViewModel
 import com.expensetracker.presentation.ui.accounts.AccountsScreen
@@ -40,6 +40,8 @@ import com.expensetracker.presentation.ui.views.CalendarViewScreen
 import com.expensetracker.presentation.ui.views.DayViewScreen
 import com.expensetracker.presentation.ui.wealth.AddInvestmentScreen
 import com.expensetracker.presentation.ui.wealth.AddSavingsScreen
+import com.expensetracker.presentation.ui.wealth.InvestmentHistoryScreen
+import com.expensetracker.presentation.ui.wealth.SavingsHistoryScreen
 import com.expensetracker.presentation.ui.wealth.WealthScreen
 import java.time.LocalDate
 
@@ -70,6 +72,18 @@ sealed class Screen(val route: String) {
     object Debt : Screen("debts")
     object AddDebt : Screen("add_debt/{debtType}")
     object Wealth : Screen("wealth")
+    object SavingsHistory : Screen("savings_history/{institutionName}") {
+        fun route(institutionName: String) =
+            "savings_history/${java.net.URLEncoder.encode(institutionName, "UTF-8")}"
+    }
+
+    object InvestmentHistory : Screen("investment_history/{invType}/{subName}") {
+        fun route(type: String, subName: String): String {
+            val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
+            return "investment_history/${enc(type)}/${enc(subName)}"
+        }
+    }
+
     object AddSavings : Screen("add_savings") {
         /**
          * Edit route — encodes all current field values as path segments so the
@@ -77,26 +91,35 @@ sealed class Screen(val route: String) {
          */
         fun editRoute(
             institutionName: String,
-            savingsBalance:  String,
-            fdBalance:       String,
-            rdBalance:       String
+            savingsBalance: String,
+            fdBalance: String,
+            rdBalance: String
         ): String {
             val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
-            return "add_savings_edit/${enc(institutionName)}/${enc(savingsBalance)}/${enc(fdBalance)}/${enc(rdBalance)}"
+            return "add_savings_edit/${enc(institutionName)}/${enc(savingsBalance)}/${enc(fdBalance)}/${
+                enc(
+                    rdBalance
+                )
+            }"
         }
     }
+
     object AddInvestment : Screen("add_investment") {
         /**
          * Edit route — encodes all current field values as path segments.
          */
         fun editRoute(
-            type:           String,
-            subName:        String,
+            type: String,
+            subName: String,
             investedAmount: String,
-            currentAmount:  String
+            currentAmount: String
         ): String {
             val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8") }
-            return "add_investment_edit/${enc(type)}/${enc(subName)}/${enc(investedAmount)}/${enc(currentAmount)}"
+            return "add_investment_edit/${enc(type)}/${enc(subName)}/${enc(investedAmount)}/${
+                enc(
+                    currentAmount
+                )
+            }"
         }
     }
 }
@@ -381,25 +404,36 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         composable(Screen.Wealth.route) {
             WealthScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onAddSavings    = { navController.navigate(Screen.AddSavings.route) },
+                onAddSavings = { navController.navigate(Screen.AddSavings.route) },
                 onAddInvestment = { navController.navigate(Screen.AddInvestment.route) },
-                onEditSavings   = { row ->
+                onViewSavingsHistory = { row ->
+                    navController.navigate(Screen.SavingsHistory.route(row.institutionName))
+                },
+                onViewInvestmentHistory = { row ->
+                    navController.navigate(
+                        Screen.InvestmentHistory.route(
+                            row.type.name,
+                            row.subName
+                        )
+                    )
+                },
+                onEditSavings = { row ->
                     navController.navigate(
                         Screen.AddSavings.editRoute(
                             institutionName = row.institutionName,
-                            savingsBalance  = row.savingsBalance.toString(),
-                            fdBalance       = row.fdBalance.toString(),
-                            rdBalance       = row.rdBalance.toString()
+                            savingsBalance = row.savingsBalance.toString(),
+                            fdBalance = row.fdBalance.toString(),
+                            rdBalance = row.rdBalance.toString()
                         )
                     )
                 },
                 onEditInvestment = { row ->
                     navController.navigate(
                         Screen.AddInvestment.editRoute(
-                            type           = row.type.name,
-                            subName        = row.subName,
+                            type = row.type.name,
+                            subName = row.subName,
                             investedAmount = row.invested.toString(),
-                            currentAmount  = row.current.toString()
+                            currentAmount = row.current.toString()
                         )
                     )
                 }
@@ -409,9 +443,9 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         // Add Savings — no existing data (add mode)
         composable(Screen.AddSavings.route) {
             AddSavingsScreen(
-                existing       = null,
+                existing = null,
                 onNavigateBack = { navController.popBackStack() },
-                onSaved        = { navController.popBackStack() }
+                onSaved = { navController.popBackStack() }
             )
         }
 
@@ -420,9 +454,9 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
             route = "add_savings_edit/{institutionName}/{savingsBalance}/{fdBalance}/{rdBalance}",
             arguments = listOf(
                 navArgument("institutionName") { type = NavType.StringType },
-                navArgument("savingsBalance")  { type = NavType.StringType },
-                navArgument("fdBalance")       { type = NavType.StringType },
-                navArgument("rdBalance")       { type = NavType.StringType }
+                navArgument("savingsBalance") { type = NavType.StringType },
+                navArgument("fdBalance") { type = NavType.StringType },
+                navArgument("rdBalance") { type = NavType.StringType }
             )
         ) { backStackEntry ->
             val dec = { key: String ->
@@ -431,26 +465,63 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                 )
             }
             val preFilledRow = com.expensetracker.domain.model.SavingsRow(
-                institutionName  = dec("institutionName"),
-                savingsBalance   = dec("savingsBalance").toDoubleOrNull() ?: 0.0,
-                fdBalance        = dec("fdBalance").toDoubleOrNull() ?: 0.0,
-                rdBalance        = dec("rdBalance").toDoubleOrNull() ?: 0.0,
-                total            = 0.0,   // not needed for form pre-fill
-                recordedOn       = java.time.LocalDate.now(),
+                institutionName = dec("institutionName"),
+                savingsBalance = dec("savingsBalance").toDoubleOrNull() ?: 0.0,
+                fdBalance = dec("fdBalance").toDoubleOrNull() ?: 0.0,
+                rdBalance = dec("rdBalance").toDoubleOrNull() ?: 0.0,
+                total = 0.0,
+                recordedOn = LocalDate.now(),
                 latestSnapshotId = 0L
             )
             AddSavingsScreen(
-                existing       = preFilledRow,
+                existing = preFilledRow,
                 onNavigateBack = { navController.popBackStack() },
-                onSaved        = { navController.popBackStack() }
+                onSaved = { navController.popBackStack() }
             )
         }
         // Add Investment — no existing data (add mode)
         composable(Screen.AddInvestment.route) {
             AddInvestmentScreen(
-                existing       = null,
+                existing = null,
                 onNavigateBack = { navController.popBackStack() },
-                onSaved        = { navController.popBackStack() }
+                onSaved = { navController.popBackStack() }
+            )
+        }
+
+        // Savings History
+        composable(
+            route = Screen.SavingsHistory.route,
+            arguments = listOf(navArgument("institutionName") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val institutionName = java.net.URLDecoder.decode(
+                backStackEntry.arguments?.getString("institutionName") ?: "", "UTF-8"
+            )
+            SavingsHistoryScreen(
+                institutionName = institutionName,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Investment History
+        composable(
+            route = Screen.InvestmentHistory.route,
+            arguments = listOf(
+                navArgument("invType") { type = NavType.StringType },
+                navArgument("subName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val type = InvestmentType.valueOf(
+                java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString("invType") ?: "", "UTF-8"
+                )
+            )
+            val subName = java.net.URLDecoder.decode(
+                backStackEntry.arguments?.getString("subName") ?: "", "UTF-8"
+            )
+            InvestmentHistoryScreen(
+                type = type,
+                subName = subName,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -458,10 +529,10 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
         composable(
             route = "add_investment_edit/{invType}/{subName}/{investedAmount}/{currentAmount}",
             arguments = listOf(
-                navArgument("invType")        { type = NavType.StringType },
-                navArgument("subName")        { type = NavType.StringType },
+                navArgument("invType") { type = NavType.StringType },
+                navArgument("subName") { type = NavType.StringType },
                 navArgument("investedAmount") { type = NavType.StringType },
-                navArgument("currentAmount")  { type = NavType.StringType }
+                navArgument("currentAmount") { type = NavType.StringType }
             )
         ) { backStackEntry ->
             val dec = { key: String ->
@@ -469,19 +540,19 @@ fun AppNavGraph(navController: NavHostController, mainViewModel: MainViewModel) 
                     backStackEntry.arguments?.getString(key) ?: "", "UTF-8"
                 )
             }
-            val type = com.expensetracker.domain.model.InvestmentType.valueOf(dec("invType"))
-            val preFilledRow = com.expensetracker.domain.model.InvestmentRow(
-                type             = type,
-                subName          = dec("subName"),
-                invested         = dec("investedAmount").toDoubleOrNull() ?: 0.0,
-                current          = dec("currentAmount").toDoubleOrNull() ?: 0.0,
-                recordedOn       = java.time.LocalDate.now(),
+            val type = InvestmentType.valueOf(dec("invType"))
+            val preFilledRow = InvestmentRow(
+                type = type,
+                subName = dec("subName"),
+                invested = dec("investedAmount").toDoubleOrNull() ?: 0.0,
+                current = dec("currentAmount").toDoubleOrNull() ?: 0.0,
+                recordedOn = LocalDate.now(),
                 latestSnapshotId = 0L
             )
             AddInvestmentScreen(
-                existing       = preFilledRow,
+                existing = preFilledRow,
                 onNavigateBack = { navController.popBackStack() },
-                onSaved        = { navController.popBackStack() }
+                onSaved = { navController.popBackStack() }
             )
         }
     }

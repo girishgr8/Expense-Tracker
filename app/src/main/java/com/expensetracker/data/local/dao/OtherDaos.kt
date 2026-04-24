@@ -306,9 +306,28 @@ interface SavingsSnapshotDao {
     @Query("SELECT * FROM savings_snapshots WHERE userId = :userId ORDER BY recordedOnMillis DESC")
     fun getAllSnapshots(userId: String): Flow<List<SavingsSnapshotEntity>>
 
-    /** INSERT only — never update */
+    /** INSERT only — never update (history is preserved across days) */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSnapshot(snapshot: SavingsSnapshotEntity): Long
+
+    /**
+     * Delete the existing snapshot(s) for a given institution on a specific day.
+     * Called before inserting a new record when the user edits on the same day,
+     * so only ONE snapshot per institution per day is retained.
+     */
+    @Query("""
+        DELETE FROM savings_snapshots
+        WHERE userId = :userId
+          AND institutionName = :institutionName
+          AND recordedOnMillis >= :dayStartMillis
+          AND recordedOnMillis < :dayEndMillis
+    """)
+    suspend fun deleteSnapshotsForDay(
+        userId:          String,
+        institutionName: String,
+        dayStartMillis:  Long,
+        dayEndMillis:    Long
+    )
 
     /** Delete all snapshots for an institution (soft-delete / cleanup) */
     @Query("DELETE FROM savings_snapshots WHERE userId = :userId AND institutionName = :institutionName")
@@ -352,9 +371,29 @@ interface InvestmentSnapshotDao {
     @Query("SELECT * FROM investment_snapshots WHERE userId = :userId ORDER BY recordedOnMillis DESC")
     fun getAllSnapshots(userId: String): Flow<List<InvestmentSnapshotEntity>>
 
-    /** INSERT only — never update */
+    /** INSERT only — never update (history is preserved across days) */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSnapshot(snapshot: InvestmentSnapshotEntity): Long
+
+    /**
+     * Delete existing snapshot(s) for a (type, subName) on a specific day.
+     * Ensures only ONE snapshot per position per day is retained.
+     */
+    @Query("""
+        DELETE FROM investment_snapshots
+        WHERE userId = :userId
+          AND type = :type
+          AND subName = :subName
+          AND recordedOnMillis >= :dayStartMillis
+          AND recordedOnMillis < :dayEndMillis
+    """)
+    suspend fun deleteSnapshotsForDay(
+        userId:         String,
+        type:           InvestmentType,
+        subName:        String,
+        dayStartMillis: Long,
+        dayEndMillis:   Long
+    )
 
     /** Delete all snapshots for a position */
     @Query("""
@@ -362,4 +401,7 @@ interface InvestmentSnapshotDao {
         WHERE userId = :userId AND type = :type AND subName = :subName
     """)
     suspend fun deleteForPosition(userId: String, type: InvestmentType, subName: String)
+
+    @Query("DELETE FROM investment_snapshots WHERE userId = :userId")
+    suspend fun deleteAllForUser(userId: String)
 }

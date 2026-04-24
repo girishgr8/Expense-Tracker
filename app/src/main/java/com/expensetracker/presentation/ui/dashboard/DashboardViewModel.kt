@@ -9,6 +9,7 @@ import com.expensetracker.data.repository.CreditCardRepository
 import com.expensetracker.data.repository.PaymentModeRepository
 import com.expensetracker.data.repository.ScheduledTransactionRepository
 import com.expensetracker.data.repository.TransactionRepository
+import com.expensetracker.data.repository.WealthRepository
 import com.expensetracker.domain.model.BudgetPeriod
 import com.expensetracker.domain.model.BudgetProgress
 import com.expensetracker.domain.model.MonthlySummary
@@ -68,6 +69,7 @@ class DashboardViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val paymentModeRepository: PaymentModeRepository,
     private val creditCardRepository: CreditCardRepository,
+    private val wealthRepository: WealthRepository,
     private val authManager: AuthManager
 ) : ViewModel() {
 
@@ -283,6 +285,12 @@ class DashboardViewModel @Inject constructor(
 
     fun selectPeriod(period: SummaryPeriod) {
         _selectedPeriod.value = period
+    }
+
+    fun deleteAllInvestmentSnapshots() {
+        viewModelScope.launch {
+            wealthRepository.deleteAllInvestmentSnapshots(userId)
+        }
     }
 
     fun logout() {
