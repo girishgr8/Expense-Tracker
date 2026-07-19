@@ -77,6 +77,7 @@ import com.expensetracker.presentation.components.LocalCurrencySymbol
 import com.expensetracker.util.FormatUtils.formatAmountForDisplay
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.core.graphics.toColorInt
 
 // ── Theme colors ──────────────────────────────────────────────────────────────
 private val WealthGold = Color(0xFFF0B429)
@@ -929,14 +930,11 @@ private fun OverviewChartTab(summary: NetWorthSummary, sym: String, fmt: String)
             val investShare = (summary.totalCurrentInv / total).toFloat()
             DonutChart(
                 segments = listOf(
-                    DonutSegment("Savings", savingsShare, WealthBlue),
-                    DonutSegment("Investments", investShare, WealthGold)
+                    DonutSegment("Savings",     savingsShare, WealthBlue),
+                    DonutSegment("Investments", investShare,  WealthGold)
                 ),
-                centerLabel = "$sym${formatAmountForDisplay(total, fmt)}",
-                centerSubLabel = "Net Worth",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
+                centerLabel    = "$sym${formatAmountForDisplay(total, fmt)}",
+                modifier       = Modifier.fillMaxWidth()  // no fixed height — legend is outside
             )
         }
 
@@ -996,32 +994,35 @@ private fun SavingsBreakdownTab(summary: NetWorthSummary, sym: String, fmt: Stri
     }
     val total = summary.totalSavings.coerceAtLeast(1.0)
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Horizontal bar chart
-        HorizontalStackedBar(
-            segments = summary.savingsRows.mapIndexed { i, row ->
-                StackedSegment(
-                    row.institutionName, (row.total / total).toFloat(),
-                    barColors[i % barColors.size]
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Pie chart showing each institution's share
+        BreakdownPieChart(
+            slices   = summary.savingsRows.mapIndexed { i, row ->
+                PieSlice(
+                    label    = row.institutionName,
+                    fraction = (row.total / total).toFloat(),
+                    color    = barColors[i % barColors.size],
+                    value    = row.total
                 )
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(40.dp)
+            centerLabel    = "$sym${formatAmountForDisplay(summary.totalSavings, fmt)}",
+            centerSubLabel = "Total Savings",
+            sym            = sym,
+            fmt            = fmt
         )
         // Per-institution rows
         summary.savingsRows.forEachIndexed { i, row ->
             val color = barColors[i % barColors.size]
             SavingsBreakdownRow(
                 institution = row.institutionName,
-                savings = row.savingsBalance,
-                fd = row.fdBalance,
-                rd = row.rdBalance,
-                total = row.total,
-                pct = if (total > 0) row.total / total * 100.0 else 0.0,
-                color = color,
-                sym = sym,
-                fmt = fmt
+                savings     = row.savingsBalance,
+                fd          = row.fdBalance,
+                rd          = row.rdBalance,
+                total       = row.total,
+                pct         = if (total > 0) row.total / total * 100.0 else 0.0,
+                color       = color,
+                sym         = sym,
+                fmt         = fmt
             )
         }
     }
@@ -1037,35 +1038,37 @@ private fun InvestmentsBreakdownTab(summary: NetWorthSummary, sym: String, fmt: 
     }
     val totalCurrent = summary.totalCurrentInv.coerceAtLeast(1.0)
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Horizontal stacked bar
-        HorizontalStackedBar(
-            segments = summary.investmentRows.mapIndexed { i, row ->
-                StackedSegment(
-                    label = row.type.shortName(),
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Pie chart by investment type
+        BreakdownPieChart(
+            slices   = summary.investmentRows.mapIndexed { i, row ->
+                PieSlice(
+                    label    = row.subName.ifEmpty { row.type.shortName() },
                     fraction = (row.current / totalCurrent).toFloat(),
-                    color = barColors[i % barColors.size]
+                    color    = barColors[i % barColors.size],
+                    value    = row.current
                 )
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(40.dp)
+            centerLabel    = "$sym${formatAmountForDisplay(summary.totalCurrentInv, fmt)}",
+            centerSubLabel = "Portfolio Value",
+            sym            = sym,
+            fmt            = fmt
         )
-        // Per-investment rows with gain indicator
+        // Per-investment rows
         summary.investmentRows.forEachIndexed { i, row ->
-            val color = barColors[i % barColors.size]
+            val color     = barColors[i % barColors.size]
             val gainColor = if (row.isGain) WealthGreen else WealthRed
             InvestmentBreakdownRow(
-                label = row.subName.ifEmpty { row.type.shortName() },
+                label     = row.subName.ifEmpty { row.type.shortName() },
                 typeLabel = row.type.shortName(),
-                invested = row.invested,
-                current = row.current,
-                gainPct = row.gainPercent,
-                pct = row.current / totalCurrent * 100.0,
-                color = color,
+                invested  = row.invested,
+                current   = row.current,
+                gainPct   = row.gainPercent,
+                pct       = row.current / totalCurrent * 100.0,
+                color     = color,
                 gainColor = gainColor,
-                sym = sym,
-                fmt = fmt
+                sym       = sym,
+                fmt       = fmt
             )
         }
     }
@@ -1079,74 +1082,93 @@ private data class DonutSegment(val label: String, val fraction: Float, val colo
 private fun DonutChart(
     segments: List<DonutSegment>,
     centerLabel: String,
-    centerSubLabel: String,
     modifier: Modifier = Modifier
 ) {
     val animProg by animateFloatAsState(1f, tween(900, easing = EaseOutCubic), label = "donut")
 
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val diameter = size.minDimension * 0.85f
-            val stroke = diameter * 0.16f
-            val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-            val arcSize = Size(diameter, diameter)
-            var startAngle = -90f
-
-            segments.forEach { seg ->
-                val sweep = seg.fraction * 360f * animProg
-                drawArc(
-                    color = seg.color,
-                    startAngle = startAngle,
-                    sweepAngle = sweep - 1.5f,    // 1.5° gap between segments
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(
-                        width = stroke,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Butt
-                    )
+    // Legend is in its own Column OUTSIDE the chart Box so it never overlaps the arc
+    Column(
+        modifier            = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // ── Donut arc + centre text ────────────────────────────────────────────
+        Box(
+            modifier        = Modifier
+                .fillMaxWidth()
+                .height(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val diameter    = size.minDimension * 0.88f
+                val stroke      = diameter * 0.17f
+                val topLeft     = Offset(
+                    (size.width  - diameter) / 2f,
+                    (size.height - diameter) / 2f
                 )
-                startAngle += sweep
+                val arcSize     = Size(diameter, diameter)
+                var startAngle  = -90f
+
+                segments.forEach { seg ->
+                    val sweep = seg.fraction * 360f * animProg
+                    drawArc(
+                        color      = seg.color,
+                        startAngle = startAngle,
+                        sweepAngle = sweep - 1.5f,
+                        useCenter  = false,
+                        topLeft    = topLeft,
+                        size       = arcSize,
+                        style      = Stroke(
+                            width = stroke,
+                            cap   = androidx.compose.ui.graphics.StrokeCap.Butt
+                        )
+                    )
+                    startAngle += sweep
+                }
+            }
+
+            // Center text — sits inside the hole, never clips the arc
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    centerLabel,
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color      = MaterialTheme.colorScheme.onSurface,
+                    fontSize   = 14.sp
+                )
+                Text(
+                    "Net Worth",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
-        // Centre text
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                centerLabel,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 14.sp
-            )
-            Text(
-                centerSubLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Legend — bottom-right pills
+        // ── Legend row — completely outside + below the chart ─────────────────
         Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalAlignment     = Alignment.CenterVertically
         ) {
             segments.forEach { seg ->
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .background(seg.color, CircleShape)
-                    )
+                    // Colored line swatch matching the arc stroke style
+                    Canvas(Modifier.size(width = 20.dp, height = 4.dp)) {
+                        drawLine(
+                            color       = seg.color,
+                            start       = Offset(0f, size.height / 2f),
+                            end         = Offset(size.width, size.height / 2f),
+                            strokeWidth = size.height,
+                            cap         = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
                     Text(
                         seg.label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style      = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color      = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -1154,24 +1176,249 @@ private fun DonutChart(
     }
 }
 
-// ─── Horizontal stacked bar ───────────────────────────────────────────────────
+// ─── Breakdown Pie Chart ─────────────────────────────────────────────────────
 
-private data class StackedSegment(val label: String, val fraction: Float, val color: Color)
+private data class PieSlice(
+    val label:    String,
+    val fraction: Float,
+    val color:    Color,
+    val value:    Double
+)
 
+/**
+ * Full pie chart (not donut) with:
+ *   - Animated sweep drawing
+ *   - Small gap between slices for visual separation
+ *   - Center label showing total
+ *   - Tappable slices — shows name + value + % in a callout below
+ *   - Legend grid below the chart
+ */
 @Composable
-private fun HorizontalStackedBar(segments: List<StackedSegment>, modifier: Modifier) {
-    val animProg by animateFloatAsState(1f, tween(800, easing = EaseOutCubic), label = "bar")
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+private fun BreakdownPieChart(
+    slices:        List<PieSlice>,
+    centerLabel:   String,
+    centerSubLabel: String,
+    sym:           String,
+    fmt:           String
+) {
+    if (slices.isEmpty()) return
+
+    val animProg by animateFloatAsState(
+        targetValue   = 1f,
+        animationSpec = tween(900, easing = EaseOutCubic),
+        label         = "pie_anim"
+    )
+    var tappedIndex by remember { mutableStateOf<Int?>(null) }
+
+    // Pre-compute start angles for hit-testing
+    val startAngles = remember(slices) {
+        val angles = mutableListOf<Float>()
+        var acc = -90f
+        slices.forEach { s ->
+            angles += acc
+            acc += s.fraction * 360f
+        }
+        angles
+    }
+
+    Card(
+        shape  = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            var x = 0f
-            segments.forEach { seg ->
-                val w = seg.fraction * size.width * animProg
-                drawRect(color = seg.color, topLeft = Offset(x, 0f), size = Size(w, size.height))
-                x += w
+        Column(
+            Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ── Pie canvas ────────────────────────────────────────────────────
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(240.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .size(220.dp)
+                        .pointerInput(slices) {
+                            detectTapGestures { offset ->
+                                // Convert offset to angle relative to center
+                                val cx    = size.width / 2f
+                                val cy    = size.height / 2f
+                                val dx    = offset.x - cx
+                                val dy    = offset.y - cy
+                                // Only trigger if tap is inside the circle
+                                val dist  = kotlin.math.sqrt(dx * dx + dy * dy)
+                                if (dist > size.width / 2f) {
+                                    tappedIndex = null; return@detectTapGestures
+                                }
+                                var angle = Math.toDegrees(
+                                    kotlin.math.atan2(dy.toDouble(), dx.toDouble())
+                                ).toFloat() - (-90f)
+                                if (angle < 0) angle += 360f
+                                // Find which slice owns this angle
+                                val hit = slices.indices.firstOrNull { i ->
+                                    val start = (startAngles[i] + 90f).let { if (it < 0) it + 360f else it }
+                                    val sweep = slices[i].fraction * 360f * animProg
+                                    angle >= start && angle < start + sweep
+                                }
+                                tappedIndex = if (hit == tappedIndex) null else hit
+                            }
+                        }
+                ) {
+                    val radius = size.minDimension / 2f
+                    val cx     = size.width  / 2f
+                    val cy     = size.height / 2f
+                    val gap    = 1.5f  // degrees gap between slices
+
+                    slices.forEachIndexed { i, slice ->
+                        val startAngle = startAngles[i]
+                        val sweep      = slice.fraction * 360f * animProg
+                        val isTapped   = tappedIndex == i
+
+                        // Slight outward offset for tapped slice
+                        val offset = if (isTapped) 8f else 0f
+                        val midAngle = Math.toRadians(
+                            (startAngle + sweep / 2).toDouble()
+                        )
+                        val ox = (offset * kotlin.math.cos(midAngle)).toFloat()
+                        val oy = (offset * kotlin.math.sin(midAngle)).toFloat()
+
+                        drawArc(
+                            color      = slice.color,
+                            startAngle = startAngle + gap / 2,
+                            sweepAngle = (sweep - gap).coerceAtLeast(0f),
+                            useCenter  = true,
+                            topLeft    = Offset(cx - radius + ox, cy - radius + oy),
+                            size       = Size(radius * 2, radius * 2)
+                        )
+
+                        // Subtle shadow/border on tapped slice
+                        if (isTapped) {
+                            drawArc(
+                                color      = Color.White.copy(alpha = 0.15f),
+                                startAngle = startAngle + gap / 2,
+                                sweepAngle = (sweep - gap).coerceAtLeast(0f),
+                                useCenter  = true,
+                                topLeft    = Offset(cx - radius + ox, cy - radius + oy),
+                                size       = Size(radius * 2, radius * 2),
+                                style      = Stroke(width = 2f)
+                            )
+                        }
+                    }
+
+                    // White centre circle (donut hole) for centre text
+                    drawCircle(
+                        color  = Color("#1C2333".toColorInt()),
+                        radius = radius * 0.6f,
+                        center = Offset(cx, cy)
+                    )
+                }
+
+                // Centre labels
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        centerLabel,
+                        style      = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize   = 13.sp,
+                        maxLines   = 1
+                    )
+                    Text(
+                        centerSubLabel,
+                        style    = MaterialTheme.typography.labelSmall,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            // ── Tapped slice callout ───────────────────────────────────────────
+            tappedIndex?.let { ti ->
+                val slice = slices[ti]
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(slice.color.copy(alpha = 0.12f))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(Modifier.size(10.dp).background(slice.color, CircleShape))
+                        Text(
+                            slice.label,
+                            style      = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color      = slice.color
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "$sym${formatAmountForDisplay(slice.value, fmt)}",
+                            style      = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color      = slice.color
+                        )
+                        Text(
+                            "${"%.1f".format(slice.fraction * 100f)}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = slice.color.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+
+            // ── Legend grid ───────────────────────────────────────────────────
+            val columns = 2
+            val rows    = (slices.size + columns - 1) / columns
+            repeat(rows) { row ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    repeat(columns) { col ->
+                        val idx = row * columns + col
+                        if (idx < slices.size) {
+                            val s = slices[idx]
+                            Row(
+                                modifier  = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (tappedIndex == idx) s.color.copy(0.12f)
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(0.5f)
+                                    )
+                                    .clickable { tappedIndex = if (tappedIndex == idx) null else idx }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment     = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(Modifier.size(9.dp).background(s.color, CircleShape))
+                                Text(
+                                    s.label,
+                                    style    = MaterialTheme.typography.labelSmall,
+                                    color    = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    "${"%.0f".format(s.fraction * 100f)}%",
+                                    style      = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color      = s.color
+                                )
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
             }
         }
     }

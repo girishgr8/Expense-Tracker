@@ -73,9 +73,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,6 +97,7 @@ import com.expensetracker.presentation.components.LocalCurrencySymbol
 import com.expensetracker.presentation.theme.ExpenseRed
 import com.expensetracker.domain.model.TagsMode
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.draw.clip
 import com.expensetracker.presentation.theme.IncomeGreen
 import com.expensetracker.presentation.theme.TransferBlue
 import com.expensetracker.util.FormatUtils.formatAmountForDisplay
@@ -208,11 +212,35 @@ fun TransactionsScreen(
             )
 
             ActiveFilterChips(
-                filter = uiState.filter,
-                categories = uiState.categories,
-                modes = uiState.modes,
-                onClearFilter = { viewModel.updateFilter(TransactionFilter()) }
+                filter        = uiState.filter,
+                categories    = uiState.categories,
+                modes         = uiState.modes,
+                allTags       = uiState.allTags,
+                onClearFilter = { viewModel.updateFilter(TransactionFilter()) },
+                onOpenFilter  = { showFilterSheet = true }
             )
+
+            // ── Spending / Income summary card — shown when any filter is active ──
+            val hasActiveFilter = uiState.filter.year != null || uiState.filter.month != null ||
+                    uiState.filter.categoryIds.isNotEmpty() ||
+                    uiState.filter.paymentModeIds.isNotEmpty() ||
+                    uiState.filter.tags.isNotEmpty() ||
+                    uiState.filter.transactionTypes.isNotEmpty() ||
+                    uiState.filter.searchQuery.isNotBlank()
+
+            if (hasActiveFilter && sortedTransactions.isNotEmpty()) {
+                val filteredExpense = sortedTransactions
+                    .filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+                val filteredIncome  = sortedTransactions
+                    .filter { it.type == TransactionType.INCOME  }.sumOf { it.amount }
+                FilterSummaryCard(
+                    expense        = filteredExpense,
+                    income         = filteredIncome,
+                    currencySymbol = currencySymbol,
+                    currencyFormat = currencyFormat,
+                    modifier       = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
 
             if (sortedTransactions.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -363,49 +391,250 @@ private fun CircularActionButton(
 
 @Composable
 private fun ActiveFilterChips(
-    filter: TransactionFilter,
-    categories: List<Category>,
-    modes: List<PaymentMode>,
-    onClearFilter: () -> Unit
+    filter:        TransactionFilter,
+    categories:    List<Category>,
+    modes:         List<PaymentMode>,
+    allTags:       List<Tag>,
+    onClearFilter: () -> Unit,
+    onOpenFilter:  () -> Unit          // tapping any chip reopens the filter sheet
 ) {
+    val shortMonthNames = listOf(
+        "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
+    )
     val hasFilters = filter.year != null || filter.month != null ||
             filter.categoryIds.isNotEmpty() || filter.paymentModeIds.isNotEmpty() ||
             filter.tags.isNotEmpty() || filter.transactionTypes.isNotEmpty()
 
     AnimatedVisibility(
         visible = hasFilters,
-        enter = expandVertically(),
-        exit = shrinkVertically()
+        enter   = expandVertically(),
+        exit    = shrinkVertically()
     ) {
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            contentPadding        = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // ── Clear all ──────────────────────────────────────────────────────
             item {
                 FilterChip(
-                    selected = true,
-                    onClick = onClearFilter,
-                    label = { Text("Clear All") },
+                    selected     = true,
+                    onClick      = onClearFilter,
+                    label        = { Text("Clear All") },
                     trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(14.dp)) }
                 )
             }
-            filter.year?.let {
-                item { FilterChip(selected = true, onClick = {}, label = { Text("Year: $it") }) }
+
+            // ── Date chip: "2026" or "Apr 26" ─────────────────────────────────
+            if (filter.year != null) {
+                val dateLabel = if (filter.month != null)
+                    "${shortMonthNames[filter.month - 1]} ${(filter.year % 100).toString().padStart(2,'0')}"
+                else
+                    "${filter.year}"
+                item {
+                    FilterChip(
+                        selected = true,
+                        onClick  = onOpenFilter,
+                        label    = { Text(dateLabel) }
+                    )
+                }
             }
-            filter.month?.let {
-                item { FilterChip(selected = true, onClick = {}, label = { Text("Month: $it") }) }
+
+            // ── Category chip ─────────────────────────────────────────────────
+            val selectedCats = categories.filter { it.id in filter.categoryIds }
+            val categoryLabel = when {
+                selectedCats.isEmpty()       -> null
+                selectedCats.size == 1       -> selectedCats[0].name
+                else                         -> "${selectedCats[0].name} +${selectedCats.size - 1}"
             }
-            filter.categoryIds.takeIf { it.isNotEmpty() }?.let { ids ->
-                val categoryLabel = categories.filter { it.id in ids }.joinToString { it.name }
-                item { FilterChip(selected = true, onClick = {}, label = { Text(categoryLabel) }) }
+            categoryLabel?.let {
+                item {
+                    FilterChip(
+                        selected = true,
+                        onClick  = onOpenFilter,
+                        label    = { Text(it) }
+                    )
+                }
             }
-            filter.paymentModeIds.takeIf { it.isNotEmpty() }?.let { ids ->
-                val paymentLabel = modes.filter { it.id in ids }.joinToString { it.displayLabel }
-                item { FilterChip(selected = true, onClick = {}, label = { Text(paymentLabel) }) }
+
+            // ── Payment mode chip ─────────────────────────────────────────────
+            val selectedModes = modes.filter { it.id in filter.paymentModeIds }
+            val paymentLabel = when {
+                selectedModes.isEmpty() -> null
+                selectedModes.size == 1 -> selectedModes[0].displayLabel
+                else                    -> "${selectedModes[0].displayLabel} +${selectedModes.size - 1}"
+            }
+            paymentLabel?.let {
+                item {
+                    FilterChip(
+                        selected = true,
+                        onClick  = onOpenFilter,
+                        label    = { Text(it) }
+                    )
+                }
+            }
+
+            // ── Tags chip: "# Includes any: weekend +1" ───────────────────────
+            if (filter.tags.isNotEmpty()) {
+                val modeLabel = when (filter.tagsMode) {
+                    TagsMode.INCLUDES_ANY -> "Includes any"
+                    TagsMode.INCLUDES_ALL -> "Includes all"
+                    TagsMode.EXCLUDES     -> "Excludes"
+                }
+                val firstTag  = filter.tags.first()
+                val tagLabel  = if (filter.tags.size == 1)
+                    "$modeLabel: $firstTag"
+                else
+                    "$modeLabel: $firstTag +${filter.tags.size - 1}"
+                item {
+                    FilterChip(
+                        selected     = true,
+                        onClick      = onOpenFilter,
+                        label        = {
+                            Row(
+                                verticalAlignment     = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "#",
+                                    fontWeight = FontWeight.Bold,
+                                    color      = Color(0xFF26C6DA)
+                                )
+                                Text(tagLabel)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // ── Transaction type chip ─────────────────────────────────────────
+            if (filter.transactionTypes.isNotEmpty()) {
+                val typeLabel = filter.transactionTypes.joinToString { it.name.lowercase()
+                    .replaceFirstChar { c -> c.uppercase() } }
+                item {
+                    FilterChip(
+                        selected = true,
+                        onClick  = onOpenFilter,
+                        label    = { Text(typeLabel) }
+                    )
+                }
             }
         }
     }
 }
+
+// ─── Filter Summary Card (Spending / Income / Net Balance) ────────────────────
+
+@Composable
+private fun FilterSummaryCard(
+    expense:        Double,
+    income:         Double,
+    currencySymbol: String,
+    currencyFormat: String,
+    modifier:       Modifier = Modifier
+) {
+    val balance     = income - expense
+    val balanceNeg  = balance < 0
+    val balanceColor = when {
+        balance > 0  -> IncomeGreen
+        balance < 0  -> ExpenseRed
+        else         -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Card(
+        shape    = RoundedCornerShape(20.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            ExpenseRed.copy(alpha = 0.22f),
+                            IncomeGreen.copy(alpha = 0.12f)
+                        )
+                    )
+                )
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+        ) {
+            Column {
+                // SPENDING / INCOME row
+                Row(Modifier.fillMaxWidth()) {
+                    // Spending
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "SPENDING",
+                            style         = MaterialTheme.typography.labelSmall,
+                            color         = ExpenseRed,
+                            fontWeight    = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "$currencySymbol${formatAmountForDisplay(expense, currencyFormat)}",
+                            style      = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color      = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    // Income
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            "INCOME",
+                            style         = MaterialTheme.typography.labelSmall,
+                            color         = IncomeGreen,
+                            fontWeight    = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "$currencySymbol${formatAmountForDisplay(income, currencyFormat)}",
+                            style      = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color      = MaterialTheme.colorScheme.onSurface,
+                            textAlign  = TextAlign.End,
+                            modifier   = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Net Balance pill
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.22f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "Net Balance",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "${if (balanceNeg) "-" else ""}$currencySymbol${
+                                formatAmountForDisplay(abs(balance), currencyFormat)
+                            }",
+                            style      = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color      = balanceColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun TransactionDayCard(
@@ -764,7 +993,7 @@ private fun FilterBottomSheet(
                             .weight(1f)
                             .background(
                                 if (sel) MaterialTheme.colorScheme.onSurface
-                                else androidx.compose.ui.graphics.Color.Transparent,
+                                else Color.Transparent,
                                 RoundedCornerShape(50)
                             )
                             .clickable { catTypeTab = tab }
@@ -1055,7 +1284,7 @@ private fun CompactFilterChip(
         modifier = Modifier
             .background(
                 color = if (selected) MaterialTheme.colorScheme.secondaryContainer
-                else androidx.compose.ui.graphics.Color.Transparent,
+                else Color.Transparent,
                 shape = RoundedCornerShape(50)
             )
             .then(
@@ -1086,12 +1315,12 @@ private fun CompactFilterChip(
 private fun CategoryFilterChip(
     label:    String,
     selected: Boolean,
-    accent:   androidx.compose.ui.graphics.Color,
+    accent:   Color,
     onClick:  () -> Unit
 ) {
     val borderColor = accent.copy(alpha = if (selected) 1f else 0.55f)
     val bgColor     = if (selected) accent.copy(alpha = 0.18f)
-    else androidx.compose.ui.graphics.Color.Transparent
+    else Color.Transparent
     val textColor   = if (selected) accent else accent.copy(alpha = 0.85f)
     Box(
         modifier = Modifier
@@ -1120,9 +1349,9 @@ private fun TagFilterChip(
     onClick:  () -> Unit
 ) {
     // Teal color for the # symbol (matching screenshot)
-    val hashColor = androidx.compose.ui.graphics.Color(0xFF26C6DA)
+    val hashColor = Color(0xFF26C6DA)
     val bgColor   = if (selected) MaterialTheme.colorScheme.surfaceVariant
-    else androidx.compose.ui.graphics.Color.Transparent
+    else Color.Transparent
     val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (selected) 0.8f else 0.4f)
 
     Row(
